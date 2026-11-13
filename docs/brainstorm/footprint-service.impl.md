@@ -431,7 +431,7 @@ export const footprintAlertSchema = z.strictObject({
 
 - `fired_at` is the ULID time of `alert_id`. `value` holds bytes, a free ratio or projected days at the fire.
 - The service computes `state` from memory for an open episode. A resolved episode answers `ok`.
-- `footprint.alert.acknowledge` takes `acknowledged_by` from the caller identity. The acknowledgement hides the episode from the Overview banner and the navigation badge. The Footprint screen still shows it.
+- `footprint.alert.acknowledge` takes `acknowledged_by` from the caller identity. The acknowledgement hides the episode from the Home banner and the navigation badge. The Footprint screen still shows it.
 - `acknowledged_until` holds bytes. The direction comes from `kind`. The service floors each value with `Math.floor`.
 - For `disk`, `acknowledged_until` is the larger of half the free bytes at the acknowledgement and the bytes of the floor, `disk_free_ratio × total_bytes`. When the free bytes are below the floor, it is half the free bytes. The acknowledgement holds until the free bytes drop below `acknowledged_until`.
 - For `bytes`, `acknowledged_until` is twice the value at the acknowledgement. The acknowledgement holds until the value reaches `acknowledged_until`.
@@ -632,7 +632,7 @@ Navigation and routes:
 
 - The sidebar group "System" follows "Credentials". Its item "Footprint" opens `/footprint` and shows the badge of the unacknowledged alerts.
 - The routes are `/footprint` (summary), `/footprint/:kind` (kind detail) and `/footprint/cleanups/:cleanup_id` (cleanup record).
-- The shared hook `use-footprint-alerts.ts` polls `footprint.summary.get` every 60 s and answers `unacknowledged_alerts`. The badge and the Overview banner read it.
+- The shared hook `use-footprint-alerts.ts` polls `footprint.summary.get` every 60 s and answers `unacknowledged_alerts`. The badge and the Home banner read it.
 
 The summary screen:
 
@@ -666,7 +666,7 @@ The confirmation flow:
 7. The dialog sends the calls in order. A later call can fail after an earlier call committed. The dialog then reports both facts and attempts no rollback.
 8. On success, the dialog closes and opens the cleanup record. The record screen polls every 15 s while the state is `queued` or `running`.
 
-The Overview banner:
+The Home banner:
 
 - The banner shows each unacknowledged firing episode below the health alert of the server, with a link to its kind and an "Acknowledge" action.
 - The text of a `disk` episode is, for example: "The disk of `e2e-coder-1` reaches 10% free in about 27 days. Node workspaces grow about 5.9 GiB a day. Review the candidates."

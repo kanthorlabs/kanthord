@@ -48,6 +48,52 @@ It describes no mechanism of another service.
 - The `/workbench/new` route names the agent providers of the enablement and links to the agent page, where a human adds one.
 - A [workbench session implementation](workbench-service.impl.md#workbench-session) declares the workbench directory and the list.
 
+## Home
+
+[The Home page](architecture.impl.md#the-home-page) owns every other Home rule. This section holds the Yumi chat, "Ask Yumi" and the slash commands.
+
+- Home opens the latest `ops@1` conversation by `modified` whose first message does not start with "Case: ". It skips an item with an empty first message.
+- "New chat" makes no API call. The first Send creates the conversation, then sends the message.
+- The pending approval of the open Home conversation shows as the queue line. Its acts sit on the deck card.
+- With Yumi off, Home shows "Yumi is not enabled. Enable Yumi to chat here." with a link to the agent page of `ops@1`. The composer is disabled and shows no command list.
+- The command list floats above the composer on focus of an empty draft or on "/".
+- The command "/brief" sends "Report the system status and the actions that need me."
+- The command "/health" sends "Check the health of the gateway and the providers." "/health" is the only command that leads to `gateway--healthcheck`.
+- The owner bubble of a command text shows the command name, with the text on the next line.
+- "/brief" and "/health" show only in an `ops@1` conversation. "/new" shows in every conversation.
+- A command and its natural-language form give the same answer.
+- "/new" alone opens a new chat and sends nothing. In a Workbench chat, it opens `/workbench/new` with the agent and the configuration of the current conversation. In the Home chat, it acts as "New chat".
+- Until the fork ships, "/new <text>" shows the hint "/new takes no text yet" and sends nothing.
+- A click on "Ask Yumi" opens a named tab at once, before any `await`. Home creates one `ops@1` conversation, sends the case request of the card at once, and points the tab at it.
+- The Home chat gets no case message.
+- One tab and one conversation exist for each card in one page load. A later click shows the same tab and sends nothing. A reload of Home forgets the cases.
+- When the case request fails after the create, Home shows the toast "The case request was not sent." with Retry. Retry, or a later click, sends the same request to the same conversation.
+- No delete operation exists. No URL starts a conversation or a model run.
+- A tool approval card and an Inbox card have no "Ask Yumi".
+- The node case text reads "Case: node `<id>` (<state>). <ask of the kind>". It holds no node name. The ask of each node kind follows.
+
+| Kind                   | Ask                                                                |
+| ---------------------- | ------------------------------------------------------------------ |
+| `blocked`              | Explain why it is blocked and recommend how to unblock it.         |
+| `paused`               | Explain why it is paused and recommend whether to resume it.       |
+| `dependency_discarded` | A dependency of it was discarded. Recommend how to continue.       |
+| `finding_review`       | Explain each open finding and recommend a decision.                |
+| `followup_proposal`    | Explain each follow-up proposal and recommend approve or reject.   |
+| `merge_wait`           | It waits for a human merge. Report what the merge needs.           |
+| `delivery_unconfirmed` | Its delivery is not confirmed. Report what the confirmation needs. |
+
+- The Fix case text reads "Case: fix <kind> <subject>. <ask of the kind>". It holds only the ids that the item shows. The subject and the ask of each Fix kind follow.
+
+| Kind                  | Subject                                                                | Ask                                                                  |
+| --------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `project_paused`      | project `<project id>`                                                 | Explain why it is paused and recommend whether to resume it.         |
+| `environment_failed`  | binding `<binding>` of project `<project id>`                          | Explain why the environment failed and recommend the fix.            |
+| `environment_pending` | binding `<binding>` of project `<project id>`                          | Explain what the environment waits for.                              |
+| `no_taker`            | jobs in state <state> (<job count>) of project `<project id>`          | Explain why no worker takes them and recommend the setup change.     |
+| `agent_invalid`       | agent `<agent>` in binding `<first binding>` of project `<project id>` | Explain the invalid configuration and recommend the fix.             |
+| `credential_refused`  | credential `<credential>`                                              | Explain why the provider refuses it and recommend the fix.           |
+| `request_rejected`    | agent `<agent>`                                                        | Explain why the provider rejects its requests and recommend the fix. |
+
 ## Prompt
 
 - The system prompt of a workbench session composes the [KanthorD prompt](agent.md#prompt-composer) of its agent: `base.md`, the Role of the agent and `workbench.md`. The framing of the Workbench closes it.

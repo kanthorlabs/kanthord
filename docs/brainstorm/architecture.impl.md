@@ -1253,9 +1253,9 @@ The rules of the credential sections follow.
 - A planned screen joins the sidebar in the change that adds its route.
 - The sidebar holds no `Settings` section, because no server-wide setting has a screen.
 - A project-scoped screen waits until the server holds one project or more: Scheduler and Workers. On a server with no project it shows the empty state with `New project`. Every other screen reads server-wide records and renders without a project.
-- Overview, Scheduler, Traces and Analytics read every project and offer a project filter. Timeline reads one project or one node.
-- On a server with no project, `/` shows Overview only with a skip mark. Overview then shows its own empty state with `New project`.
-- The sidebar item `Overview` opens the path `/`. The path `/` shows the Onboarding page or Overview. [The dashboard onboarding](#the-dashboard-onboarding) holds the rule.
+- Home reads every project and offers no project filter. Scheduler, Traces and Analytics read every project and offer a project filter. Timeline reads one project or one node.
+- On a server with no project, `/` shows Home only with a skip mark. Home then shows its own empty state with `New project`.
+- The sidebar item `Home` opens the path `/`. The path `/` shows the Onboarding page or Home. [The dashboard onboarding](#the-dashboard-onboarding) holds the rule.
 - The sidebar item `Workers` of the group `Workforce` opens `/workers`. The worker page `/workers/:workerName` and the instance page `/workers/:workerName/instances/:instanceName` sit under it. Each name in the path is URL-encoded, as on `/agents/:agentName`. [The worker pages](#the-worker-pages) hold the rules.
 - The sidebar item `Machines` of the group `Workforce` opens `/machines`, after `Workers`. The form `/machines/new` and the machine page `/machines/:machineName` sit under it. The machine name in the path is URL-encoded. [The machine pages](#the-machine-pages) hold the rules.
 - The sidebar item `Traces` of the group `Work` opens `/traces`, after `Scheduler`. The trace page `/traces/:traceId` sits under it. [The trace pages](#the-trace-pages) hold the rules.
@@ -1269,7 +1269,7 @@ The rules of the credential sections follow.
 
 - `/workers` lists the worker catalog. Each card links to its worker page and shows the count of live registrations of the worker.
 - The dashboard reads the expected instance count of a worker binding as `worker_instances.length`, and as `instance_count` for a binding of an external harness. A worker card counts that value.
-- The Overview lists the waiting jobs of one node state, intent and tag set that no live registration takes in the tab Fix setup with the cause `No taker`. When a worker binding matches them, the text names the binding and its worker and ends with the situation of the binding. The situation reads no placement of a binding:
+- Home lists the waiting jobs of one node state, intent and tag set that no live registration takes in the tab Fix setup with the cause `No taker`. When a worker binding matches them, the text names the binding and its worker and ends with the situation of the binding. The situation reads no placement of a binding:
   - A binding of a hosted worker with `worker_instances: []`: "lists no instance. Add an instance to the binding on the Bindings tab."
   - A binding of a hosted worker that lists instances: "has no live registration of a listed instance. Open the worker page to check its instances."
   - A binding of an external harness: "has no live registration. Start its worker program."
@@ -1619,7 +1619,7 @@ The prompt block:
 - An execution row of the Attempts tab offers `Trace`. The row shows turns, tokens, `Est. cost` and errors from that list. A trace that the list does not hold shows `Trace expired`.
 - An execution row of the Attempts tab shows a `Badge` with the category label and the subcategory of the cause. An `unattributed` cause shows `Unattributed` and the first suspect.
 - A registration row of the instance page with a live execution offers `Trace`.
-- The paused detail of an Overview item with an execution offers `Last trace` for the newest execution.
+- The paused detail of a Home item with an execution offers `Last trace` for the newest execution.
 - The paused detail reads that trace with `tracking.trace.list` and `execution_id`, and shows its cause line beside `Last trace`. A failed read shows no cause line and keeps the link.
 - The project page header offers `Traces`. It opens `/traces?project_id=<project id>`.
 - The worker page offers `Traces`. It opens `/traces?worker_name=<worker name>`. The agent page offers `Traces`. It opens `/traces?agent_name=<agent name>`.
@@ -1638,7 +1638,7 @@ The prompt block:
 ## The dashboard onboarding
 
 - The Onboarding page guides a fresh install through the steps that come before the first task.
-- The path `/` shows the Onboarding page while a step is pending and the browser holds no skip mark. Otherwise `/` shows Overview.
+- The path `/` shows the Onboarding page while a step is pending and the browser holds no skip mark. Otherwise `/` shows Home.
 - The page reads its facts each time `/` opens. Until the first read ends, `/` shows a loading placeholder.
 - The page reads the LLM credentials, the agents, the Git credentials, the projects and the binding set of each project. An archived credential does not count.
 - An agent is an agent of a hosted worker: a worker of the worker catalog with host `kanthord`. An agent is enabled when its enablement is in state `enabled`.
@@ -1664,7 +1664,7 @@ The page shows six steps in this order. In the Action column, the first rule tha
 - A step is pending when its read succeeded and it is not done. Only a pending step keeps `/` on the Onboarding page. A done step can become pending again, for example after the archive of the only LLM credential.
 - A failed read shows in an alert with `Retry` on the Onboarding page. Each step that depends on that read shows `Open` and is not pending. The `Open` badge thus marks a pending step or a step with a failed read. The other steps keep their state.
 - A failed project list read affects the Project step and both binding steps. A failed binding set read of the target project affects both binding steps.
-- With no pending step, `/` shows Overview. The alert then does not show, because only the Onboarding page shows it.
+- With no pending step, `/` shows Home. The alert then does not show, because only the Onboarding page shows it.
 
 ### The return after a save
 
@@ -1692,8 +1692,8 @@ The page shows six steps in this order. In the Action column, the first rule tha
 ### The skip of the onboarding
 
 - `Skip onboarding` writes the mark `kanthord.onboarding.skipped` to the `localStorage` of the browser. The mark holds for that browser profile only. The server stores no skip state.
-- With the mark, `/` shows Overview. While a step is pending, Overview shows the link `Resume onboarding`. The link removes the mark, and `/` shows the Onboarding page again.
-- The skip lets an install whose setup never completes reach Overview, for example an external harness with no enabled agent.
+- With the mark, `/` shows Home. While a step is pending, Home shows the link `Resume onboarding`. The link removes the mark, and `/` shows the Onboarding page again.
+- The skip lets an install whose setup never completes reach Home, for example an external harness with no enabled agent.
 - The page reads and writes the mark inside `try` and `catch`. When the storage throws, the page reads no mark. A skip then holds only while `/` stays open. A reload or a later open of `/` shows the Onboarding page again.
 
 ### The project readiness panel
@@ -1746,7 +1746,7 @@ The page shows six steps in this order. In the Action column, the first rule tha
 
 Home is agent native. It holds one standing Yumi chat. Every waiting act shows as a client card in a rotated deck. Cards are not transcript records.
 
-`apps/src/lib/board-*.ts` and `apps/src/lib/home-deck.ts` hold the board model and the deck. `apps/src/features/home/` holds the screen. This section owns every rule of the deck, the board model and the acts. [Home](workbench-service.md) keeps only the Yumi chat, the case texts of "Ask Yumi" and the slash commands.
+`apps/src/lib/board-*.ts` and `apps/src/lib/home-deck.ts` hold the board model and the deck. `apps/src/features/home/` holds the screen. This section owns every rule of the deck, the board model and the acts. [Home](workbench-service.md#home) keeps only the Yumi chat, the case texts of "Ask Yumi" and the slash commands.
 
 The board model groups each item in one of seven tabs, in a fixed order. The cost of the wait sets the order of the first six tabs. The tab Inbox comes last. The tab name shows on the card, and the short name shows on the rows of the inline list.
 
@@ -1823,7 +1823,7 @@ The act rules follow.
 - Discard opens an `AlertDialog`.
 - `finding_review` leads with "Decide", which opens the finding sheet. `followup_proposal` leads with "Decide".
 - `environment_failed` leads with "Ask Yumi". "Open project" and "Run onboarding again" sit in More. `environment_pending` leads with "Open project".
-- "Ask Yumi" sits in More of each node card and each Fix card. A tool approval card and an Inbox card have none. The case texts are in [Home](workbench-service.md).
+- "Ask Yumi" sits in More of each node card and each Fix card. A tool approval card and an Inbox card have none. The case texts are in [Home](workbench-service.md#home).
 - The controls of the cards, the summary, the inline list and the act bar sit in `TouchTarget`.
 - `TouchTarget` makes a control at least 44 px high below the `lg` breakpoint of the window.
 - Each act with an effect opens its KanthorD dialog as it is: `NodeResumeDialog`, `NodeUnblockDialog`, `NodeOverrideDialog`, `NodeDiscardDialog`, `ProposalDecisionDialog`, `FollowupDecisionDialog`, `NodeCreateDialog`, `NodeLinkDialog` or `DependencyRemoveDialog`.

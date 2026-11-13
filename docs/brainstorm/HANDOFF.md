@@ -111,6 +111,7 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
 - [ ] Define how the workspace directory of a project relates to the execution workspaces under `workspaces/` of the state directory.
 - [ ] Define how a workbench session pulls and executes a task through the Worker and Scheduler Services. The Workbench Service owns no worker, no registration and no claim.
 - [ ] The composer of the chat shows a model picker and a reasoning-effort picker, as in the screenshot of Ulrich on 2026-10-06. Its `+` menu offers images and files, commands (`/`), context (`@`) and a shell command (`!`). Define each of the four from the capability of pi that serves it: prompt templates, file references, bash and image input.
+- [ ] Home cards are client cards, and Yumi sees an item only after "Ask Yumi" or "/brief". Server records of the cards wait for a later layer.
 
 ### Worker Service
 
@@ -187,7 +188,7 @@ Added 2026-11-04 from the storage growth design. [footprint-service.md](footprin
 - [ ] RULED 2026-11-04 by Ulrich (SG-Q6a, SG-Q6b). A new proof still removes the image tags and the proof files of the other digests of its path, a replace inside one run. No start removes an image, a proof or a cache volume of an unbound repository, and no proof run removes a cache volume. [project-service.impl.md](project-service.impl.md#garbage-collection) holds the rule.
 - [ ] RULED 2026-11-04 by Ulrich (SG-Q7, SG-K11). The `workbench` kind covers the session files and the agent directories of the Workbench Service. It holds statistics only, with no delete and no rule.
 - [ ] RULED 2026-11-04 by Ulrich (SG-Q8). The unit of an instance measures and cleans its unit kinds only while it runs and holds a registration. Otherwise its statistics show as stale. No second measure path exists.
-- [ ] RULED 2026-11-04 by Ulrich (SG-Q9). A Footprint alert shows as an Overview banner under the system health alert, plus a badge on the "Footprint" navigation item of the group "System". No board item and no board tab.
+- [ ] RULED 2026-11-04 by Ulrich (SG-Q9). A Footprint alert shows as a Home line above the deck, plus a badge on the "Footprint" navigation item of the group "System". No board item and no board tab.
 - [ ] RULED 2026-11-04 by Ulrich (SG-Q10). `footprint_cleanup` and `footprint_alert` stand in ERD 1 in a "Footprint" group, with a dashed name reference to `worker_instance`.
 - [ ] RULED 2026-11-04 by Ulrich (SG-Q12). A `disk` acknowledgement holds until the free bytes drop below the larger of half the free bytes and the floor bytes, or below half the free bytes under the floor. A bytes acknowledgement holds until the value reaches twice the value at the acknowledgement.
 - [ ] RULED 2026-11-04 by Ulrich (SG-Q13). `tracking.trace.delete` refuses only an open trace. The predicate is `trace_id = ? AND state != 'open'`. The default age of `trace` is 30 days.

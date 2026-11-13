@@ -19,3 +19,28 @@ In that session, `swe@1` pulls "Add password reset", a dependency of "Account re
 The work of the agent on one human message of a workbench session.
 The term names no closed set.
 Ulrich writes "List the open dependencies of Account recovery". The run of `swe@1` on that message holds 3 turns of pi and ends with the list.
+
+## Home chat
+
+The standing Yumi conversation on the Home screen. Home opens the latest `ops@1` conversation that is no case conversation.
+The term names no closed set.
+Ulrich opens Home and sees his latest `ops@1` conversation, with the deck of waiting acts under it.
+
+## case conversation
+
+An `ops@1` conversation that "Ask Yumi" creates for one card of Home. Its first message is a case request.
+The term names no closed set.
+Ulrich clicks "Ask Yumi" on a blocked node. Home creates one `ops@1` conversation for that card, and the Home chat skips it.
+
+## case request
+
+The first message of a case conversation. It starts with "Case: " and names one card by its ids, then asks one question of its kind.
+The term names no closed set.
+The plain text of one case request:
+Case: node `node_01J` (Blocked). Explain why it is blocked and recommend how to unblock it.
+
+## slash command
+
+A command that a human types in the composer of the chat. It starts with "/".
+The closed set is `/brief`, `/health` and `/new`.
+Ulrich types "/health" in the Home chat. The chat sends "Check the health of the gateway and the providers."
