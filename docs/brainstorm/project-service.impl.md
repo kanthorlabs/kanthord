@@ -220,7 +220,7 @@ The write refuses a submission that changes the worker of an existing worker bin
 - The instruction file of a binding revision joins the system prompt as `Repository prompt of repository <name>, file <path>:` and the text. `repository` joins as `Repository prompt of repository <name>, set in KanthorD:` and the text. `agents[<agent_name>]` joins the system prompt of that agent as `Binding prompt of repository <name>:` and the text. [agent.md](agent.md#prompt-composer) rules the order and the precedence.
 - A change of any `prompts` key stores the next binding revision with a new binding ID. A node keeps its pinned binding revision, and `mission node rebind` moves the node to the current revision.
 - The onboarding group of the binding takes the new binding ID as a changed row, and it clears `environment_from_agent`.
-- The execution setup, `agent.get` with a binding and an `pe@1` run read the texts of the binding revision that each names.
+- The execution setup, `agent.get` with a binding and a `pe@1` run read the texts of the binding revision that each names.
 - The Project Service offers two reads through its `contract.ts`. `baseCommitOf(binding_id, deadline)` answers the head commit of the base branch, 40 or 64 lower-case hex. `instructionFileOf(binding_id, commit, deadline)` answers the reader state and the text of `prompts.instruction_file` at that commit.
 - Both reads reuse `readBase` and `readFiles` of `engine/src/project/environment.ts` and the SSH access of the binding. Each read takes the deadline of its caller, and every caller reads all bindings in parallel.
 - The execution setup and `agent.get` use one deadline of 20000 ms. The handover uses at most 20000 ms of the one deadline of its handler.
@@ -768,7 +768,7 @@ The delete operations of the Project Service:
 - `pe@1` is a one-shot agent session that the Onboarding component starts in the server, as the Workbench Service runs a session. It holds no worker, no registration and no claim.
 - `pe@1` is one declaration of [the agent catalog](agent.impl.md#the-agent-catalog), with the tools `read`, `grep`, `find` and `ls`, no host tool, no overridable field and the prompt `static/prompt/pe@1.md`. Its declaration lists no operation, so it has no Workbench session.
 - Its provider, its credential and its model come from the agent enablement of `pe@1`. The agent page `/agents/pe@1` holds that enablement, as for any agent. With no enabled `pe@1`, the component starts no session, and the failure stays for the human.
-- Custody releases the model credential under [the release for an `pe@1` session](custody.impl.md#the-protected-facility).
+- Custody releases the model credential under [the release for a `pe@1` session](custody.impl.md#the-protected-facility).
 - The session reads the files of the base-branch head in `environments/run-<session id>/checkout` through read-only tools.
 - A `tool_call` hook of the session resolves each path argument of `read`, `grep`, `find` and `ls` with `realpath` against the checkout. A path that is absolute, starts with `~`, holds a `..` segment or resolves outside the checkout, also through a symbolic link, answers a tool error and reads nothing. The session runs on the server host with the server user, so the hook keeps a prompt-injected file from reading a key file or the state directory. It writes only the stored environment of its binding, through the tool `environment_write`.
 - `environment_write` validates the document with the rules of [the environment of a repository binding](#the-environment-of-a-repository-binding). It writes it under the service identity of the Project Service as a binding revision.
@@ -811,7 +811,7 @@ The first layer of the build builds the image at the start of a `container` inst
 | log  | `project.onboarding.run_failed`                          | An error stops a run. It names the binding and the digest. An error of the build or the setup step writes `build_failed` or `setup_failed`.             |
 | log  | `worker.pool.environment_proof_failed`                   | A step of the proof at the `image` target fails. The record of `project.onboarding.run_failed` carries it in `err`, and the run records `setup_failed`. |
 | log  | `project.onboarding.read_failed`                         | A read of a group fails with a new reason. It names the project, the binding, the resource identity, the reason and the failure reason.                 |
-| log  | `project.onboarding.session_failed`                      | An `pe@1` session ends with an error. It names the binding and the digest.                                                                              |
+| log  | `project.onboarding.session_failed`                      | A `pe@1` session ends with an error. It names the binding and the digest.                                                                               |
 | 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                                                |
 | 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                                               |
 

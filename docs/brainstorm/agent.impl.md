@@ -318,6 +318,7 @@ The Agent component owns these keys of the section `agent`.
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `work`               | `node.name`, `node.requirement`, `node.criterion`, `name`, `requirement`, `criterion`, `verifications[].number`, `verifications[].command`, `tasks[].number`, `tasks[].id`, `tasks[].name`, `tasks[].criterion`, `repositories`, `affected_tests` |
 | `identity`           | `display_name`                                                                                                                                                                                                                                    |
+| `framing-worker`     | none                                                                                                                                                                                                                                              |
 | `framing-workbench`  | none                                                                                                                                                                                                                                              |
 | `task-revision`      | `rationale`, `results`, `output`, `release`                                                                                                                                                                                                       |
 | `criterion-revision` | `rationale`, `findings`                                                                                                                                                                                                                           |
@@ -664,7 +665,7 @@ The tag:
 
 - `TAG` is the session part followed by the process part, 8 hexadecimal characters each, written as letters.
 - The session part is the first 8 characters of the sha-256 hex digest of the pi session id.
-- The process part is 8 random hexadecimal characters from `randomBytes`. It names one redaction object. A worker session and an `pe@1` session have one object; a workbench session has one object for its life in the process.
+- The process part is 8 random hexadecimal characters from `randomBytes`. It names one redaction object. A worker session and a `pe@1` session have one object; a workbench session has one object for its life in the process.
 - Example: `<redacted:url_userinfo:d:jpcmebklahnbofmd>`.
 - `openSession` builds the redaction object from `sessionManager.getSessionId()` before it creates the pi session (`engine/src/agent/agent-session.ts`). So `text()` of the system prompt, `text()` of the work and every handler use one tag. With two tags, the pins find no equal text and insert a second copy.
 
