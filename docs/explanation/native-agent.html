@@ -1390,9 +1390,11 @@ Binding prompt of repository app:
             A Workbench operation tool that changes state waits for the human.
             The dashboard shows the pending call, and the human approves or
             rejects it. A rejection, an abort, an expiry or the end of the run
-            counts as a rejection. A read operation and a built-in tool run
-            without approval. A Worker execution has no approval step, because
-            no human is present.
+            counts as a rejection. A pending approval expires after
+            <code>workbench.approval_wait_ms</code>, one hour by default. The
+            call returns blocked, and the run ends. A read operation and a
+            built-in tool run without approval. A Worker execution has no
+            approval step, because no human is present.
           </p>
           <h2 id="a-session-inside-a-worker-execution">
             A session inside a Worker execution

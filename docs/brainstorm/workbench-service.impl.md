@@ -49,7 +49,7 @@ A mechanism here never overrides a rule there.
 - A rejected call returns `{ block: true, reason: "The human rejected the call." }` to pi.
 - An abort of the run rejects every pending approval.
 - Each pending approval starts one timer of `workbench.approval_wait_ms`.
-- Approve, reject, the abort of the run signal, the abort of the run and the expiry share one exit, `decide`. It clears the timer.
+- Approve, reject, the abort signal of the tool call, the abort of the run (`rejectApprovals`) and the expiry share one exit, `decide`. It clears the timer.
 - At expiry the call returns `{ block: true, reason, terminate: true }` to pi. The reason is "The approval wait ended with no human decision. The call did not run. Do not call it again unless the human asks again."
 - The expiry sets `Run.endingCall` to the call. The agent aborts at the `tool_execution_end` event of that call, so no later call of the batch and no provider call follow.
 - The queue stays at an expiry. Its next item starts at the settle of the run.
@@ -84,11 +84,11 @@ Every operation has `human` access.
 - `get` during a run answers the entries before the run started.
 - The queue is memory only. A restart clears it.
 - `WORKBENCH_QUEUE_LIMIT` is 10. A queued message id has the prefix `workbench_queued_message`.
-- A message with no active run starts a run at once. The settle of a run claims the head of the queue synchronously and starts it.
+- A message with no active run starts a run at once. `queued_message_id` is null when the message starts a run at once. The settle of a run claims the head of the queue synchronously and starts it.
 - The invariant: `session.run` is null only when the queue is empty.
 - Each queued item keeps its requester. Each drained run uses the requester of its own item.
 - A replace clears the queue and stops the run. Its item becomes the only queued item.
-- Stop clears the queue and starts no cleared item.
+- An abort clears the queue and starts no cleared item.
 - A stopped run sets `stopped`. The agent aborts at the `agent_start` event of a stopped run.
 - Each call takes one new idempotency key. A resend after a lost answer can queue a duplicate.
 

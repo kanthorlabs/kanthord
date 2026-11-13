@@ -47,8 +47,8 @@ It describes no mechanism of another service.
 - "Stop & send draft" replaces the run. Cancel keeps the run, the queue and the draft.
 - A draft that is the "/new" command counts as no draft in the confirm.
 - When Edit or Remove finds that the message already started, the chat shows "The message already started."
-- While a run is active or a message waits in the queue, the pickers of the agent provider, the model and the reasoning effort stay disabled.
-- The cleared texts return to the composer, before the draft. The chat shows no line about them in the transcript.
+- While a run is active, the pickers of the agent provider, the model and the reasoning effort stay disabled. They stay disabled while a message waits in the queue.
+- The cleared texts return to the composer before the draft, joined with one newline. The chat shows no line about them in the transcript.
 - The hint line shows "N cleared messages are back in your draft" after Stop or replace clears the queue. One message reads "1 cleared message is back in your draft".
 - A call with no result shows "No Result" with the line "No result. The run ended before this call finished."
 - Every action of a workbench session comes from its human.
