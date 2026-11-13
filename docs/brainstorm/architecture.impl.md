@@ -440,6 +440,7 @@ This sibling declares the fields below.
 - `footprint.thresholds`, which [footprint-service.impl.md](footprint-service.impl.md#configuration) declares.
 - `mission.consecutive_failure_limit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
 - `mission.text_max_bytes`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
+- `workbench.approval_wait_ms`, which [workbench-service.impl.md](workbench-service.impl.md#configuration) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
 
 ## The log
