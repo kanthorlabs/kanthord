@@ -24,10 +24,14 @@ It describes no mechanism of another service.
 - The chat renders the text of an assistant message as Markdown.
 - The chat shows the input of a tool call and a tool result that is a JSON object or array as indented, colored JSON. Other text stays as it is.
 - The chat shows the resource names of a `gateway--healthcheck` result with each segment decoded. Two names that decode to one label stay encoded.
+- Every bubble of the chat shows its author and its time. An agent bubble shows an avatar whose colour derives from the agent name.
+- A Workbench path of two or more segments in agent text opens in a new tab. A slash command never becomes a link.
+- An error shows as one line directly under its cause, code first. The full text wraps and no hover is needed. The failed bubble or card gets a red border.
 - The chat header copies the pi command that continues the session outside kanthord. That pi uses its own login, its own prompt and its own tools, and a write from both sides forks the session.
 - While a run is active and no text streams, the chat shows that the agent works, with the seconds since the run started. The draft stays editable, and Stop takes the place of Send until the run ends.
 - Every action of a workbench session comes from its human.
 - A human picks one agent of the catalog and starts a workbench session with that agent.
+- No conversation exists without a human message.
 - A workbench session belongs to one agent and to no project.
 - One workbench session can act on several projects.
 - A workbench session holds its own configuration: `agent_provider`, `model_identifier` and `reasoning_effort`.
@@ -38,7 +42,9 @@ It describes no mechanism of another service.
 - The session list of an agent lists the sessions that the runtime stores for that workbench directory.
 - The session list of the Workbench lists the sessions of every agent.
 - The dashboard lists the workbench sessions under Workforce › Workbench, with a filter by agent.
-- New Session opens a dialog with a blank Agent field that offers the enabled agents. The quick action of the agent list opens it with its agent.
+- New Session lists only the enabled agents whose `agent list` item holds `workbench` in `consumers`. `workbench.session.create` still refuses any other agent.
+- New Session opens the route `/workbench/new` with no API call. The route shows a greeting from the display name of the agent. The quick action of the agent list opens it with its agent.
+- The first Send calls `workbench.session.create`, then `workbench.session.message`. A closed tab with no message writes nothing.
 - The dialog names the agent providers of the enablement and links to the agent page, where a human adds one.
 - A [workbench session implementation](workbench-service.impl.md#workbench-session) declares the workbench directory and the list.
 
@@ -55,9 +61,10 @@ It describes no mechanism of another service.
 ## Tools
 
 - A workbench session holds the built-in tools that the declaration of its agent enables.
-- It also holds one tool for each `human` operation of the server. The tool invokes the operation under the human identity of the run.
+- It also holds one tool for each operation that the declaration of its agent lists. A listed operation has `human` access, is no stream and carries no secret material. The tool invokes the operation under the human identity of the run.
 - The owning service authorizes each call.
-- A workbench session holds no tool of an operation that carries secret material.
+- A workbench session holds no tool of an operation that carries secret material or answers a presigned URL.
+- `swe@1` and `re@1` read evidence metadata only until A1.
 - A tool of a mutation operation runs only after the human approves that call.
 - A tool of a read operation and a built-in tool run without an approval.
 - A rejected call reaches the agent as a blocked call.
