@@ -40,7 +40,7 @@
         <summary>On this page</summary>
         <ul>
           <li><a href="#in-short">In short</a></li>
-          <li><a href="#the-two-agents">The two agents</a></li>
+          <li><a href="#the-agents">The agents</a></li>
           <li><a href="#two-consumers">Two consumers</a></li>
           <li>
             <a href="#configuration-which-model-answers"
@@ -99,8 +99,11 @@
           <h2 id="in-short">In short</h2>
           <ul>
             <li>
-              Two agents exist: <code>swe@1</code> writes code, and
-              <code>re@1</code> reviews code with read-only tools.
+              Four agents exist: <code>swe@1</code> writes code,
+              <code>re@1</code> reviews code with read-only tools,
+              <code>pe@1</code> repairs the environment of a repository binding,
+              and <code>ops@1</code> (Yumi) reports and changes the state of
+              projects and missions through operation tools.
             </li>
             <li>
               A human picks the provider, the model and the reasoning effort of
@@ -126,10 +129,11 @@
               the Tracking Service holds its entries.
             </li>
           </ul>
-          <h2 id="the-two-agents">The two agents</h2>
+          <h2 id="the-agents">The agents</h2>
           <p>
-            The agent catalog is static and holds two declarations. An agent
-            name names a role, not a worker.
+            The agent catalog is static and holds four declarations. An agent
+            name names a role, not a worker. Each declaration also holds a
+            display name that a human uses in a mention: SWE, RE, PE and Yumi.
           </p>
           <div class="table-wrap">
             <table>
@@ -139,6 +143,7 @@
                   <th>Role</th>
                   <th>Built-in tools</th>
                   <th>Host tools</th>
+                  <th>Operation tools</th>
                   <th>Used by</th>
                 </tr>
               </thead>
@@ -152,6 +157,7 @@
                     <code>bash</code>
                   </td>
                   <td><code>evidence-upload</code></td>
+                  <td>6 node-review reads</td>
                   <td>Worker <code>coder@1</code>, the Workbench</td>
                 </tr>
                 <tr>
@@ -162,7 +168,27 @@
                     <code>ls</code>
                   </td>
                   <td>none</td>
+                  <td>6 node-review reads</td>
                   <td>Worker <code>reviewer@1</code>, the Workbench</td>
+                </tr>
+                <tr>
+                  <td><code>pe@1</code></td>
+                  <td>Platform engineer</td>
+                  <td>
+                    <code>read</code>, <code>grep</code>, <code>find</code>,
+                    <code>ls</code>
+                  </td>
+                  <td>none</td>
+                  <td>none</td>
+                  <td>The environment run of the Project Service</td>
+                </tr>
+                <tr>
+                  <td><code>ops@1</code> (Yumi)</td>
+                  <td>Operations assistant</td>
+                  <td>none</td>
+                  <td>none</td>
+                  <td>36 tools</td>
+                  <td>The Workbench</td>
                 </tr>
               </tbody>
             </table>
@@ -225,7 +251,10 @@
                 <tr>
                   <td>Extra tools</td>
                   <td><code>evidence-upload</code> for <code>swe@1</code></td>
-                  <td>KanthorD operation tools</td>
+                  <td>
+                    Only the operation tools that the declaration of the agent
+                    lists
+                  </td>
                 </tr>
                 <tr>
                   <td>Approval of a change</td>
@@ -603,9 +632,9 @@ Binding prompt of repository app:
             <code>reviewer@1</code> and the replies of the agent.
           </p>
           <p>
-            The agent <code>env@1</code> repairs a failed environment of a
+            The agent <code>pe@1</code> repairs a failed environment of a
             repository binding on the server. Its system prompt holds
-            <code>base.md</code>, <code>env@1.md</code>, layers 2 and 3 of its
+            <code>base.md</code>, <code>pe@1.md</code>, layers 2 and 3 of its
             own binding and the worker framing. It reads the instruction file at
             the commit of its environment run. Its first message holds the
             failure. It has no Workbench session.
@@ -657,7 +686,7 @@ Binding prompt of repository app:
                   <td>
                     <code>prompts.agents[&lt;agent_name&gt;]</code>, one text
                     for each of <code>swe@1</code>, <code>re@1</code> and
-                    <code>env@1</code>
+                    <code>pe@1</code>
                   </td>
                   <td>The repository binding of the project</td>
                 </tr>
@@ -943,7 +972,7 @@ Binding prompt of repository app:
               the work prompt.
             </li>
             <li>
-              A Workbench session and an <code>env@1</code> run take it from the
+              A Workbench session and an <code>pe@1</code> run take it from the
               server process.
             </li>
           </ul>
@@ -960,7 +989,7 @@ Binding prompt of repository app:
             newline answers <code>409 agent.prompt.template_invalid</code>, and
             <code>details.file</code> names the file. Every reader refuses in
             this way: <code>agent.get</code>, the execution setup, the Workbench
-            session open and the <code>env@1</code> run. A reader never replaces
+            session open and the <code>pe@1</code> run. A reader never replaces
             the invalid file with the shipped text, because that would run an
             agent with other rules than the rules that the operator wrote. The
             same limits apply to <code>prompts.repository</code> and to each
@@ -1112,7 +1141,7 @@ Binding prompt of repository app:
               <strong>Environment onboarding</strong> treats the new binding ID
               of the revision as a changed binding. It clears
               <code>environment_from_agent</code>, the mark that a stored
-              environment came from a session of <code>env@1</code>.
+              environment came from a session of <code>pe@1</code>.
             </li>
             <li>
               <strong>A deploy</strong> upgrades the server and every worker
@@ -1213,14 +1242,18 @@ Binding prompt of repository app:
               never a tool.
             </li>
             <li>It is not a stream.</li>
-            <li>It handles no secret.</li>
+            <li>
+              It handles no secret. An operation whose answer holds a presigned
+              URL is secret material.
+            </li>
+            <li>The declaration of the agent lists its id.</li>
           </ul>
           <p>
             The tool name is the operation id with each <code>.</code> replaced
             by <code>--</code>, for example <code>mission--node--create</code>.
           </p>
           <p>
-            The agent cannot call these 13 human operations. Twelve of them
+            The agent cannot call these 16 human operations. Fifteen of them
             handle a secret. <code>repository.host_key.pin</code> confirms the
             trust of an SSH host, and only a human confirms a host key.
           </p>
@@ -1244,11 +1277,102 @@ Binding prompt of repository app:
               <code>storage.credential.rotate</code>,
               <code>storage.credential.check</code>
             </li>
+            <li>
+              <code>intake.inbound.get</code>, <code>intake.storage.get</code>,
+              <code>mission.evidence.asset.content.get</code>
+            </li>
           </ul>
           <p>
             The agent therefore cannot create a credential, change a secret, pin
             a host key, or finish an OAuth login. A human does that in the
             dashboard or the CLI.
+          </p>
+          <p>
+            The declaration of each agent lists its operation tools.
+            <code>swe@1</code> and <code>re@1</code> hold the same 6 node-review
+            reads: <code>mission.node.get</code>,
+            <code>mission.attempt.list</code>,
+            <code>mission.outcome.list</code>,
+            <code>mission.assessment.list</code>,
+            <code>mission.evidence.list</code> and
+            <code>mission.evidence.get</code>. They read evidence metadata only.
+            <code>pe@1</code> lists no operation, so it has no Workbench
+            session. <code>ops@1</code> holds 36 tools by damage class:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>Count</th>
+                  <th>Tools</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>R0p, probe</td>
+                  <td>1</td>
+                  <td><code>gateway.healthcheck</code></td>
+                </tr>
+                <tr>
+                  <td>R0, read</td>
+                  <td>19</td>
+                  <td>
+                    <code>project.list</code>, <code>mission.get</code>,
+                    <code>mission.node.list</code>,
+                    <code>mission.node.get</code>,
+                    <code>mission.assessment.list</code>,
+                    <code>mission.proposal.list</code>,
+                    <code>mission.externalAction.list</code>,
+                    <code>mission.evidence.list</code>,
+                    <code>scheduler.execution.list</code>,
+                    <code>scheduler.queue.list</code>,
+                    <code>worker.instance.list</code>,
+                    <code>agent.cooldown.list</code>,
+                    <code>workbench.session.list</code>,
+                    <code>mission.export</code>,
+                    <code>mission.import.preview</code>,
+                    <code>worker.catalog.list</code>,
+                    <code>project.binding.list</code>,
+                    <code>project.agentConfiguration.list</code>,
+                    <code>llm.credential.list</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>R1, undo</td>
+                  <td>9</td>
+                  <td>
+                    <code>mission.node.pause</code>,
+                    <code>mission.node.resume</code>,
+                    <code>mission.node.check</code>,
+                    <code>mission.node.priority.set</code>,
+                    <code>mission.dependency.add</code>,
+                    <code>mission.dependency.remove</code>,
+                    <code>project.pause</code>, <code>project.resume</code>,
+                    <code>agent.cooldown.clear</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>R2, rework</td>
+                  <td>7</td>
+                  <td>
+                    <code>mission.node.unblock</code>,
+                    <code>mission.node.block</code>,
+                    <code>mission.node.create</code>,
+                    <code>mission.node.update</code>,
+                    <code>mission.proposal.decide</code>,
+                    <code>mission.criterion.set</code>,
+                    <code>mission.import.apply</code>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Damage gates and duty selects. An operation of class R3 (loss or
+            setup), C (control) or S (secret) is never a tool. A read is a tool
+            when an operations duty needs it. An R1 or R2 mutation is a tool
+            when an operations duty acts with it. A human changes no list.
           </p>
           <p>
             A Workbench operation tool that changes state waits for the human.
