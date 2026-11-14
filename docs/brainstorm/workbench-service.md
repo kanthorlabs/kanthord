@@ -141,7 +141,7 @@ It describes no mechanism of another service.
 - An agent that cannot do an act offers one [action card](workbench-service.vocabulary.md#action-card) through the tool `offer_action`. The owner clicks the card, and the act runs as the owner's own act through the dashboard route.
 - The tool `offer_action` runs no act. It is no operation, so the approval of a tool call does not apply to it.
 - The allow-list of `offer_action` holds eight acts: `mission.node.resume`, `mission.node.unblock`, `mission.node.check`, `mission.node.discard`, `mission.node.override` and `mission.node.pause` with a node as target, and `project.pause` and `project.resume` with a project as target.
-- Discard, override, node pause and project pause confirm in their dashboard dialogs. Project resume and check run at once.
+- Discard, override, node pause and project pause confirm in their dashboard dialogs. Project resume runs at once.
 - A click on the card reads the target again. A changed target runs no act.
 - One card per answer. A second offer in one run is refused, and the first card stays.
 - An agent offers a card for an act that it holds as a tool when the human did not direct that act. It calls its own tool only when the run message directs the act.
