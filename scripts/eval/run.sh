@@ -12,8 +12,8 @@ PRETTIER="$ROOT/node_modules/.bin/prettier"
 MAIN=$(dirname "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)")
 ENV_FILE="$MAIN/engine/.env.eval"
 
-[ -f "$ENV_FILE" ] || die "$ENV_FILE is missing"
-grep -q '^EVAL_ANTHROPIC_API_KEY=.' "$ENV_FILE" || die "$ENV_FILE holds no value for EVAL_ANTHROPIC_API_KEY"
+[ -f "$ENV_FILE" ] || die "$ENV_FILE is missing; it must hold EVAL_ANTHROPIC_API_KEY"
+grep -Eq '^EVAL_ANTHROPIC_API_KEY=[[:space:]]*("[^"]+"|'\''[^'\'']+'\''|[^"'\''[:space:]#])' "$ENV_FILE" || die "$ENV_FILE holds no value for EVAL_ANTHROPIC_API_KEY"
 
 HISTORY="$ROOT/docs/reference/agent/evals/$AGENT.json"
 RUN=$(date -u +%Y%m%d-%H%M%S)
