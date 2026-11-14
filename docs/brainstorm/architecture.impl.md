@@ -1811,6 +1811,7 @@ The deck rules follow.
 - Settled elsewhere: the item leaves with no act of this client, or after the client cancels the act dialog. The card then shows "The selected item no longer waits." for 1.5 s. Then the same exit follows.
 - Queue line: the pending approval of the open Home conversation renders in the stream as one line. It reads "<subject> is #k in your queue."
 - The "#k" link of the queue line moves the cursor.
+- In the Home chat, an action card whose target holds a node or project deck item renders as the queue line "<subject> is #k in your queue." with no card. The "#k" link moves the cursor to that item. A card whose target holds no deck item renders as in the Workbench chat.
 - Yumi off: the deck and every board act work. Ask Yumi leaves every card, and `environment_failed` leads with "Open project".
 - With Yumi off, the composer is disabled and shows no command list.
 
