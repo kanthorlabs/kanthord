@@ -28,6 +28,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - The component refuses a record of a platform that it does not own.
 - A credential of an LLM platform holds one copy for each [holder](custody.vocabulary.md#holder): `server`, one [worker machine](worker-service.md#worker-instances) or one [worker instance](worker-service.md#worker-instances).
 - A `worker` instance uses the copy of its [copy holder](custody.vocabulary.md#copy-holder): its own copy when it holds one, else the copy of its machine. The instances of one machine thus share one copy.
+- A secret is typed only in the owner's dialog, never through an agent.
 - A human enters a secret once and names its holders. The server seals each copy of a machine or an instance and drops the plaintext.
 - A worker instance enters a copy of its own holder only, already sealed to its own key.
 - A copy of a machine or an instance skips the pre-save check and the provider check. The human types the model ids of such an `openai-compatible` copy.

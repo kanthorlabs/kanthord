@@ -37,6 +37,7 @@ A mechanism here never overrides a rule there.
 | `action_offer` | `tool_call_id`, `operation_id`, `target_id`, `seen` | `offer_action` | The member that called the tool | The card merge of the dashboard and `actionReport` | Shown with no button (L7) |
 
 - `seen` of a node target is `{ name, state, attempt }`. `seen` of a project target is `{ name, paused }`.
+- `seen` of a credential target is `{ revision }`, the newest live revision. `seen` of an agent target is `{ revision }`, the enablement revision. `seen` of a binding set target is `{ version }`, the binding set version.
 
 ## Prompt
 
@@ -78,6 +79,13 @@ A mechanism here never overrides a rule there.
 - Every session holds the tool `offer_action` (`WORKBENCH_ACTION_TOOL_NAME`) beside its operation tools. `offerActionTool` of `engine/src/workbench/actions.ts` builds it.
 - The parameters are a strict object `{ operation_id, target_id }`. `operation_id` is an enum of the ids of `ACTION_CARD_OPERATIONS`. The description of the tool and `workbench.md` list the ids.
 - `ACTION_CARD_OPERATIONS` maps `mission.node.{resume,unblock,check,discard,override,pause}` to the target `node`, and `project.{pause,resume}` to the target `project`.
+- Three setup acts join `ACTION_CARD_OPERATIONS`:
+  - `llm.credential.rotate`: target kind `credential`, an LLM credential name, read `llm.credential.get`.
+  - `project.bindingSet.write`: target kind `bindingSet`, a project id, read `project.bindingSet.get`.
+  - `agent.enablement.put`: target kind `agent`, an agent name, read `agent.enablement.get`.
+- A setup target passes no prefix check. An absent target answers the code of its read: `credential.credential.not_found`, `project.project.not_found` or `agent.enablement.not_found`. The tool writes no record.
+- An archived credential answers `workbench.action.target_refused`.
+- The three setup ids stay off every tool list. `llm.credential.rotate` is in `SECRET_OPERATION_IDS`.
 - A call runs three checks in this order. Each failure is a tool error that starts with its code:
   - `workbench.action.operation_refused`: `operation_id` is not a key of `ACTION_CARD_OPERATIONS`.
   - `workbench.action.target_invalid`: `target_id` is no identity of the target kind.
@@ -186,6 +194,13 @@ Every operation has `human` access.
 - The states are tested in this order: `done`, `superseded`, `unknown`, then `waiting` or `live`.
 - Discard, override, node pause and project pause confirm in their dialogs. Resume and unblock open their dialogs. Check (`mission.node.check`) and `project.resume` run at once with no dialog.
 - A click on the button reads the target again. When the target differs from `seen`, the card runs no act and shows a change line.
+- A setup card opens the existing dashboard dialog with the target id only:
+  - `llm.credential.rotate`: `BoardRotateSheet` through the core hook `useNamedRotate`. One save rotates the server copy and each ticked holder copy. The card reports `done` only when the server copy rotates.
+  - `project.bindingSet.write`: `BindingsPanel` in a right `Sheet`. `onWritten` reports `done`.
+  - `agent.enablement.put`: `DefaultConfigurationSheet`. `onSaved` reports `done`.
+- A credential with no live server copy or no platform entry shows "Not available".
+- A read whose revision or version differs from `seen` shows the change line and opens no dialog.
+- A closed dialog reports nothing.
 - The node change line is "<id> changed since the card: it is now <state> (attempt <m>). Nothing ran."
 - The project change line is "<id> changed since the card: it is now paused. Nothing ran." or "<id> changed since the card: it is now active. Nothing ran."
 
@@ -212,6 +227,7 @@ Every operation has `human` access.
 | tool error | `workbench.action.operation_refused`         | `operation_id` of an offer is no act of `ACTION_CARD_OPERATIONS`.            |
 | tool error | `workbench.action.target_invalid`            | `target_id` of an offer is no identity of the target kind.                   |
 | tool error | `workbench.action.offer_limit`               | The run already offered one action card.                                     |
+| tool error | `workbench.action.target_refused`            | The credential of a `llm.credential.rotate` offer is archived.               |
 | tool error | `workbench.evidence.asset_mismatch`          | The evidence of an `evidence_read` holds no asset `asset_id`.                |
 | tool error | `workbench.evidence.not_granted`             | The owner did not grant the node of the evidence to the conversation.        |
 | tool error | `workbench.evidence.media_refused`           | The media type of the asset is no text media type.                           |

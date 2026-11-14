@@ -1849,6 +1849,9 @@ Each kind follows one order: the primary act, the other acts, Last trace, then D
 
 - The deck keeps each KanthorD act of today, also an act outside the mockup set.
 - Approve, Reject, Run onboarding again, Check now and Verify credential send at once. Rotate opens the rotate sheet.
+- The rotate sheet is shared. The Fix `credential_refused` and the Workbench setup card "Rotate <credential>" open the same sheet, `BoardRotateSheet`.
+- The core hook `useNamedRotate` takes the credential name and the options `reload`, `onActed` and `onOpenChange`. `useBoardRotate` is a thin wrapper for the Fix item.
+- The Workbench card reports `done` when the server copy rotates.
 - The rotate sheet title reads "Rotate <credential>". The description reads "The new secret becomes the next revision of the server copy."
 - The footer holds "Rotate secret" and "Cancel". The sheet shows no stock Close. Cancel and Esc close it.
 - The secret fields of the rotate sheet follow the `secret_shape` of the platform of the server copy, as on the credential detail. An `api_key` platform shows "API Key". An `oauth` platform shows "Refresh Token", "Access Token" and "Access Token Expiry".

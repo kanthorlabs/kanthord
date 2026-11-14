@@ -139,13 +139,20 @@ It describes no mechanism of another service.
 - A kanthord restart ends the active run and every pending approval.
 - An agent that cannot do an act offers one [action card](workbench-service.vocabulary.md#action-card) through the tool `offer_action`. The owner clicks the card, and the act runs as the owner's own act through the dashboard route.
 - The tool `offer_action` runs no act. It is no operation, so the approval of a tool call does not apply to it.
-- The allow-list of `offer_action` holds eight acts: `mission.node.resume`, `mission.node.unblock`, `mission.node.check`, `mission.node.discard`, `mission.node.override` and `mission.node.pause` with a node as target, and `project.pause` and `project.resume` with a project as target.
+- The allow-list of `offer_action` holds eleven acts. Eight are the following: `mission.node.resume`, `mission.node.unblock`, `mission.node.check`, `mission.node.discard`, `mission.node.override` and `mission.node.pause` with a node as target, and `project.pause` and `project.resume` with a project as target. The other three are the setup acts of the rule block "Setup cards".
 - Discard, override, node pause and project pause confirm in their dashboard dialogs. Resume and unblock open their dashboard dialogs.
 - Check (`mission.node.check`) and `project.resume` run at once with no dialog.
 - A click on the card reads the target again. A changed target runs no act.
 - An agent offers at most one card per answer. A second offer in one run is refused, and the first card stays.
 - An agent offers a card for an act that it holds as a tool when the human did not direct that act. It calls its own tool only when the run message directs the act.
 - The agent never sends the human to another agent, another page or the dashboard.
+
+Setup cards:
+
+- An agent offers a [setup card](workbench-service.vocabulary.md#setup-card) on an action card for a setup act: `llm.credential.rotate` for `credential_refused`, `project.bindingSet.write` for `no_taker`, and `agent.enablement.put` for `agent_invalid` and `request_rejected`.
+- A setup card carries only the operation id and the target id. A click opens the existing dashboard dialog.
+- The owner types every value in that dialog, a secret included, never through an agent. The dialog calls the existing route under the owner JWT. The guard does not decide the act.
+- An agent never asks the human for a secret and never accepts one in the chat.
 
 ### Evidence read
 
