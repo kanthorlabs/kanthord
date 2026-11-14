@@ -92,7 +92,7 @@ A mechanism here never overrides a rule there.
   - `workbench.action.offer_limit`: the run already offered a card. `Run.offerToolCallId` holds the first `tool_call_id`.
 - Then the tool reads the target under the requester of the run. `TARGET_READS` maps `node` to `mission.node.get` with `node_id`, and `project` to `project.get` with `project_id`. A refused or failed read is a tool error with the code of the owning service.
 - The tool appends the `action_offer` record, then sets `Run.offerToolCallId`. A run holds at most one card.
-- The result text is fixed: "Card shown: <operation_id> on <target_id>. The owner decides. Do not state that the act ran. End the answer."
+- The result text is fixed: "Card shown: <operation_id> on <target_id>. The owner decides. Do not state that the act ran. If the answer is not written yet, write it now. Then end the answer."
 - The tool is no operation and never enters the mutation map. The approval hook does not decide it.
 
 ### evidence_read

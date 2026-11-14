@@ -989,8 +989,9 @@ This section records the eval harness of the engine node `l2-engine`.
 - `openSandbox` in `engine/src/eval/sandbox.ts` builds one sandbox for each agent run. It never shares a sandbox between two runs.
 - It calls `gatewayFixture` with a temporary state directory. The fixture removes the directory when the run ends.
 - It calls `provisionNativeAgent` with the eval key and `EVAL_CONFIGURATION`, so the subject resolves one `anthropic` credential.
-- For each fixture key of a case, `provisionWorkerProject` creates a project with one worker binding `general` of `claude-code@1` and `instance_count: 0`.
-- That binding covers every claim, and no worker runs a fixture node. The mission import of the fixture entries then applies.
+- For each fixture key of a case, `provisionWorkerProject` creates a project with one worker binding `general` of `claude-code@1` and `instance_count: 1`, and seeds one live registration for it. A sandbox fixture project has a live `general` binding by default.
+- `case-fix-no_taker` builds its no-taker state explicitly. Its `job_without_taker` seed step ends the registrations of `general`, sets `general` back to `instance_count: 0` and ages the job.
+- That binding covers every claim, and no fixture node runs in a worker. The mission import of the fixture entries then applies.
 - A turn waits up to `TURN_DEADLINE_MS`, 300000 ms. A turn that times out ends the case run.
 - `node --test-timeout`, set by `scripts/eval/run.sh` from `EVAL_TIMEOUT_MS`, bounds one agent run.
 
