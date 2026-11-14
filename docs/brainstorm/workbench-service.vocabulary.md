@@ -66,8 +66,14 @@ Ulrich types "/health" in the Home chat. The chat sends "Check the health of the
 ## action card
 
 One card in the chat that offers exactly one owner act on one target.
-The closed set of acts is the eight ids of `ACTION_CARD_OPERATIONS`.
+The closed set of acts is the eleven ids of `ACTION_CARD_OPERATIONS`.
 Yumi finds a blocked node and offers `mission.node.unblock` on it. Ulrich clicks the card, and the act runs as his own act.
+
+## setup card
+
+An [action card](#action-card) for a credential rotation, a binding edit or an agent enablement edit. It opens the existing dashboard dialog with the target id only.
+The closed set of acts is `llm.credential.rotate`, `project.bindingSet.write` and `agent.enablement.put`.
+Yumi finds a refused credential and offers `llm.credential.rotate` on it. Ulrich clicks the card and types the new secret in the rotate sheet.
 
 ## action offer
 
