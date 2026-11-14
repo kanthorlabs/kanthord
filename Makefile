@@ -14,7 +14,7 @@ export WEB_PORT ?= 27182
 .PHONY: help dev bootstrap release release-build release-smoke release-smoke-container release-image \
 	homelab-nginx homelab-stats homelab-kanthord homelab-cleanup \
 	sync sync-status test-submodules test-container cleanup docs-tools \
-	e2e e2e-start e2e-watch e2e-stop e2e-restart e2e-resume e2e-scale e2e-check pi-tools-update
+	e2e e2e-start e2e-watch e2e-stop e2e-restart e2e-resume e2e-scale e2e-check pi-tools-update eval
 
 help:
 	@echo "Kanthord. Run make <target>."
@@ -136,6 +136,14 @@ help:
 	@echo "                   Prints one line per check and RESULT pass or RESULT fail."
 	@echo "                   Clone lives in .dev/e2e/<RUN>/check/ of the main checkout."
 	@echo ""
+	@echo "eval"
+	@echo "  eval             make eval AGENT=<subject>: run the eval suite of one subject in a"
+	@echo "                   sandbox, and compare it with the latest accepted run"
+	@echo "                   REPEAT=<k>: default 3"
+	@echo "                   CASES=<id,id>: default all"
+	@echo "                   ACCEPT=1: append the run to the history"
+	@echo "                   The key comes from engine/.env.eval"
+	@echo ""
 	@echo "pi tools"
 	@echo "  pi-tools-update  Pin one pi tool (fd, rg) to a release in engine/static/pi-tools.json"
 	@echo "                   TOOL=rg VERSION=15.1.0. It refuses a release younger than"
@@ -194,5 +202,7 @@ e2e-scale:
 	@$(S)/e2e/scale.sh
 e2e-check:
 	@$(S)/e2e/check.sh
+eval:
+	@$(S)/eval/run.sh
 pi-tools-update:
 	@$(S)/engine/pi-tools-update.sh
