@@ -976,7 +976,7 @@ This section records the eval harness of the engine node `l2-engine`.
 
 - `engine/src/eval/run.eval.ts` is a `node:test` file. Its name ends in `.eval.ts`, so the default test glob `src/**/*.test.ts` skips it.
 - `make eval` runs it through `scripts/eval/run.sh`. The runner fails only on a harness error. A failed case is a result, not a failure.
-- `EVAL_AGENT` names the subject. `EVAL_OUTPUT` is the path of the run file. `EVAL_HISTORY` is the path of the history file. `EVAL_ANTHROPIC_API_KEY` is the key.
+- `EVAL_AGENT` names the subject. `EVAL_OUTPUT` is the path of the run file. `EVAL_HISTORY` is the path of the history file. The harness reads exactly one of `EVAL_ANTHROPIC_API_KEY` and `EVAL_ANTHROPIC_AUTH_FILE`. `EVAL_ANTHROPIC_API_KEY` is the key. `EVAL_ANTHROPIC_AUTH_FILE` is the absolute path of a pi-ai `auth.json`.
 - `EVAL_REPEAT` is a positive integer, default 3. `EVAL_CASES` is a list of case ids separated by commas, default every case.
 - `EVAL_RERUN=1` selects the rerun mode. It requires `EVAL_CASES`, the same repeat as the run file, and the same `case_digest` for each named case.
 - The rerun mode merges its results into the run file as `reruns` and `rerun_pass_rate`. It recomputes `comparison`.
@@ -1045,9 +1045,14 @@ This section records the eval harness of the engine node `l2-engine`.
 
 ### The key
 
-- `engine/.env.eval` holds `EVAL_ANTHROPIC_API_KEY`. `engine/.gitignore` ignores it through `.env.*`.
+- `engine/.env.eval` holds exactly one of `EVAL_ANTHROPIC_API_KEY` and `EVAL_ANTHROPIC_AUTH_FILE`. `engine/.gitignore` ignores it through `.env.*`.
 - `scripts/eval/run.sh` reads the file of the main checkout. It gives it to the engine process through `node --env-file`.
-- No file, log or output receives the key. The run file and the history hold no reply text and no tool input.
+- `scripts/eval/run.sh` stops when both variables or none hold a value. It also stops when `EVAL_ANTHROPIC_AUTH_FILE` is not an absolute path or names no file.
+- `EVAL_ANTHROPIC_API_KEY` gives the sandbox an `anthropic` credential with the key.
+- `EVAL_ANTHROPIC_AUTH_FILE` gives the sandbox an `anthropic-subscription` credential with the OAuth entry of the file.
+- Before a case, the harness refreshes the token when it expires inside the refresh window. It writes the new token back to the auth file.
+- For the sign-in step, run `<root>/engine/node_modules/.bin/pi-ai login anthropic` in a private directory outside the repository. It writes `auth.json` there. No other program uses that file, because the harness writes the refreshed token to it.
+- No file, log or output receives the key or the content of the auth file. The run file and the history hold no reply text and no tool input.
 
 ### Lint and build
 

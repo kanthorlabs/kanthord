@@ -142,7 +142,7 @@ help:
 	@echo "                   REPEAT=<k>: default 3"
 	@echo "                   CASES=<id,id>: default all"
 	@echo "                   ACCEPT=1: append the run to the history"
-	@echo "                   The key comes from engine/.env.eval"
+	@echo "                   The key or the subscription auth file comes from engine/.env.eval"
 	@echo ""
 	@echo "pi tools"
 	@echo "  pi-tools-update  Pin one pi tool (fd, rg) to a release in engine/static/pi-tools.json"
