@@ -27,6 +27,7 @@ env_file_value() {
 [ -f "$ENV_FILE" ] || die "$ENV_FILE is missing; it must hold exactly one of EVAL_ANTHROPIC_API_KEY and EVAL_ANTHROPIC_AUTH_FILE"
 KEY_VALUE=$(env_file_value EVAL_ANTHROPIC_API_KEY | tr -d '[:space:]')
 AUTH_FILE_VALUE=$(env_file_value EVAL_ANTHROPIC_AUTH_FILE)
+AUTH_FILE_VALUE=$(printf '%s' "${AUTH_FILE_VALUE%%[[:space:]]#*}" | sed -E 's/[[:space:]]+$//')
 if [ -n "$KEY_VALUE" ] && [ -n "$AUTH_FILE_VALUE" ]; then
 	die "$ENV_FILE holds both EVAL_ANTHROPIC_API_KEY and EVAL_ANTHROPIC_AUTH_FILE; keep exactly one"
 fi

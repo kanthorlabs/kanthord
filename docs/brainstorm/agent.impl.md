@@ -1050,8 +1050,8 @@ This section records the eval harness of the engine node `l2-engine`.
 - `scripts/eval/run.sh` stops when both variables or none hold a value. It also stops when `EVAL_ANTHROPIC_AUTH_FILE` is not an absolute path or names no file.
 - `EVAL_ANTHROPIC_API_KEY` gives the sandbox an `anthropic` credential with the key.
 - `EVAL_ANTHROPIC_AUTH_FILE` gives the sandbox an `anthropic-subscription` credential with the OAuth entry of the file.
-- Before a case, the harness refreshes the token when it expires inside the refresh window. It writes the new token back to the auth file.
-- For the sign-in step, run `<root>/engine/node_modules/.bin/pi-ai login anthropic` in a private directory outside the repository. It writes `auth.json` there. No other program uses that file, because the harness writes the refreshed token to it.
+- Before a case, the harness refreshes the token when it expires within `PI_OAUTH_REFRESH_WINDOW_MS` plus the turn deadline. It writes the new token back to the auth file.
+- For the sign-in step, run `<root>/engine/node_modules/.bin/pi-ai login anthropic` in a private directory outside the repository. It writes `auth.json` there. Run `chmod 600 auth.json` after the sign-in. No other program uses that file, because the harness writes the refreshed token to it.
 - No file, log or output receives the key or the content of the auth file. The run file and the history hold no reply text and no tool input.
 
 ### Lint and build
