@@ -111,6 +111,7 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
 - [ ] Define how a workbench session pulls and executes a task through the Worker and Scheduler Services. The Workbench Service owns no worker, no registration and no claim.
 - [ ] The composer of the chat shows a model picker and a reasoning-effort picker, as in the screenshot of Ulrich on 2026-10-06. Its `+` menu offers images and files, commands (`/`), context (`@`) and a shell command (`!`). Define each of the four from the capability of pi that serves it: prompt templates, file references, bash and image input.
 - [ ] Home cards ([The Home page](architecture.impl.md#the-home-page)) are client cards, and Yumi sees an item only after "Ask Yumi" or "/brief". Server records of the cards wait for a later layer.
+- [ ] Action card for `mission.node.block` once the dashboard has a dialog for it.
 - [ ] Added 2026-11-14. In a guest-started run (layer L8), a call can wait on a card when its invite ends. The call fails as a tool error at the execute scope check, and the run does not end. Decide the rule in L8.
 
 ### Worker Service

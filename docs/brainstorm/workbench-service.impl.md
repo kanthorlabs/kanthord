@@ -21,6 +21,23 @@ A mechanism here never overrides a rule there.
 - A resume takes the last entry of each kind, and the Agent component validates the three values as a complete entry.
 - The credential view of a workbench session exposes only the credential of the agent provider that the configuration of the session names.
 
+## Workbench record
+
+- A Workbench record is one `custom` entry of pi with `customType` `kanthord.workbench.record` (`WORKBENCH_RECORD_ENTRY`). Its `data` is the record.
+- `workbenchRecordSchema` is a zod discriminated union on `kind`. Each variant is a strict object.
+- A record is append-only. The service never edits or removes a record.
+- No model reads a record. pi keeps a `custom` entry out of the model context.
+- The entry of pi carries the id, the parent id and the timestamp. The record carries none of them.
+- `appendRecord(manager, record)` parses the record, then calls `appendCustomEntry`. It throws on invalid data.
+- `recordOf(entry)` answers the record of a Workbench record entry. It answers `null` for another entry or for invalid data, and it never throws.
+- The configuration entry `kanthord.workbench.configuration` keeps its own name and is no Workbench record.
+
+| Kind           | Fields                                              | Writer         | Session file                    | Readers                                            | Guest view                |
+| -------------- | --------------------------------------------------- | -------------- | ------------------------------- | -------------------------------------------------- | ------------------------- |
+| `action_offer` | `tool_call_id`, `operation_id`, `target_id`, `seen` | `offer_action` | The member that called the tool | The card merge of the dashboard and `actionReport` | Shown with no button (L7) |
+
+- `seen` of a node target is `{ name, state, attempt }`. `seen` of a project target is `{ name, paused }`.
+
 ## Prompt
 
 - The workbench prompt is [assets/prompt/workbench.md](assets/prompt/workbench.md).
@@ -56,21 +73,36 @@ A mechanism here never overrides a rule there.
 - A call with no result shows the state "No Result" in the chat.
 - A restart keeps no approval.
 
+### offer_action
+
+- Every session holds the tool `offer_action` (`WORKBENCH_ACTION_TOOL_NAME`) beside its operation tools. `offerActionTool` of `engine/src/workbench/actions.ts` builds it.
+- The parameters are a strict object `{ operation_id, target_id }`. `operation_id` is an enum of the ids of `ACTION_CARD_OPERATIONS`. The description of the tool and `workbench.md` list the ids.
+- `ACTION_CARD_OPERATIONS` maps `mission.node.{resume,unblock,check,discard,override,pause}` to the target `node`, and `project.{pause,resume}` to the target `project`.
+- A call runs three checks in this order. Each failure is a tool error that starts with its code:
+  - `workbench.action.operation_refused`: `operation_id` is not a key of `ACTION_CARD_OPERATIONS`.
+  - `workbench.action.target_invalid`: `target_id` is no identity of the target kind.
+  - `workbench.action.offer_limit`: the run already offered a card. `Run.offerToolCallId` holds the first `tool_call_id`.
+- Then the tool reads the target under the requester of the run. `TARGET_READS` maps `node` to `mission.node.get` with `node_id`, and `project` to `project.get` with `project_id`. A refused or failed read is a tool error with the code of the owning service.
+- The tool appends the `action_offer` record, then sets `Run.offerToolCallId`. A run holds at most one card.
+- The result text is fixed: "Card shown: <operation_id> on <target_id>. The owner decides. Do not state that the act ran. End the answer."
+- The tool is no operation and never enters the mutation map. The approval hook does not decide it.
+
 ## Operations
 
 Every operation has `human` access.
 
-| Operation ID                     | Route                                                                                                                      | Lifetime | Answer                                                                                                                                        |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workbench.session.list`         | `GET /api/workbench/session` with an optional `agent_name`                                                                 | `unary`  | The session list of every agent, or of one agent. Each item carries `agent_name`.                                                             |
-| `workbench.session.create`       | `POST /api/workbench/session` with `{ agent_name, agent_provider, model_identifier, reasoning_effort }`                    | `unary`  | The new session.                                                                                                                              |
-| `workbench.session.get`          | `GET /api/workbench/session/:session_id`                                                                                   | `unary`  | The configuration, the entries of the completed runs, `run_active` and `resume_command`.                                                      |
-| `workbench.session.configure`    | `PUT /api/workbench/session/:session_id/configuration`                                                                     | `unary`  | The new configuration. 409 `workbench.session.run_active` while a run is active.                                                              |
-| `workbench.session.message`      | `POST /api/workbench/session/:session_id/message` with `{ text, delivery }`. `delivery` is `queue` (default) or `replace`. | `unary`  | 202 with `{ session_id, run_active: true, queued_message_id, cleared }`. 409 `workbench.session.queue_full` at 10 queued messages.            |
-| `workbench.session.approve`      | `POST /api/workbench/session/:session_id/approve` with `{ tool_call_id, approved }`                                        | `unary`  | `{ session_id, tool_call_id, approved }`. The pending call runs or returns blocked.                                                           |
-| `workbench.session.abort`        | `POST /api/workbench/session/:session_id/abort`                                                                            | `unary`  | `{ session_id, run_active: false, cleared }`. The active run stops and the queue clears. The answer has the same shape when no run is active. |
-| `workbench.session.queue.remove` | `DELETE /api/workbench/session/:session_id/queue/:queued_message_id`                                                       | `unary`  | `{ session_id, queued_message_id }`. 404 `workbench.session.queued_message_not_found`.                                                        |
-| `workbench.session.events`       | `GET /api/workbench/session/:session_id/events` with `after` and `version`                                                 | `wait`   | The entries after `after` and the snapshot of the active run.                                                                                 |
+| Operation ID                      | Route                                                                                                                                  | Lifetime | Answer                                                                                                                                        |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workbench.session.list`          | `GET /api/workbench/session` with an optional `agent_name`                                                                             | `unary`  | The session list of every agent, or of one agent. Each item carries `agent_name`.                                                             |
+| `workbench.session.create`        | `POST /api/workbench/session` with `{ agent_name, agent_provider, model_identifier, reasoning_effort }`                                | `unary`  | The new session.                                                                                                                              |
+| `workbench.session.get`           | `GET /api/workbench/session/:session_id`                                                                                               | `unary`  | The configuration, the entries of the completed runs, `run_active` and `resume_command`.                                                      |
+| `workbench.session.configure`     | `PUT /api/workbench/session/:session_id/configuration`                                                                                 | `unary`  | The new configuration. 409 `workbench.session.run_active` while a run is active.                                                              |
+| `workbench.session.message`       | `POST /api/workbench/session/:session_id/message` with `{ text, delivery }`. `delivery` is `queue` (default) or `replace`.             | `unary`  | 202 with `{ session_id, run_active: true, queued_message_id, cleared }`. 409 `workbench.session.queue_full` at 10 queued messages.            |
+| `workbench.session.approve`       | `POST /api/workbench/session/:session_id/approve` with `{ tool_call_id, approved }`                                                    | `unary`  | `{ session_id, tool_call_id, approved }`. The pending call runs or returns blocked.                                                           |
+| `workbench.session.abort`         | `POST /api/workbench/session/:session_id/abort`                                                                                        | `unary`  | `{ session_id, run_active: false, cleared }`. The active run stops and the queue clears. The answer has the same shape when no run is active. |
+| `workbench.session.queue.remove`  | `DELETE /api/workbench/session/:session_id/queue/:queued_message_id`                                                                   | `unary`  | `{ session_id, queued_message_id }`. 404 `workbench.session.queued_message_not_found`.                                                        |
+| `workbench.session.action.report` | `POST /api/workbench/session/:session_id/action/:tool_call_id/report` with `{ outcome, error_code }`. `outcome` is `done` or `failed`. | `unary`  | `{ session_id, tool_call_id, outcome }`. 404 `workbench.session.action_not_found`. 409 `workbench.session.action_settled`.                    |
+| `workbench.session.events`        | `GET /api/workbench/session/:session_id/events` with `after` and `version`                                                             | `wait`   | The entries after `after` and the snapshot of the active run.                                                                                 |
 
 - `resume_command` is `pi --session <session file>`, with the home directory written as `~`. pi opens the file from any directory and takes the working directory from the session header.
 - `after` names the id of the last session entry that the client holds.
@@ -92,6 +124,41 @@ Every operation has `human` access.
 - A stopped run sets `stopped`. The agent aborts at the `agent_start` event of a stopped run.
 - Each call takes one new idempotency key. A resend after a lost answer can queue a duplicate.
 
+### Action result
+
+- `workbench.session.action.report` is a mutation with `human` access. It records the outcome of an act that the owner ran. It runs no act.
+- The body is `{ outcome, error_code }`. `error_code` is `null` or a dotted lower-case code of at most 128 characters. A `done` body with an `error_code` fails validation.
+- The operation finds the `action_offer` record with the `tool_call_id`. It answers 404 `workbench.session.action_not_found` when none exists.
+- The operation answers 409 `workbench.session.action_settled` when the card already holds a `done` result.
+- A `failed` report leaves the card open, and a later `done` report is accepted.
+- The operation appends the `custom_message` `kanthord.workbench.action_result` with `display: false`.
+- The text of the message is "The owner ran <operation_id> on <target_id>. Result: done." or "Result: failed, <error_code>." A `failed` report with no code reads "Result: failed."
+- `details` holds `tool_call_id`, `operation_id`, `target_id`, `outcome` and `error_code`. `operation_id` and `target_id` come from the record, not from the body.
+- With an open agent, the service sends the message to the agent without a turn. Otherwise it appends the message to the session file.
+- The readers of `details` are the next run of the agent, which reads the text, the card merge of the dashboard, and from L7 the guest line.
+
+### Card look
+
+- The card look follows the design "Yumi Workbench Preview", scenario `a1-offer`.
+- The card shows the "Action" pill and the operation id.
+- The card shows two fact bullets. For a node target they are "node: <name> (<id>)" and "state: <state> · attempt <n>". For a project target they are "project: <name> (<id>)" and "state: paused" or "state: active".
+- The card shows one primary button. For `mission.node.discard` and `mission.node.override` the button is a filled danger button.
+
+### Card states
+
+- The card merge of the dashboard gives each `action_offer` one state.
+- `done`: the card holds a result with the outcome `done`.
+- `superseded`: a later user message or a later `action_offer` follows the card. An assistant message does not supersede.
+- `unknown`: the dashboard holds no card for the `operation_id`. The card shows "This act has no card in this dashboard version." and no button.
+- `waiting`: a run is active. The button is disabled.
+- `live`: none of the states above applies. The button runs the act.
+- `live` after `failed`: the latest result holds the outcome `failed`. The inline error line sits under the card with the `error_code`.
+- The states are tested in this order: `done`, `superseded`, `unknown`, then `waiting` or `live`.
+- Discard, override, node pause and project pause confirm in their dialogs. Resume and unblock open their dialogs. Check (`mission.node.check`) and `project.resume` run at once with no dialog.
+- A click on the button reads the target again. When the target differs from `seen`, the card runs no act and shows a change line.
+- The node change line is "<id> changed since the card: it is now <state> (attempt <m>). Nothing ran."
+- The project change line is "<id> changed since the card: it is now paused. Nothing ran." or "<id> changed since the card: it is now active. Nothing ran."
+
 ## Session files
 
 - pi stores the session files of an agent under `pi/sessions/workbench/<agent name>/` of the state directory.
@@ -106,15 +173,20 @@ Every operation has `human` access.
 
 ## Error codes
 
-| HTTP  | Code                                         | Condition                                                                    |
-| ----- | -------------------------------------------- | ---------------------------------------------------------------------------- |
-| 404   | `workbench.session.not_found`                | The session identity names no session.                                       |
-| 404   | `workbench.session.approval_not_found`       | The tool call of an approval waits for no approval, or the approval expired. |
-| 409   | `workbench.session.run_active`               | A configure arrives while a run is active.                                   |
-| 409   | `workbench.session.queue_full`               | A message arrives while the session holds 10 queued messages.                |
-| 404   | `workbench.session.queued_message_not_found` | The queued message identity names no queued message.                         |
-| 409   | `workbench.session.configuration_invalid`    | The stored entries of the session hold no readable configuration.            |
-| 409   | `workbench.session.setup_refused`            | The runtime refuses the setup of the session.                                |
-| 403   | `workbench.authorization.refused`            | The Workbench Service refuses the credential release of the session.         |
-| local | `workbench.lifecycle.stopped`                | A stopped service starts again.                                              |
-| 404   | `agent.catalog.not_found`                    | The agent name of a create or a list is absent from the agent catalog.       |
+| HTTP       | Code                                         | Condition                                                                    |
+| ---------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
+| 404        | `workbench.session.not_found`                | The session identity names no session.                                       |
+| 404        | `workbench.session.approval_not_found`       | The tool call of an approval waits for no approval, or the approval expired. |
+| 404        | `workbench.session.action_not_found`         | The tool call of an action report names no action offer.                     |
+| 409        | `workbench.session.action_settled`           | An action report arrives for a card that holds a `done` result.              |
+| tool error | `workbench.action.operation_refused`         | `operation_id` of an offer is no act of `ACTION_CARD_OPERATIONS`.            |
+| tool error | `workbench.action.target_invalid`            | `target_id` of an offer is no identity of the target kind.                   |
+| tool error | `workbench.action.offer_limit`               | The run already offered one action card.                                     |
+| 409        | `workbench.session.run_active`               | A configure arrives while a run is active.                                   |
+| 409        | `workbench.session.queue_full`               | A message arrives while the session holds 10 queued messages.                |
+| 404        | `workbench.session.queued_message_not_found` | The queued message identity names no queued message.                         |
+| 409        | `workbench.session.configuration_invalid`    | The stored entries of the session hold no readable configuration.            |
+| 409        | `workbench.session.setup_refused`            | The runtime refuses the setup of the session.                                |
+| 403        | `workbench.authorization.refused`            | The Workbench Service refuses the credential release of the session.         |
+| local      | `workbench.lifecycle.stopped`                | A stopped service starts again.                                              |
+| 404        | `agent.catalog.not_found`                    | The agent name of a create or a list is absent from the agent catalog.       |

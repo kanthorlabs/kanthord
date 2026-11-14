@@ -57,6 +57,9 @@ async function sections() {
     join(ENGINE, "workbench/tools.ts")
   );
   const { AGENT_DECLARATIONS } = await import(join(ENGINE, "agent/catalog.ts"));
+  const { ACTION_CARD_OPERATIONS } = await import(
+    join(ENGINE, "workbench/actions.ts")
+  );
   const operations = [];
   for (const [directory, exportNames] of CONTRACTS) {
     const contract = await import(join(ENGINE, directory, "contract.ts"));
@@ -68,6 +71,13 @@ async function sections() {
       operations.push(...Object.values(contract[exportName]));
     }
   }
+  const actions = Object.entries(ACTION_CARD_OPERATIONS).map(([id, target]) => {
+    assert.ok(
+      operations.some((operation) => operation.id === id),
+      `ACTION_CARD_OPERATIONS lists ${id}, which resolves to no operation`,
+    );
+    return { id, target };
+  });
   const result = [];
   for (const agent of Object.values(AGENT_DECLARATIONS)) {
     const listed = agent.tools.operation;
@@ -87,11 +97,12 @@ async function sections() {
       toolName,
     });
   }
-  return result;
+  return { groups: result, actions };
 }
 
-function render(groups) {
+function render({ groups, actions }) {
   const anchor = (group) => group.anchor;
+  const offerTitle = "Workbench tool <code>offer_action</code>";
   const lines = [
     "<!doctype html>",
     '<html lang="en">',
@@ -124,6 +135,7 @@ function render(groups) {
       (group) =>
         `          <li><a href="#${anchor(group)}">${group.title}</a></li>`,
     ),
+    `          <li><a href="#offer-action">${offerTitle}</a></li>`,
     "        </ul>",
     "      </details>",
     "      <main>",
@@ -157,6 +169,29 @@ function render(groups) {
     );
   }
   lines.push(
+    `<h2 id="offer-action">${offerTitle}</h2>`,
+    "<p>Every Workbench agent also holds the tool <code>offer_action</code>. The tool runs nothing. It shows one action card in the chat, and the owner decides whether the act runs. It needs no approval, because it is no operation.</p>",
+    "<p>A run offers one card. A second call in the same run fails.</p>",
+    ...table(
+      ["Parameter", "Description"],
+      [
+        [
+          "<code>operation_id</code>",
+          "The act of the card. One of the ids in the table below.",
+        ],
+        [
+          "<code>target_id</code>",
+          "The identity of the node or the project of the act.",
+        ],
+      ],
+    ),
+    ...table(
+      ["Operation", "Target"],
+      actions.map(({ id, target }) => [
+        `<code>${escape(id)}</code>`,
+        escape(target),
+      ]),
+    ),
     "        </article>",
     "      </main>",
     "    </div>",

@@ -62,3 +62,27 @@ Case: node `node_01J` (Blocked). Explain why it is blocked and recommend how to 
 A command that a human types in the composer of the chat. It starts with "/".
 The closed set is `/brief`, `/health` and `/new`.
 Ulrich types "/health" in the Home chat. The chat sends "Check the health of the gateway and the providers."
+
+## action card
+
+One card in the chat that offers exactly one owner act on one target.
+The closed set of acts is the eight ids of `ACTION_CARD_OPERATIONS`.
+Yumi finds a blocked node and offers `mission.node.unblock` on it. Ulrich clicks the card, and the act runs as his own act.
+
+## action offer
+
+The `action_offer` [Workbench record](#workbench-record) that the tool `offer_action` appends. It holds the act, the target and what the server read on the target.
+The term names no closed set.
+Yumi calls `offer_action` for `mission.node.pause` on `node_01J`. The server reads the node and appends the action offer with its name, its state and its attempt.
+
+## action result
+
+The `kanthord.workbench.action_result` custom message that `workbench.session.action.report` appends. It holds the outcome of the act that the owner ran from an action card.
+The closed set of outcomes is `done` and `failed`.
+Ulrich clicks the card of `mission.node.unblock` and the act fails. The dashboard reports `failed`, and the next run of Yumi reads "The owner ran mission.node.unblock on node_01J. Result: failed, mission.node.state_conflict."
+
+## Workbench record
+
+A server fact in a session file that no model reads.
+The closed set of kinds is `action_offer`.
+The server appends an action offer to the session file when `offer_action` shows a card. The model never sees that entry.
