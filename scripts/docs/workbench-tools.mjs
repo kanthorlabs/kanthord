@@ -181,7 +181,7 @@ function render({ groups, actions }) {
         ],
         [
           "<code>target_id</code>",
-          "The identity of the node or the project that the act acts on.",
+          "The identity of the node or the project of the act.",
         ],
       ],
     ),
