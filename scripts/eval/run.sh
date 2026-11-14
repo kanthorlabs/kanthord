@@ -13,7 +13,18 @@ MAIN=$(dirname "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-d
 ENV_FILE="$MAIN/engine/.env.eval"
 
 [ -f "$ENV_FILE" ] || die "$ENV_FILE is missing; it must hold EVAL_ANTHROPIC_API_KEY"
-grep -Eq '^EVAL_ANTHROPIC_API_KEY=[[:space:]]*("[^"]+"|'\''[^'\'']+'\''|[^"'\''[:space:]#])' "$ENV_FILE" || die "$ENV_FILE holds no value for EVAL_ANTHROPIC_API_KEY"
+KEY_LINE=$(grep -E '^EVAL_ANTHROPIC_API_KEY=' "$ENV_FILE" | tail -n 1) || true
+KEY_VALUE=${KEY_LINE#EVAL_ANTHROPIC_API_KEY=}
+KEY_VALUE=$(printf '%s' "$KEY_VALUE" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
+case $KEY_VALUE in
+\"*\") KEY_VALUE=${KEY_VALUE#\"}; KEY_VALUE=${KEY_VALUE%\"} ;;
+\'*\') KEY_VALUE=${KEY_VALUE#\'}; KEY_VALUE=${KEY_VALUE%\'} ;;
+\#*) KEY_VALUE= ;;
+esac
+KEY_VALUE=$(printf '%s' "$KEY_VALUE" | tr -d '[:space:]')
+[ -n "$KEY_VALUE" ] || die "$ENV_FILE holds no value for EVAL_ANTHROPIC_API_KEY"
+unset KEY_LINE KEY_VALUE EVAL_ANTHROPIC_API_KEY
+[ -x "$PRETTIER" ] || die "$PRETTIER is missing; run scripts/repo/install.sh"
 
 HISTORY="$ROOT/docs/reference/agent/evals/$AGENT.json"
 RUN=$(date -u +%Y%m%d-%H%M%S)

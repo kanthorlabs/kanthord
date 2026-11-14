@@ -1002,7 +1002,7 @@ This section records the eval harness of the engine node `l2-engine`.
 ### The case file
 
 - A case file holds the keys `id`, `source`, `fixtures`, `setup`, `seed`, `turns` and `checks`. `source` is optional.
-- An unknown key fails the parse at every level, because each schema is strict.
+- An unknown key of a case object fails the parse, because each object schema is strict. The `input`, `body` and `expect` values accept any key.
 - `id` equals the file name without `.yaml`. `fixtures` maps a key to a JSON file under `engine/eval/<agent>/fixtures/`.
 - `setup` lists operation calls. `turns` lists a `human` text and `approvals`, a map of operation id to `approve` or `reject`.
 - A placeholder resolves to a real id after the fixture import. It has four forms:
@@ -1011,7 +1011,7 @@ This section records the eval harness of the engine node `l2-engine`.
   - `{{<key>.evidence.<filename>}}`
   - `{{<key>.evidence.<filename>.asset.<n>}}`
 - Placeholders work in `setup`, `seed`, `turns`, `checks` and the text assets. An unknown key or filename fails the parse.
-- `case_digest` is the SHA-256 of the canonical JSON of the case file, the fixture files and the evidence asset files.
+- `case_digest` is the SHA-256 of the canonical JSON of the case file, followed by the bytes of its fixture files and evidence asset files.
 
 ### The seed steps
 
@@ -1033,7 +1033,7 @@ This section records the eval harness of the engine node `l2-engine`.
 
 ### The run file and the history
 
-- The run file holds `run`, `subject`, `engine_revision`, `configuration`, `prompt_digests`, `repeat`, `comparison` and `cases`. `run` is the base name of `EVAL_OUTPUT`.
+- The run file holds `run`, `subject`, `engine_revision`, `configuration`, `prompt_digests`, `repeat`, `comparison` and `cases`. `run` is the file name of `EVAL_OUTPUT` without `.json`.
 - A case holds `case_id`, `case_digest`, `pass_rate`, `rerun_pass_rate`, `runs` and `reruns`. A result holds `passed`, `checks`, the tokens, `cost` and `duration_ms`.
 - The engine writes the history entry form beside the run file as `<run>.entry.json`. It reduces each `checks[]` item to `{ kind, passed }`, so the history holds no `detail`.
 - `comparison` holds `baseline_run`, `regressed`, `improved`, `new`, `dropped`, `tokens_delta` and `cost_delta`.
