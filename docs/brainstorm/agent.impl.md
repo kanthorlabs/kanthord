@@ -18,7 +18,7 @@ A mechanism here never overrides a rule there.
 - The catalog is a static server module that holds one declaration per agent name, with options, a whole-configuration constraint and prompts.
 - Options use `zod` at 4.4.3, and the constraint uses `superRefine`.
 - `swe@1` and `re@1` declare an empty option schema.
-- A declaration holds `display_name` and `tools`. `AgentTools` is `{ builtin, host, operation }`. `builtin` and `host` hold tool names, and `operation` holds operation ids.
+- A declaration holds `display_name` and `tools`. `AgentTools` is `{ builtin, host, operation, workbench }`. `builtin`, `host` and `workbench` hold tool names, and `operation` holds operation ids. `workbench` holds `evidence_read` for `swe@1` and `re@1`, and it is empty for `pe@1` and `ops@1`.
 - `workbenchAgentNames()` is the one reader of the session rule. It answers the agents whose `tools.operation` is not empty. The Workbench lists and opens only those agents, and it refuses another agent with the unknown-agent code. `pe@1` lists no operation.
 - The list test of `engine/src/workbench/tools.test.ts` checks that every listed id names an operation that `toolOperations` keeps, and that no list names a secret operation.
 - The shipped role of `swe@1` states the split of the coder flow: the agent writes the code, runs any check while it works, and checks the work against the criterion and the default standard before it ends a turn. The worker runs the verifications after the turn. `swe@1` gives no judgement. [assets/prompt/swe@1.md](assets/prompt/swe@1.md) holds the text.
@@ -28,10 +28,10 @@ A mechanism here never overrides a rule there.
 - The declaration supplies no provider, model identifier or reasoning-effort default.
 - `agent list` answers one summary per catalog agent: `{ agent_name, display_name, worker_names, consumers, tool_counts, enablement }`.
 - `consumers` names the services that run the agent, in the order `workbench`, `worker`. `workbench` comes from `workbenchAgentNames()`. `worker` comes from the released workers that name the agent and from the project environment agent `pe@1`. At L0, `swe@1` and `re@1` hold `["workbench", "worker"]`, `ops@1` holds `["workbench"]` and `pe@1` holds `["worker"]`.
-- `tool_counts` holds one count for each tool source: `builtin`, `host`, `kanthord-mcp` and `operation`. The count comes from the tools of `agent.get`.
+- `tool_counts` holds one count for each tool source: `builtin`, `host`, `kanthord-mcp`, `operation` and `workbench`. The count comes from the tools of `agent.get`.
 - `agent get` answers `display_name`, `prompt`, `configuration_schema`, `overridable_fields`, `tools`, `enablement`, `chain`, `active_position` and `cooling`.
 - `enablement` is null when no record exists.
-- `agent.get` is `GET /api/agent/:agent_name`, keyed by agent name. It answers `agent_name`, `display_name`, `configuration_schema`, `overridable_fields`, `prompt`, `tools`, `enablement`, the agent enablement or `null`, and the [chain view](#the-chain-view). A tool item holds the source, the name, `description` and `guard_class`. The source is `builtin`, `host`, `kanthord-mcp` or `operation`. `guard_class` is `read` or `card` for an operation item and `null` for any other source. An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
+- `agent.get` is `GET /api/agent/:agent_name`, keyed by agent name. It answers `agent_name`, `display_name`, `configuration_schema`, `overridable_fields`, `prompt`, `tools`, `enablement`, the agent enablement or `null`, and the [chain view](#the-chain-view). A tool item holds the source, the name, `description` and `guard_class`. The source is `builtin`, `host`, `kanthord-mcp`, `operation` or `workbench`. `guard_class` is `read` or `card` for an operation item, `card` for a `workbench` item and `null` for any other source. An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
 - Tests cover each human read, each unknown name, and null and disabled enablements.
 
 ## The prompt answer

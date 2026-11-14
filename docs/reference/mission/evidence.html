@@ -100,6 +100,14 @@
                   <td>Human JWT</td>
                   <td>Returns the stored content of one asset.</td>
                 </tr>
+                <tr>
+                  <td><code>evidence asset content download</code></td>
+                  <td>Human JWT</td>
+                  <td>
+                    Streams the stored bytes of one asset, whole or a range,
+                    through the server. It has no CLI command.
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -682,6 +690,74 @@
             <a href="../identities.html">identity reference</a>. Timestamps are
             integer Unix milliseconds in UTC.
           </p>
+          <h3 id="evidence-asset-content-download">
+            <code>evidence asset content download</code>
+          </h3>
+          <p>
+            The server reads the bytes from storage and answers them. The answer
+            is never a URL, and no storage URL reaches the caller. The operation
+            has no CLI command. The API returns HTTP
+            <code>200</code> with the bytes as the body, also when the request
+            names a range.
+          </p>
+          <p>
+            A range is a read choice. The service still never truncates stored
+            evidence. <code>offset</code> and <code>length</code> select a part
+            of the content for this answer only.
+          </p>
+          <p>The answer carries seven headers:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Header</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>Content-Type</code></td>
+                  <td><code>application/octet-stream</code></td>
+                </tr>
+                <tr>
+                  <td><code>Content-Length</code></td>
+                  <td>The number of bytes in the body.</td>
+                </tr>
+                <tr>
+                  <td><code>Content-Disposition</code></td>
+                  <td>
+                    <code
+                      >attachment;
+                      filename="&lt;asset_id&gt;&lt;extension&gt;"</code
+                    >. The extension follows the stored media type:
+                    <code>.txt</code>, <code>.json</code>, <code>.xml</code>,
+                    <code>.yaml</code>, <code>.png</code>, <code>.jpg</code>,
+                    <code>.gif</code> or <code>.webp</code>. Any other media
+                    type gives <code>.bin</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>X-Content-Type-Options</code></td>
+                  <td><code>nosniff</code></td>
+                </tr>
+                <tr>
+                  <td><code>Cache-Control</code></td>
+                  <td><code>no-store</code></td>
+                </tr>
+                <tr>
+                  <td><code>X-Evidence-Media-Type</code></td>
+                  <td>The stored media type of the asset.</td>
+                </tr>
+                <tr>
+                  <td><code>X-Evidence-Size</code></td>
+                  <td>
+                    The full size of the stored content in bytes, not the size
+                    of the range.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <h3 id="failures">Failures</h3>
           <p>
             API failures use the shared
@@ -764,7 +840,7 @@
                   <td><code>404 mission.record.not_found</code></td>
                   <td>
                     <code>get</code>, both deletes, <code>content get</code>,
-                    <code>complete</code>
+                    <code>content download</code>, <code>complete</code>
                   </td>
                   <td>The evidence or asset does not exist.</td>
                 </tr>
@@ -851,7 +927,7 @@
                   <td><code>403 mission.authorization.refused</code></td>
                   <td>
                     <code>submit</code>, <code>complete</code>, both deletes,
-                    <code>content get</code>
+                    <code>content get</code>, <code>content download</code>
                   </td>
                   <td>
                     The claim is not live, or the storage binding is removed or
@@ -903,7 +979,9 @@
                 </tr>
                 <tr>
                   <td><code>409 mission.evidence.content_repository</code></td>
-                  <td><code>content get</code></td>
+                  <td>
+                    <code>content get</code>, <code>content download</code>
+                  </td>
                   <td>
                     The asset is a <code>repository</code> address. Details hold
                     <code>evidence_id</code> and <code>address</code>.
@@ -911,16 +989,39 @@
                 </tr>
                 <tr>
                   <td><code>409 mission.evidence.content_platform</code></td>
-                  <td><code>content get</code></td>
+                  <td>
+                    <code>content get</code>, <code>content download</code>
+                  </td>
                   <td>
                     The asset is a <code>platform</code> address. Details hold
                     <code>evidence_id</code> and <code>address</code>.
                   </td>
                 </tr>
                 <tr>
+                  <td>
+                    <code>400 mission.evidence.content_range_invalid</code>
+                  </td>
+                  <td><code>content download</code></td>
+                  <td>
+                    <code>offset</code> is at or after the end of a content that
+                    is not empty.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>502 mission.evidence.content_unavailable</code>
+                  </td>
+                  <td><code>content download</code></td>
+                  <td>
+                    The storage read failed. The message is "The storage read
+                    failed." and holds no cause and no URL.
+                  </td>
+                </tr>
+                <tr>
                   <td><code>503 mission.evidence.storage_unavailable</code></td>
                   <td>
-                    <code>submit</code>, both deletes, <code>content get</code>
+                    <code>submit</code>, both deletes, <code>content get</code>,
+                    <code>content download</code>
                   </td>
                   <td>
                     The operation needs object storage for an
@@ -1317,6 +1418,66 @@ curl -i http://127.0.0.1:31415/api/mission/evidence/asset/evidence_asset_01M4C5G
             the <code>cursor</code> query parameter with the same
             <code>limit</code> and <code>attempt</code>.
           </p>
+          <h3 id="evidence-asset-content-download-1">
+            <code>evidence asset content download</code>
+          </h3>
+          <p>This operation has no CLI command.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Method and path</td>
+                  <td>
+                    <code
+                      >GET
+                      /api/mission/evidence/asset/:asset_id/content/download</code
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td>Operation ID</td>
+                  <td><code>mission.evidence.asset.content.download</code></td>
+                </tr>
+                <tr>
+                  <td>Access</td>
+                  <td><code>human</code> (human bearer JWT)</td>
+                </tr>
+                <tr>
+                  <td>Mutation</td>
+                  <td>No</td>
+                </tr>
+                <tr>
+                  <td>Path/query parameters</td>
+                  <td>
+                    <code>asset_id</code> (path, required);
+                    <code>offset</code> (query, optional nonnegative integer,
+                    the first byte to read, default <code>0</code>);
+                    <code>length</code> (query, optional positive integer of at
+                    most 5 GiB, the number of bytes to read, default the rest of
+                    the content)
+                  </td>
+                </tr>
+                <tr>
+                  <td>Request body</td>
+                  <td>None</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The operation takes the <code>Authorization</code> header of the
+            reads above. <code>-o</code> saves the body to a file and
+            <code>-D</code> saves the headers to another file:
+          </p>
+          <pre><code class="language-sh">curl -sS -D headers.txt -o evidence_asset_01M4C5G6BPAK4AZ9KWFEMWPGRR.bin \
+  'http://127.0.0.1:31415/api/mission/evidence/asset/evidence_asset_01M4C5G6BPAK4AZ9KWFEMWPGRR/content/download?offset=0&amp;length=1048576' \
+  -H 'Authorization: Bearer &lt;human-jwt&gt;'</code></pre>
           <h3 id="evidence-submit-1"><code>evidence submit</code></h3>
           <div class="table-wrap">
             <table>
