@@ -29,6 +29,7 @@
           <li><a href="#re-1">RE (re@1)</a></li>
           <li><a href="#ops-1">Yumi (ops@1)</a></li>
           <li><a href="#offer-action">Workbench tool <code>offer_action</code></a></li>
+          <li><a href="#evidence-read">Workbench tool <code>evidence_read</code></a></li>
         </ul>
       </details>
       <main>
@@ -454,6 +455,44 @@
 </tr>
 </tbody></table>
 </div>
+<h2 id="evidence-read">Workbench tool <code>evidence_read</code></h2>
+<p>SWE (swe@1) and RE (re@1) also hold the tool <code>evidence_read</code>. It gives the text of one evidence asset to the agent. It never gives a storage URL.</p>
+<p>The first read of a node waits on one evidence card. When the owner approves it, the conversation reads every asset of that node until kanthord restarts. When the owner rejects it or lets it expire, the read fails and nothing is granted.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>evidence_id</code></td>
+<td>The identity of the evidence.</td>
+</tr>
+<tr>
+<td><code>asset_id</code></td>
+<td>The identity of the asset. The evidence must hold it.</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>Optional. The first byte to read. The default is 0.</td>
+</tr>
+<tr>
+<td><code>length</code></td>
+<td>Optional. The number of bytes to read, from 1 to the cap below.</td>
+</tr>
+</tbody></table>
+</div>
+<p>A call gives at most 65536 bytes. The tool reads these media types:</p>
+<ul>
+<li><code>text/*</code></li>
+<li><code>application/json</code></li>
+<li><code>application/x-ndjson</code></li>
+<li><code>application/xml</code></li>
+<li><code>application/yaml</code></li>
+</ul>
+<p>The tool refuses an image or any other binary type. The owner downloads that asset from the node page.</p>
         </article>
       </main>
     </div>

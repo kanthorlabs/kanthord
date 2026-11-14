@@ -278,14 +278,17 @@
                   <td>
                     Permitted tools. Each item holds <code>name</code>,
                     <code>source</code> (<code>host</code>,
-                    <code>builtin</code>, <code>kanthord-mcp</code> or
-                    <code>operation</code>), <code>input_schema</code>,
-                    <code>description</code> and <code>guard_class</code>.
-                    <code>guard_class</code> is <code>read</code> or
-                    <code>card</code> for an <code>operation</code> item, and
-                    <code>null</code> for a built-in or host item. Only an
-                    <code>operation</code> item has a description. The
-                    description of every other item is an empty string. A
+                    <code>builtin</code>, <code>kanthord-mcp</code>,
+                    <code>operation</code> or <code>workbench</code>),
+                    <code>input_schema</code>, <code>description</code> and
+                    <code>guard_class</code>. <code>guard_class</code> is
+                    <code>read</code> or <code>card</code> for an
+                    <code>operation</code> item, <code>card</code> for a
+                    <code>workbench</code> item, and <code>null</code> for a
+                    built-in or host item. Only an <code>operation</code> item
+                    and a <code>workbench</code>
+                    item have a description. The description of every other item
+                    is an empty string. A
                     <code>card</code> tool waits for the approval of the human.
                   </td>
                 </tr>
@@ -945,7 +948,7 @@ kanthord agent get re@1 --node &lt;node-id&gt; --attempt 2 --view final</code></
       "display_name": "Yumi",
       "worker_names": [],
       "consumers": ["workbench"],
-      "tool_counts": { "builtin": 0, "host": 0, "kanthord-mcp": 0, "operation": 36 },
+      "tool_counts": { "builtin": 0, "host": 0, "kanthord-mcp": 0, "operation": 36, "workbench": 0 },
       "enablement": null
     }
   ],
@@ -999,9 +1002,9 @@ kanthord agent get re@1 --node &lt;node-id&gt; --attempt 2 --view final</code></
                   <td>
                     The number of tools by source, with the keys
                     <code>builtin</code>, <code>host</code>,
-                    <code>kanthord-mcp</code> and <code>operation</code>. The
-                    counts equal the <code>tools</code> of
-                    <code>agent get</code>.
+                    <code>kanthord-mcp</code>, <code>operation</code> and
+                    <code>workbench</code>. The counts equal the
+                    <code>tools</code> of <code>agent get</code>.
                   </td>
                 </tr>
                 <tr>

@@ -1241,6 +1241,20 @@ Binding prompt of repository app:
               card shows “Done by the owner” after the act, or the error when it
               fails. The agent offers one card for each answer.
             </li>
+            <li>
+              <strong><code>evidence_read</code></strong> (Workbench only,
+              <code>swe@1</code> and <code>re@1</code>) lets the agent read the
+              text of one evidence asset, up to 64 KiB for each call. The first
+              read of a node shows you an evidence card. When you approve, the
+              conversation reads every asset of that node until kanthord
+              restarts. When you reject or ignore the card, nothing is granted.
+              The tool reads text and JSON, XML and YAML files. It refuses
+              images and other binary files. You download any asset from the
+              node page, and the agent never gets a storage URL. See the
+              <a href="../reference/workbench/tools.html#evidence-read"
+                >tool reference</a
+              >.
+            </li>
           </ul>
           <p>
             An operation becomes a tool when it meets all of these conditions:
@@ -1314,9 +1328,10 @@ Binding prompt of repository app:
             <code>mission.outcome.list</code>,
             <code>mission.assessment.list</code>,
             <code>mission.evidence.list</code> and
-            <code>mission.evidence.get</code>. They read evidence metadata only.
-            <code>pe@1</code> lists no operation, so it has no Workbench
-            session. <code>ops@1</code> holds 36 tools by damage class:
+            <code>mission.evidence.get</code>. They read evidence text with
+            <code>evidence_read</code>. <code>pe@1</code> lists no operation, so
+            it has no Workbench session. <code>ops@1</code> holds 36 tools by
+            damage class:
           </p>
           <div class="table-wrap">
             <table>

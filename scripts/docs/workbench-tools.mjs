@@ -60,6 +60,12 @@ async function sections() {
   const { ACTION_CARD_OPERATIONS } = await import(
     join(ENGINE, "workbench/actions.ts")
   );
+  const {
+    EVIDENCE_READ_PARAMETERS,
+    EVIDENCE_READ_TOOL,
+    EVIDENCE_TEXT_MAX_BYTES,
+    EVIDENCE_TEXT_MEDIA_TYPES,
+  } = await import(join(ENGINE, "workbench/evidence.ts"));
   const operations = [];
   for (const [directory, exportNames] of CONTRACTS) {
     const contract = await import(join(ENGINE, directory, "contract.ts"));
@@ -97,10 +103,56 @@ async function sections() {
       toolName,
     });
   }
-  return { groups: result, actions };
+  const evidence = {
+    tool: EVIDENCE_READ_TOOL,
+    parameters: Object.keys(EVIDENCE_READ_PARAMETERS.properties),
+    mediaTypes: EVIDENCE_TEXT_MEDIA_TYPES,
+    maxBytes: EVIDENCE_TEXT_MAX_BYTES,
+    agents: Object.values(AGENT_DECLARATIONS)
+      .filter((agent) => agent.tools.workbench.includes(EVIDENCE_READ_TOOL))
+      .map((agent) => `${agent.display_name} (${agent.agent_name})`),
+  };
+  assert.ok(evidence.agents.length > 0, `no agent holds ${EVIDENCE_READ_TOOL}`);
+  return { groups: result, actions, evidence };
 }
 
-function render({ groups, actions }) {
+const EVIDENCE_PARAMETER_TEXT = {
+  evidence_id: "The identity of the evidence.",
+  asset_id: "The identity of the asset. The evidence must hold it.",
+  offset: "Optional. The first byte to read. The default is 0.",
+  length: "Optional. The number of bytes to read, from 1 to the cap below.",
+};
+
+function evidenceSection(evidence) {
+  assert.deepEqual(
+    [...evidence.parameters].sort(),
+    Object.keys(EVIDENCE_PARAMETER_TEXT).sort(),
+    "the parameters of evidence_read changed",
+  );
+  return [
+    `<h2 id="evidence-read">${evidenceTitle}</h2>`,
+    `<p>${evidence.agents.join(" and ")} also hold the tool <code>${evidence.tool}</code>. It gives the text of one evidence asset to the agent. It never gives a storage URL.</p>`,
+    "<p>The first read of a node waits on one evidence card. When the owner approves it, the conversation reads every asset of that node until kanthord restarts. When the owner rejects it or lets it expire, the read fails and nothing is granted.</p>",
+    ...table(
+      ["Parameter", "Description"],
+      evidence.parameters.map((name) => [
+        `<code>${name}</code>`,
+        EVIDENCE_PARAMETER_TEXT[name],
+      ]),
+    ),
+    `<p>A call gives at most ${evidence.maxBytes} bytes. The tool reads these media types:</p>`,
+    "<ul>",
+    ...evidence.mediaTypes.map(
+      (type) => `<li><code>${escape(type)}</code></li>`,
+    ),
+    "</ul>",
+    "<p>The tool refuses an image or any other binary type. The owner downloads that asset from the node page.</p>",
+  ];
+}
+
+const evidenceTitle = "Workbench tool <code>evidence_read</code>";
+
+function render({ groups, actions, evidence }) {
   const anchor = (group) => group.anchor;
   const offerTitle = "Workbench tool <code>offer_action</code>";
   const lines = [
@@ -136,6 +188,7 @@ function render({ groups, actions }) {
         `          <li><a href="#${anchor(group)}">${group.title}</a></li>`,
     ),
     `          <li><a href="#offer-action">${offerTitle}</a></li>`,
+    `          <li><a href="#evidence-read">${evidenceTitle}</a></li>`,
     "        </ul>",
     "      </details>",
     "      <main>",
@@ -192,6 +245,7 @@ function render({ groups, actions }) {
         escape(target),
       ]),
     ),
+    ...evidenceSection(evidence),
     "        </article>",
     "      </main>",
     "    </div>",
