@@ -12,18 +12,36 @@ PRETTIER="$ROOT/node_modules/.bin/prettier"
 MAIN=$(dirname "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)")
 ENV_FILE="$MAIN/engine/.env.eval"
 
-[ -f "$ENV_FILE" ] || die "$ENV_FILE is missing; it must hold EVAL_ANTHROPIC_API_KEY"
-KEY_LINE=$(grep -E '^EVAL_ANTHROPIC_API_KEY=' "$ENV_FILE" | tail -n 1) || true
-KEY_VALUE=${KEY_LINE#EVAL_ANTHROPIC_API_KEY=}
-KEY_VALUE=$(printf '%s' "$KEY_VALUE" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
-case $KEY_VALUE in
-\"*) KEY_VALUE=$(printf '%s' "$KEY_VALUE" | sed -E 's/^"([^"]*)".*$/\1/') ;;
-\'*) KEY_VALUE=$(printf '%s' "$KEY_VALUE" | sed -E "s/^'([^']*)'.*\$/\\1/") ;;
-\#*) KEY_VALUE= ;;
-esac
-KEY_VALUE=$(printf '%s' "$KEY_VALUE" | tr -d '[:space:]')
-[ -n "$KEY_VALUE" ] || die "$ENV_FILE holds no value for EVAL_ANTHROPIC_API_KEY"
-unset KEY_LINE KEY_VALUE EVAL_ANTHROPIC_API_KEY
+env_file_value() {
+	LINE=$(grep -E "^$1=" "$ENV_FILE" | tail -n 1) || true
+	VALUE=${LINE#"$1="}
+	VALUE=$(printf '%s' "$VALUE" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
+	case $VALUE in
+	\"*) VALUE=$(printf '%s' "$VALUE" | sed -E 's/^"([^"]*)".*$/\1/') ;;
+	\'*) VALUE=$(printf '%s' "$VALUE" | sed -E "s/^'([^']*)'.*\$/\\1/") ;;
+	\#*) VALUE= ;;
+	esac
+	printf '%s' "$VALUE"
+}
+
+[ -f "$ENV_FILE" ] || die "$ENV_FILE is missing; it must hold exactly one of EVAL_ANTHROPIC_API_KEY and EVAL_ANTHROPIC_AUTH_FILE"
+KEY_VALUE=$(env_file_value EVAL_ANTHROPIC_API_KEY | tr -d '[:space:]')
+AUTH_FILE_VALUE=$(env_file_value EVAL_ANTHROPIC_AUTH_FILE)
+AUTH_FILE_VALUE=$(printf '%s' "${AUTH_FILE_VALUE%%[[:space:]]#*}" | sed -E 's/[[:space:]]+$//')
+if [ -n "$KEY_VALUE" ] && [ -n "$AUTH_FILE_VALUE" ]; then
+	die "$ENV_FILE holds both EVAL_ANTHROPIC_API_KEY and EVAL_ANTHROPIC_AUTH_FILE; keep exactly one"
+fi
+if [ -z "$KEY_VALUE" ] && [ -z "$AUTH_FILE_VALUE" ]; then
+	die "$ENV_FILE holds no value for EVAL_ANTHROPIC_API_KEY or EVAL_ANTHROPIC_AUTH_FILE; keep exactly one"
+fi
+if [ -n "$AUTH_FILE_VALUE" ]; then
+	case $AUTH_FILE_VALUE in
+	/*) ;;
+	*) die "EVAL_ANTHROPIC_AUTH_FILE is not an absolute path: $AUTH_FILE_VALUE" ;;
+	esac
+	[ -f "$AUTH_FILE_VALUE" ] || die "EVAL_ANTHROPIC_AUTH_FILE does not exist: $AUTH_FILE_VALUE"
+fi
+unset LINE VALUE KEY_VALUE AUTH_FILE_VALUE EVAL_ANTHROPIC_API_KEY EVAL_ANTHROPIC_AUTH_FILE
 [ -x "$PRETTIER" ] || die "$PRETTIER is missing; run scripts/repo/install.sh"
 
 HISTORY="$ROOT/docs/reference/agent/evals/$AGENT.json"
