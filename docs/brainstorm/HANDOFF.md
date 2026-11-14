@@ -61,6 +61,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] RULED 2026-11-06 by Ulrich (O5, O13, O17, O23, P8, P9, inbox S11). Build the `reply` action of a conversation binding, the `comment` evidence of the deferred check, the answer `{ count, link_count, inbox }` of `mission.delivery.unresolved_request.count` and the link read of `mission.node.check`. [mission-service.impl.md](mission-service.impl.md#the-request-record) holds the design. Delete the item when the engine holds the change.
 - [ ] POSTPONED 2026-09-28 by Ulrich until budgets or agent limits land. Design the handoff from one execution to the next execution of a node. `mission_run_output` is dropped on 2026-09-28; the human direction stays in the node revision, and the checkpoint commit stays the only carrier inside an attempt.
 - [ ] POSTPONED 2026-09-29 by Ulrich until a need for redaction arises. Design the redaction of evidence content and how an asset states it.
+- [ ] Added 2026-11-14 from the evidence download. Add a CLI command `kanthord mission evidence asset content download` that writes a file through `mission.evidence.asset.content.download` and shows no URL. Then `content get` leaves the owner terminal. [mission-service.impl.md](mission-service.impl.md#evidence-content) holds the operation.
 
 ### Scheduler Service and delivery
 
@@ -112,6 +113,8 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
 - [ ] The composer of the chat shows a model picker and a reasoning-effort picker, as in the screenshot of Ulrich on 2026-10-06. Its `+` menu offers images and files, commands (`/`), context (`@`) and a shell command (`!`). Define each of the four from the capability of pi that serves it: prompt templates, file references, bash and image input.
 - [ ] Home cards ([The Home page](architecture.impl.md#the-home-page)) are client cards, and Yumi sees an item only after "Ask Yumi" or "/brief". Server records of the cards wait for a later layer.
 - [ ] Action card for `mission.node.block` once the dashboard has a dialog for it.
+- [ ] Added 2026-11-14 from the evidence read. Put `object` assets in the eval sandbox of a workbench session. `evidence_read` reads text only.
+- [ ] Added 2026-11-14 from the evidence read. Give evidence images to an agent. Define a dimension check for each provider and a context cost rule. `evidence_read` refuses an image today.
 - [ ] Added 2026-11-14. In a guest-started run (layer L8), a call can wait on a card when its invite ends. The call fails as a tool error at the execute scope check, and the run does not end. Decide the rule in L8.
 
 ### Worker Service

@@ -44,10 +44,12 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 
 ### Agent tools
 
-- Every declaration holds a `tools` object `{ builtin, host, operation }`.
+- Every declaration holds a `tools` object `{ builtin, host, operation, workbench }`.
 - `builtin` applies in a Worker execution and in a Workbench session.
 - `host` applies in a Worker execution only.
 - `operation` applies in a Workbench session only.
+- `workbench` applies in a Workbench session only. It lists tools that the Workbench Service owns. `swe@1` and `re@1` list `evidence_read`, and every other agent lists none.
+- A `workbench` tool has the guard class `card`.
 - `operation` is an explicit list of operation ids. The default is deny.
 - An operation that the list does not name is no tool of the agent.
 - An agent with an empty `operation` list has no Workbench session. `pe@1` is such an agent.
@@ -98,6 +100,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - Hover or focus on a chip shows the description of the tool and the undo line of its class.
 - The undo line of `read` is "Reads only. Nothing to undo."
 - The undo line of `card` is "Waits on your card."
+- The undo line of `evidence_read` is "Asks your approval once per node in a conversation."
 
 ## Agent configuration
 

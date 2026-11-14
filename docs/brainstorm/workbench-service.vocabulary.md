@@ -81,6 +81,18 @@ The `kanthord.workbench.action_result` custom message that `workbench.session.ac
 The closed set of outcomes is `done` and `failed`.
 Ulrich clicks the card of `mission.node.unblock` and the act fails. The dashboard reports `failed`, and the next run of Yumi reads "The owner ran mission.node.unblock on node_01J. Result: failed, mission.node.state_conflict."
 
+## evidence read
+
+One `evidence_read` call that gives the text of one evidence asset to an agent.
+The term names no closed set.
+Ulrich asks `swe@1` why a node failed. `swe@1` calls `evidence_read` on the log of the attempt and gets the last 65536 bytes as text.
+
+## evidence grant
+
+The owner approval that lets one conversation read every evidence asset of one node until kanthord restarts.
+The term names no closed set.
+Ulrich approves the evidence card of "Add password reset". `swe@1` then reads every asset of that node with no new card, until kanthord restarts.
+
 ## Workbench record
 
 A server fact in a session file that no model reads.

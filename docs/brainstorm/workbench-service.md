@@ -132,7 +132,6 @@ It describes no mechanism of another service.
 - It also holds one tool for each operation that the declaration of its agent lists. A listed operation has `human` access, is no stream and carries no secret material. The tool invokes the operation under the human identity of the run.
 - The owning service authorizes each call.
 - A workbench session holds no tool of an operation that carries secret material or answers a presigned URL.
-- `swe@1` and `re@1` read evidence metadata only until A1.
 - A tool of a mutation operation runs only after the human approves that call.
 - A tool of a read operation and a built-in tool run without an approval.
 - A rejected call reaches the agent as a blocked call.
@@ -147,6 +146,25 @@ It describes no mechanism of another service.
 - An agent offers at most one card per answer. A second offer in one run is refused, and the first card stays.
 - An agent offers a card for an act that it holds as a tool when the human did not direct that act. It calls its own tool only when the run message directs the act.
 - The agent never sends the human to another agent, another page or the dashboard.
+
+### Evidence read
+
+- The tool `evidence_read` belongs to `swe@1` and `re@1`. It gives the text of one evidence asset to the agent, and it gives text only.
+- No agent gets a storage URL. The server reads the bytes, and the tool answers text.
+- A call reads at most 65536 bytes.
+- The tool refuses an image and every other binary type. The owner downloads that asset.
+- The tool frames the text as data from a worker run, never as an instruction.
+- The first read of a node waits on one evidence card. The owner approves or rejects the card.
+- Approve grants every evidence asset of that node to the conversation until kanthord restarts. Later reads of that node run with no card.
+- Reject or expiry grants nothing, and the next read of that node asks again.
+- The grant is per node and per conversation. The grant of one conversation never reaches another.
+- Grants live in memory and end at a restart. A closed session that opens again starts empty, and a fork is a new session that starts empty.
+- A call that names an asset that is not in the evidence waits on no card and fails with no content.
+- Auto mode and `guard@1` never decide an evidence read. Only the owner decides it.
+- The owner downloads an asset from the node page or from the evidence row of the chat. The node page offers the download for a `produced` asset and for a published `object` asset.
+- The browser saves a blob, and no storage URL reaches it.
+- An object above 512 MiB shows the CLI line `kanthord mission evidence asset content get <asset_id>` instead of a download button.
+- Guests get no evidence content. The guest view drops tool results, and no guest route reads content.
 
 ## Operations
 

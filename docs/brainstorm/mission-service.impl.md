@@ -776,6 +776,28 @@ Repository evidence remains an address, not an upload of repository content.
 - A content read of a repository asset answers 409 `mission.evidence.content_repository` with `evidence_id` and the repository address in `details`, after the authorization and the execution bound checks of the read. The failure carries no bytes and no presigned URL. The human and the execution content reads share that mapping.
 - A content read of a `platform` asset answers 409 `mission.evidence.content_platform` with `evidence_id` and the address in `details`, after the same checks, and it fetches no external content.
 
+- `mission.evidence.asset.content.download` is `GET /api/mission/evidence/asset/:asset_id/content/download`. It has `human` access and the lifetime `stream`, and it has no CLI command because the port refuses a stream operation.
+- The server reads the bytes and answers them. The operation never answers a URL, and no storage URL reaches a browser or an agent.
+- The query holds the optional `offset` (a nonnegative integer) and the optional `length` (a positive integer, at most 5 GiB). With neither, the answer holds the whole content.
+- A range is a read choice. The service still never truncates stored evidence.
+- A `produced` asset answers the slice of its decoded bytes. An `object` asset takes the same presigned GET as `mission.evidence.asset.content.get` and the server fetches it. The server follows no redirect of storage.
+- An `object` read with a range sends `Range: bytes=<start>-<stop - 1>` to storage. A read of the whole object sends no `Range`. The server accepts 206 for a ranged read and 200 for a whole read. Any other storage answer, and a failed fetch, answers 502.
+- The answer status is 200 for every accepted read, also for a range. A content of size 0 answers 200 with no body and reads no storage.
+- `stop` is the lesser of `offset + length` and the size. An `offset` at or after a nonzero size answers 400 `mission.evidence.content_range_invalid`.
+- A repository asset answers 409 `mission.evidence.content_repository`, and a `platform` asset answers 409 `mission.evidence.content_platform`, as a content read does.
+- A storage failure answers 502 `mission.evidence.content_unavailable` with the fixed message "The storage read failed." The error holds no cause, no detail and no URL.
+- The answer holds seven headers:
+  - `Content-Type: application/octet-stream`
+  - `Content-Length`: the number of bytes of the answer.
+  - `Content-Disposition: attachment; filename="<asset_id><extension>"`
+  - `X-Content-Type-Options: nosniff`
+  - `Cache-Control: no-store`
+  - `X-Evidence-Media-Type`: the stored media type.
+  - `X-Evidence-Size`: the full size of the content, not the size of the slice.
+- `EVIDENCE_FILE_EXTENSIONS` maps the stored media type, with its parameter removed and in lower case, to the extension: `text/plain` to `.txt`, `application/json` to `.json`, `application/xml` and `text/xml` to `.xml`, `application/yaml` and `text/yaml` to `.yaml`, `image/png` to `.png`, `image/jpeg` to `.jpg`, `image/gif` to `.gif` and `image/webp` to `.webp`. Every other type gets `.bin`.
+- The CORS answer of the Gateway exposes `X-Request-Id`, `Content-Disposition`, `X-Evidence-Media-Type` and `X-Evidence-Size`.
+- The CLI keeps `kanthord mission evidence asset content get`. It prints the URL to the owner terminal only.
+
 ## Object evidence
 
 Object evidence uses one presigned-transfer strategy for every placement and every co-location.
