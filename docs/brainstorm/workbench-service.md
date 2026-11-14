@@ -144,7 +144,7 @@ It describes no mechanism of another service.
 - Discard, override, node pause and project pause confirm in their dashboard dialogs. Resume and unblock open their dashboard dialogs.
 - Check (`mission.node.check`) and `project.resume` run at once with no dialog.
 - A click on the card reads the target again. A changed target runs no act.
-- One card per answer. A second offer in one run is refused, and the first card stays.
+- An agent offers at most one card per answer. A second offer in one run is refused, and the first card stays.
 - An agent offers a card for an act that it holds as a tool when the human did not direct that act. It calls its own tool only when the run message directs the act.
 - The agent never sends the human to another agent, another page or the dashboard.
 

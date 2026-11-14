@@ -141,7 +141,7 @@ Every operation has `human` access.
 
 - The card look follows the design "Yumi Workbench Preview", scenario `a1-offer`.
 - The card shows the "Action" pill and the operation id.
-- The card shows two fact bullets: "node: <name> (<id>)" and "state: <state> · attempt <n>".
+- The card shows two fact bullets. For a node target they are "node: <name> (<id>)" and "state: <state> · attempt <n>". For a project target they are "project: <name> (<id>)" and "state: paused" or "state: active".
 - The card shows one primary button. For `mission.node.discard` and `mission.node.override` the button is a filled danger button.
 
 ### Card states
@@ -155,7 +155,9 @@ Every operation has `human` access.
 - `live` after `failed`: the latest result holds the outcome `failed`. The inline error line sits under the card with the `error_code`.
 - The states are tested in this order: `done`, `superseded`, `unknown`, then `waiting` or `live`.
 - Discard, override, node pause and project pause confirm in their dialogs. Resume and unblock open their dialogs. Check (`mission.node.check`) and `project.resume` run at once with no dialog.
-- A click on the button reads the target again. When the target differs from `seen`, the card shows "<id> changed since the card: it is now <state> (attempt <m>). Nothing ran." and runs no act.
+- A click on the button reads the target again. When the target differs from `seen`, the card runs no act and shows a change line.
+- The node change line is "<id> changed since the card: it is now <state> (attempt <m>). Nothing ran."
+- The project change line is "<id> changed since the card: it is now paused. Nothing ran." or "<id> changed since the card: it is now active. Nothing ran."
 
 ## Session files
 
