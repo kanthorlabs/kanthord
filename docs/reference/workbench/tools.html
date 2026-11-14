@@ -28,6 +28,7 @@
           <li><a href="#swe-1">SWE (swe@1)</a></li>
           <li><a href="#re-1">RE (re@1)</a></li>
           <li><a href="#ops-1">Yumi (ops@1)</a></li>
+          <li><a href="#offer-action">Workbench tool <code>offer_action</code></a></li>
         </ul>
       </details>
       <main>
@@ -387,6 +388,69 @@
 <td><code>GET /api/worker/instance</code></td>
 <td>No</td>
 <td>Page worker instances in ascending name order with their connection, binding count and holder mismatch.</td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="offer-action">Workbench tool <code>offer_action</code></h2>
+<p>Every Workbench agent also holds the tool <code>offer_action</code>. The tool runs nothing. It shows one action card in the chat, and the owner decides whether the act runs. It needs no approval, because it is no operation.</p>
+<p>A run offers one card. A second call in the same run fails.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>operation_id</code></td>
+<td>The act of the card. One of the ids in the table below.</td>
+</tr>
+<tr>
+<td><code>target_id</code></td>
+<td>The identity of the node or the project that the act acts on.</td>
+</tr>
+</tbody></table>
+</div>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mission.node.resume</code></td>
+<td>node</td>
+</tr>
+<tr>
+<td><code>mission.node.unblock</code></td>
+<td>node</td>
+</tr>
+<tr>
+<td><code>mission.node.check</code></td>
+<td>node</td>
+</tr>
+<tr>
+<td><code>mission.node.discard</code></td>
+<td>node</td>
+</tr>
+<tr>
+<td><code>mission.node.override</code></td>
+<td>node</td>
+</tr>
+<tr>
+<td><code>mission.node.pause</code></td>
+<td>node</td>
+</tr>
+<tr>
+<td><code>project.pause</code></td>
+<td>project</td>
+</tr>
+<tr>
+<td><code>project.resume</code></td>
+<td>project</td>
 </tr>
 </tbody></table>
 </div>

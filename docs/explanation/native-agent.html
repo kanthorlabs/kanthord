@@ -1232,6 +1232,15 @@ Binding prompt of repository app:
               >
               lists every tool.
             </li>
+            <li>
+              <strong><code>offer_action</code></strong> (Workbench only) lets
+              the agent offer one action card for an act that it cannot call, or
+              that you did not direct. The tool runs nothing. You click the
+              card, and the act runs as your own act. Discard, override, node
+              pause and project pause ask you to confirm in their dialogs. The
+              card shows “Done by the owner” after the act, or the error when it
+              fails. The agent offers one card for each answer.
+            </li>
           </ul>
           <p>
             An operation becomes a tool when it meets all of these conditions:
