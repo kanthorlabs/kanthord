@@ -144,12 +144,13 @@ It describes no mechanism of another service.
 - Check (`mission.node.check`) and `project.resume` run at once with no dialog.
 - A click on the card reads the target again. A changed target runs no act.
 - An agent offers at most one card per answer. A second offer in one run is refused, and the first card stays.
-- An agent offers a card for an act that it holds as a tool when the human did not direct that act. It calls its own tool only when the run message directs the act.
+- An agent offers a card for an act that it holds as a tool when the human did not direct that act. It calls its own tool only when the human message directs the act.
+- The agent writes its full answer, the report included, before the card or right after it. It adds nothing after the full answer.
 - The agent never sends the human to another agent, another page or the dashboard.
 
 Setup cards:
 
-- An agent offers a [setup card](workbench-service.vocabulary.md#setup-card) on an action card for a setup act: `llm.credential.rotate` for `credential_refused`, `project.bindingSet.write` for `no_taker`, and `agent.enablement.put` for `agent_invalid` and `request_rejected`.
+- An agent offers a [setup card](workbench-service.vocabulary.md#setup-card) on an action card for a setup act: `llm.credential.rotate` for `credential_refused`, `project.bindingSet.write` for `no_taker`, and `agent.enablement.put` for `agent_invalid` and `request_rejected`. The agent offers the setup act at the source of the issue: `llm.credential.rotate` for a credential, `agent.enablement.put` for an issue in the agent defaults, and `project.bindingSet.write` for an issue in a binding entry.
 - A setup card carries only the operation id and the target id. A click opens the existing dashboard dialog.
 - The owner types every value in that dialog, a secret included, never through an agent. The dialog calls the existing route under the owner JWT. The guard does not decide the act.
 - An agent never asks the human for a secret and never accepts one in the chat.
