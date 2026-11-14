@@ -252,3 +252,15 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - Two findings stay in the stored session: a finding in a thinking block that the provider signs, and a residual in a compaction summary. Each is a value that the model made, or a value that no rule matched where the model read it.
 - The `write` and `edit` tools receive the value of each marker of their own redaction, so a write to the workspace keeps the real text. A command receives no masked value, and no tool receives an LLM credential.
 - The rule set is one standard configuration for every consumer.
+
+## Evaluation
+
+- An eval subject is a catalog agent, for example `ops@1` or `re@1`, or the guard, named `guard`. L2 ships the subjects `ops@1` and `re@1`.
+- An [eval run](agent.vocabulary.md#eval-run) executes every [eval case](agent.vocabulary.md#eval-case) of one subject `k` times. Each execution runs in a fresh sandbox, against a real model, with the key of `engine/.env.eval`.
+- A run writes `.dev/eval/<agent>/<run>.json`. No run file is committed.
+- The [eval history](agent.vocabulary.md#eval-history) `docs/reference/agent/evals/<agent>.json` is committed. It holds the first recorded run and every later [accepted run](agent.vocabulary.md#accepted-run). Each run is appended, oldest first. No run is removed.
+- No database table and no `agent.eval.*` operation exist.
+- `make eval` compares a run with the latest entry of the history. It matches a case by its `case_digest`.
+- A case passes at a `pass_rate` of 2/3 or more. A regressed case reruns `k` more times. It stays regressed below 2/3.
+- `make eval` exits non-zero when a case stays regressed.
+- `docs/reference/agent/evals.html` renders the history on the docs site. `docs/reference/index.html` holds its row.

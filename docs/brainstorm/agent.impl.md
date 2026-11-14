@@ -966,3 +966,93 @@ Engine consumers:
 - In that test: a marker from before `session.configure` restores into `write` after it, and `closeAgent` writes the log record with `unkept`.
 - In that test: a `llm_credential` marker from before `configure` to another credential blocks after it.
 - `engine/src/project/environment-agent.test.ts`: the `pe@1` session opens with the redaction, keeps the confinement, and redacts its JSON failure message. The log record follows `drive`.
+
+## Eval harness
+
+This section records the eval harness of the engine node `l2-engine`.
+[Evaluation](agent.md#evaluation) holds the rules.
+
+### The runner
+
+- `engine/src/eval/run.eval.ts` is a `node:test` file. Its name ends in `.eval.ts`, so the default test glob `src/**/*.test.ts` skips it.
+- `make eval` runs it through `scripts/eval/run.sh`. The runner fails only on a harness error. A failed case is a result, not a failure.
+- `EVAL_AGENT` names the subject. `EVAL_OUTPUT` is the path of the run file. `EVAL_HISTORY` is the path of the history file. `EVAL_ANTHROPIC_API_KEY` is the key.
+- `EVAL_REPEAT` is a positive integer, default 3. `EVAL_CASES` is a list of case ids separated by commas, default every case.
+- `EVAL_RERUN=1` selects the rerun mode. It requires `EVAL_CASES`, the same repeat as the run file, and the same `case_digest` for each named case.
+- The rerun mode merges its results into the run file as `reruns` and `rerun_pass_rate`. It recomputes `comparison`.
+- `EVAL_CONFIGURATION` in `engine/src/eval/run.ts` fixes `agent_provider: default`, `model_identifier: claude-sonnet-5-5` and `reasoning_effort: medium`. Each run file records it.
+- A change to `EVAL_CONFIGURATION` changes every result. It runs every subject.
+- The runner prints one line for each case and the comparison to standard error.
+
+### The sandbox
+
+- `openSandbox` in `engine/src/eval/sandbox.ts` builds one sandbox for each agent run. It never shares a sandbox between two runs.
+- It calls `gatewayFixture` with a temporary state directory. The fixture removes the directory when the run ends.
+- It calls `provisionNativeAgent` with the eval key and `EVAL_CONFIGURATION`, so the subject resolves one `anthropic` credential.
+- For each fixture key of a case, `provisionWorkerProject` creates a project with one worker binding `general` of `claude-code@1` and `instance_count: 0`.
+- That binding covers every claim, and no worker runs a fixture node. The mission import of the fixture entries then applies.
+- A turn waits up to `TURN_DEADLINE_MS`, 300000 ms. A turn that times out ends the case run.
+- `node --test-timeout`, set by `scripts/eval/run.sh` from `EVAL_TIMEOUT_MS`, bounds one agent run.
+
+### The pass rule
+
+- A case passes when `pass_rate` is 2/3 or more, or `rerun_pass_rate` is 2/3 or more. `casePassed` in `engine/src/eval/compare.ts` holds the rule.
+- `pass_rate` is the count of passed runs over `repeat`. A run passes when every check of the run passes.
+
+### The case file
+
+- A case file holds the keys `id`, `source`, `fixtures`, `setup`, `seed`, `turns` and `checks`. `source` is optional.
+- An unknown key fails the parse at every level, because each schema is strict.
+- `id` equals the file name without `.yaml`. `fixtures` maps a key to a JSON file under `engine/eval/<agent>/fixtures/`.
+- `setup` lists operation calls. `turns` lists a `human` text and `approvals`, a map of operation id to `approve` or `reject`.
+- A placeholder resolves to a real id after the fixture import. It has four forms:
+  - `{{<key>.project_id}}`
+  - `{{<key>.node.<filename>}}`
+  - `{{<key>.evidence.<filename>}}`
+  - `{{<key>.evidence.<filename>.asset.<n>}}`
+- Placeholders work in `setup`, `seed`, `turns`, `checks` and the text assets. An unknown key or filename fails the parse.
+- `case_digest` is the SHA-256 of the canonical JSON of the case file, the fixture files and the evidence asset files.
+
+### The seed steps
+
+- `execution_refusal` records a refused execution for a node, with `code` `unauthorized` or `bad_request`. It checks that the agent resolves the named `credential`.
+- `job_without_taker` ages the job of a node by `age_ms`.
+- `evidence` writes the assets of one attempt of a node. It writes produced assets only (EV4).
+- The `approvals` key `mission.evidence.asset.content.download` answers an evidence card (EV5).
+- A pending approval that a turn does not name is rejected. The harness check `unexpected_approval` then fails.
+
+### The checks
+
+- `expect_calls` lists the calls that the run must make. An item names an `operation_id` or a `tool`, and may hold `input` and `count`.
+- `forbid_calls` lists the calls that the run must not make, in the same form.
+- `final_state` reads an operation after the last turn and compares the answer with `expect`.
+- `reply_contains` lists texts that the reply must hold. `reply_forbids` lists regular expressions that the reply must not match.
+- `max_tool_calls`, `max_confirmations` and `max_offers` bound the count of tool calls, confirmations and action offers.
+- `expect_offer` names one offer that must appear. `forbid_offer` lists filters that no offer may match.
+- `unexpected_approval` is the harness check. It runs for every case and fails when a pending approval has no entry in `approvals`.
+
+### The run file and the history
+
+- The run file holds `run`, `subject`, `engine_revision`, `configuration`, `prompt_digests`, `repeat`, `comparison` and `cases`. `run` is the base name of `EVAL_OUTPUT`.
+- A case holds `case_id`, `case_digest`, `pass_rate`, `rerun_pass_rate`, `runs` and `reruns`. A result holds `passed`, `checks`, the tokens, `cost` and `duration_ms`.
+- The engine writes the history entry form beside the run file as `<run>.entry.json`. It reduces each `checks[]` item to `{ kind, passed }`, so the history holds no `detail`.
+- `comparison` holds `baseline_run`, `regressed`, `improved`, `new`, `dropped`, `tokens_delta` and `cost_delta`.
+- The baseline is the last history entry. A case with a `case_digest` that the baseline lacks is `new`. A baseline case that the run lacks is `dropped`.
+- A case that passed in the baseline and fails now is `regressed`. A case that failed and passes now is `improved`.
+- `scripts/eval/run.sh` reruns the regressed cases once, with `EVAL_RERUN=1`. It exits 1 when `comparison.regressed` stays non-empty.
+- `scripts/eval/run.sh` appends `<run>.entry.json` to the history only when the history is absent or `ACCEPT=1`.
+- `scripts/eval/render.mjs` renders the history files into `docs/reference/agent/evals.html`.
+
+### The key
+
+- `engine/.env.eval` holds `EVAL_ANTHROPIC_API_KEY`. `engine/.gitignore` ignores it through `.env.*`.
+- `scripts/eval/run.sh` reads the file of the main checkout. It gives it to the engine process through `node --env-file`.
+- No file, log or output receives the key. The run file and the history hold no reply text and no tool input.
+
+### Lint and build
+
+- The lint element `eval` covers `src/eval`. It imports `kernel`, the components, the `index.ts` and `contract.ts` of a service, and the application entry of `apps-server`.
+- It also imports `test-support.ts` of `apps-server`, `mission` and `scheduler`.
+- The rules for magic numbers, complexity and parameters skip `src/eval/**`.
+- `tsconfig.build.json` excludes `src/eval/**`, so the release build holds no eval code.
+- `loadSuite` accepts only an agent name of the form `<name>@<version>`. The subject `guard` needs a change to it.

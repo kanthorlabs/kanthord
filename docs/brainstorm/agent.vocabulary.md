@@ -233,3 +233,27 @@ The resumed session of Execution 1 holds the 40 turns, and `swe@1` continues at 
 A service that opens an agent session under its own authority.
 The term names no closed set.
 The Worker Service is a consumer, and Execution 1 supplies the effective configuration of `swe@1` that `coder-main` resolves.
+
+## eval case
+
+One YAML file under `engine/eval/<agent>/` that holds fixtures, setup, seed, turns and checks.
+The term names no closed set.
+The case `status-blocked` of `ops@1` is the file `engine/eval/ops@1/status-blocked.yaml`.
+
+## eval run
+
+One execution of the suite of one subject, with `k` repeats for each case, written to one run file.
+The term names no closed set.
+The file `.dev/eval/ops@1/20261111-093000.json` holds one eval run of `ops@1`.
+
+## eval history
+
+The committed array of the accepted runs of one subject, oldest first.
+The term names no closed set.
+The file `docs/reference/agent/evals/ops@1.json` is the eval history of `ops@1`.
+
+## accepted run
+
+A run that `make eval ACCEPT=1` appended to the eval history, or the first recorded run of a subject.
+The term names no closed set.
+After `make eval AGENT=ops@1 ACCEPT=1`, the run of that command is the last accepted run of `ops@1`.
