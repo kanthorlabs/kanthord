@@ -137,6 +137,13 @@ Every operation has `human` access.
 - With an open agent, the service sends the message to the agent without a turn. Otherwise it appends the message to the session file.
 - The readers of `details` are the next run of the agent, which reads the text, the card merge of the dashboard, and from L7 the guest line.
 
+### Card look
+
+- The card look follows the design "Yumi Workbench Preview", scenario `a1-offer`.
+- The card shows the "Action" pill and the operation id.
+- The card shows two fact bullets: "node: <name> (<id>)" and "state: <state> · attempt <n>".
+- The card shows one primary button. For `mission.node.discard` and `mission.node.override` the button is a filled danger button.
+
 ### Card states
 
 - The card merge of the dashboard gives each `action_offer` one state.
@@ -147,6 +154,7 @@ Every operation has `human` access.
 - `live`: none of the states above applies. The button runs the act.
 - `live` after `failed`: the latest result holds the outcome `failed`. The inline error line sits under the card with the `error_code`.
 - The states are tested in this order: `done`, `superseded`, `unknown`, then `waiting` or `live`.
+- Discard, override, node pause and project pause confirm in their dialogs. Resume and unblock open their dialogs. Check (`mission.node.check`) and `project.resume` run at once with no dialog.
 - A click on the button reads the target again. When the target differs from `seen`, the card shows "<id> changed since the card: it is now <state> (attempt <m>). Nothing ran." and runs no act.
 
 ## Session files
