@@ -17,8 +17,8 @@ KEY_LINE=$(grep -E '^EVAL_ANTHROPIC_API_KEY=' "$ENV_FILE" | tail -n 1) || true
 KEY_VALUE=${KEY_LINE#EVAL_ANTHROPIC_API_KEY=}
 KEY_VALUE=$(printf '%s' "$KEY_VALUE" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
 case $KEY_VALUE in
-\"*\") KEY_VALUE=${KEY_VALUE#\"}; KEY_VALUE=${KEY_VALUE%\"} ;;
-\'*\') KEY_VALUE=${KEY_VALUE#\'}; KEY_VALUE=${KEY_VALUE%\'} ;;
+\"*) KEY_VALUE=$(printf '%s' "$KEY_VALUE" | sed -E 's/^"([^"]*)".*$/\1/') ;;
+\'*) KEY_VALUE=$(printf '%s' "$KEY_VALUE" | sed -E "s/^'([^']*)'.*\$/\\1/") ;;
 \#*) KEY_VALUE= ;;
 esac
 KEY_VALUE=$(printf '%s' "$KEY_VALUE" | tr -d '[:space:]')
