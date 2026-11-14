@@ -85,7 +85,7 @@ Ulrich clicks the card of `mission.node.unblock` and the act fails. The dashboar
 
 One `evidence_read` call that gives the text of one evidence asset to an agent.
 The term names no closed set.
-Ulrich asks `swe@1` why a node failed. `swe@1` calls `evidence_read` on the log of the attempt and gets the last 65536 bytes as text.
+Ulrich asks `swe@1` why a node failed. `swe@1` calls `evidence_read` on the log of the attempt and gets the first 65536 bytes as text.
 
 ## evidence grant
 

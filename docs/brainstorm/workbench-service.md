@@ -158,13 +158,13 @@ It describes no mechanism of another service.
 - Approve grants every evidence asset of that node to the conversation until kanthord restarts. Later reads of that node run with no card.
 - Reject or expiry grants nothing, and the next read of that node asks again.
 - The grant is per node and per conversation. The grant of one conversation never reaches another.
-- Grants live in memory and end at a restart. A closed session that opens again starts empty, and a fork is a new session that starts empty.
+- Grants live in memory and end at a restart. A closed session that opens again starts empty, and a fork, when it ships, is a new session that starts empty.
 - A call that names an asset that is not in the evidence waits on no card and fails with no content.
 - Auto mode and `guard@1` never decide an evidence read. Only the owner decides it.
 - The owner downloads an asset from the node page or from the evidence row of the chat. The node page offers the download for a `produced` asset and for a published `object` asset.
 - The browser saves a blob, and no storage URL reaches it.
 - An object above 512 MiB shows the CLI line `kanthord mission evidence asset content get <asset_id>` instead of a download button.
-- Guests get no evidence content. The guest view drops tool results, and no guest route reads content.
+- Guests get no evidence content. The guest view drops tool results, and no guest route reads content. Layers L7 and L8 enforce this guest rule.
 
 ## Operations
 

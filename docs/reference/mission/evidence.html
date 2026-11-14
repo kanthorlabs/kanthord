@@ -840,7 +840,7 @@
                   <td><code>404 mission.record.not_found</code></td>
                   <td>
                     <code>get</code>, both deletes, <code>content get</code>,
-                    <code>complete</code>
+                    <code>content download</code>, <code>complete</code>
                   </td>
                   <td>The evidence or asset does not exist.</td>
                 </tr>
@@ -927,7 +927,7 @@
                   <td><code>403 mission.authorization.refused</code></td>
                   <td>
                     <code>submit</code>, <code>complete</code>, both deletes,
-                    <code>content get</code>
+                    <code>content get</code>, <code>content download</code>
                   </td>
                   <td>
                     The claim is not live, or the storage binding is removed or
@@ -1020,7 +1020,8 @@
                 <tr>
                   <td><code>503 mission.evidence.storage_unavailable</code></td>
                   <td>
-                    <code>submit</code>, both deletes, <code>content get</code>
+                    <code>submit</code>, both deletes, <code>content get</code>,
+                    <code>content download</code>
                   </td>
                   <td>
                     The operation needs object storage for an
