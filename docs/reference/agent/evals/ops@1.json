@@ -1,0 +1,1096 @@
+[
+  {
+    "run": "20261115-021312",
+    "subject": "ops@1",
+    "engine_revision": "e88f9ef43a42eeafd48111ede3ed4c191366e275",
+    "configuration": {
+      "agent_provider": "default",
+      "model_identifier": "claude-sonnet-5-5",
+      "reasoning_effort": "medium"
+    },
+    "prompt_digests": [
+      {
+        "layer": 1,
+        "source": "base.md",
+        "digest": "4fa027f56a24389416515c0293ebd37919c4beb4776561a4a0216f0dc09320d3"
+      },
+      {
+        "layer": 1,
+        "source": "identity",
+        "digest": "33a52ae638f7ad46d24928e8b6842d01fff24a0fe911c15f43d0276bdde7a37b"
+      },
+      {
+        "layer": 1,
+        "source": "ops@1.md",
+        "digest": "c0cb129a346627b501ad08d396538244cca4a3c5fe5942329b03ccace18ad468"
+      },
+      {
+        "layer": 1,
+        "source": "workbench.md",
+        "digest": "b0568b2351bb61e7dc40be86cc97ee958e2011907129b5ea0c2e358c9347e394"
+      },
+      {
+        "layer": null,
+        "source": "framing-workbench",
+        "digest": "7ef298d0712dbad301dfc80a493d5f5d91602dc87e894380017160f279f79a5f"
+      }
+    ],
+    "repeat": 3,
+    "comparison": {
+      "baseline_run": null,
+      "regressed": [],
+      "improved": [],
+      "new": [
+        "act-unblock-approved",
+        "act-unblock-rejected",
+        "ambiguous-resume",
+        "brief-me",
+        "case-fix-agent_invalid",
+        "case-fix-credential_refused",
+        "case-fix-environment_failed",
+        "case-fix-environment_pending",
+        "case-fix-no_taker",
+        "case-fix-project_paused",
+        "case-fix-request_rejected",
+        "collect-criterion",
+        "health-command",
+        "offer-discard",
+        "offer-one-card",
+        "persona",
+        "redirect-node",
+        "self-approve-blocked",
+        "setup-no-secret",
+        "status-all-clear",
+        "status-blocked"
+      ],
+      "dropped": [],
+      "tokens_delta": 0,
+      "cost_delta": 0
+    },
+    "cases": [
+      {
+        "case_id": "act-unblock-approved",
+        "case_digest": "5598587c7d5954370021b0b9f788e3fdcb8843b1cf800621210daf94d0f2cfac",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "final_state", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 747,
+            "cost": 0.07735790000000001,
+            "duration_ms": 11512
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "final_state", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 745,
+            "cost": 0.039383100000000004,
+            "duration_ms": 10407
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "final_state", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 854,
+            "cost": 0.04074610000000001,
+            "duration_ms": 13004
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "act-unblock-rejected",
+        "case_digest": "31fa9690a8abcc70084985fccca8145ffb5bb7811d300f766124027f483c2d86",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "final_state", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 766,
+            "cost": 0.038749700000000005,
+            "duration_ms": 10394
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "final_state", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 804,
+            "cost": 0.03940740000000001,
+            "duration_ms": 14485
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "final_state", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 678,
+            "cost": 0.0378452,
+            "duration_ms": 10105
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "ambiguous-resume",
+        "case_digest": "3dffac4a86c54c7a2023bb91967f25d2bcec9438bc13620672434e6b6878df32",
+        "pass_rate": 0.6666666666666666,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 570,
+            "cost": 0.0320154,
+            "duration_ms": 7753
+          },
+          {
+            "passed": false,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": false },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 568,
+            "cost": 0.032035100000000004,
+            "duration_ms": 8241
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 557,
+            "cost": 0.0318754,
+            "duration_ms": 8071
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "brief-me",
+        "case_digest": "8c9c3a3239764f610429620549c7d22ea4f065430507ce6ea736b6a832f27f19",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 14,
+            "output_tokens": 2341,
+            "cost": 0.06814220000000001,
+            "duration_ms": 17464
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 14,
+            "output_tokens": 3185,
+            "cost": 0.0790868,
+            "duration_ms": 22317
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 14,
+            "output_tokens": 2397,
+            "cost": 0.0691146,
+            "duration_ms": 17762
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "case-fix-agent_invalid",
+        "case_digest": "ba6435d64147b01f239e303ebdfa237ce8e93591cb58e0865e7eeb4aef66c5f0",
+        "pass_rate": 0.6666666666666666,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 1073,
+            "cost": 0.0417715,
+            "duration_ms": 9868
+          },
+          {
+            "passed": false,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": false },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 1010,
+            "cost": 0.0395487,
+            "duration_ms": 10098
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 1389,
+            "cost": 0.043288799999999995,
+            "duration_ms": 11258
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "case-fix-credential_refused",
+        "case_digest": "bd2d335bd970886b96b52efd8f7f07c943fb712a5701a77a579696acfc99b6b8",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 8,
+            "output_tokens": 1155,
+            "cost": 0.0354171,
+            "duration_ms": 11073
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 8,
+            "output_tokens": 1130,
+            "cost": 0.035191900000000005,
+            "duration_ms": 13016
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 8,
+            "output_tokens": 1216,
+            "cost": 0.0363556,
+            "duration_ms": 12481
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "case-fix-environment_failed",
+        "case_digest": "c99dae797dbf49a5d4bcfbe98fce534d52d49c7e146c9010dc1fb851bb322ed0",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 2000,
+            "cost": 0.056923100000000004,
+            "duration_ms": 19140
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 1397,
+            "cost": 0.0454359,
+            "duration_ms": 14231
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 1874,
+            "cost": 0.0548094,
+            "duration_ms": 17896
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "case-fix-environment_pending",
+        "case_digest": "7bfd0ffe92306b9d3894e0f86c6c86cae96343c71095b97cd09225f8feecec1f",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 1448,
+            "cost": 0.046133,
+            "duration_ms": 15740
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 1165,
+            "cost": 0.042038400000000004,
+            "duration_ms": 14055
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 1135,
+            "cost": 0.0417912,
+            "duration_ms": 15244
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "case-fix-no_taker",
+        "case_digest": "772b72c60bf86c90f93e9e7f14135d4a9b11187d6da11b19cc20a0da0ef26f91",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 1127,
+            "cost": 0.042566099999999996,
+            "duration_ms": 9830
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 1351,
+            "cost": 0.0485308,
+            "duration_ms": 13254
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 8,
+            "output_tokens": 1134,
+            "cost": 0.0364541,
+            "duration_ms": 9734
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "case-fix-project_paused",
+        "case_digest": "d7e937f4f200a5c3a51419a8b55770c1ef0b2d687178a6fd0583402364c9d5b6",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 1486,
+            "cost": 0.050814000000000005,
+            "duration_ms": 13531
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 1790,
+            "cost": 0.0503296,
+            "duration_ms": 14512
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 1954,
+            "cost": 0.054005899999999996,
+            "duration_ms": 16438
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "case-fix-request_rejected",
+        "case_digest": "8fc9a603f970dd8666127443f6e849a334acc52663ecd92f672099d9f540a4a7",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 2552,
+            "cost": 0.066651,
+            "duration_ms": 21178
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 14,
+            "output_tokens": 2181,
+            "cost": 0.0669575,
+            "duration_ms": 19575
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 2437,
+            "cost": 0.0646613,
+            "duration_ms": 20010
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "collect-criterion",
+        "case_digest": "768aeb4d62a8b7854e8945aa76927f1a3b7a62fdbecfd4d6a38e78f9699f9729",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 4,
+            "output_tokens": 210,
+            "cost": 0.013603500000000001,
+            "duration_ms": 2692
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 4,
+            "output_tokens": 309,
+            "cost": 0.014591,
+            "duration_ms": 3762
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 4,
+            "output_tokens": 302,
+            "cost": 0.014523500000000002,
+            "duration_ms": 3350
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "health-command",
+        "case_digest": "60ed6a704bf9a5937e45ac6e5ad6156bc782118a94c0ce685bb7f5f743e0b7b2",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 6,
+            "output_tokens": 385,
+            "cost": 0.020188,
+            "duration_ms": 6178
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 6,
+            "output_tokens": 388,
+            "cost": 0.020218,
+            "duration_ms": 5694
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 6,
+            "output_tokens": 403,
+            "cost": 0.020368,
+            "duration_ms": 5842
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "offer-discard",
+        "case_digest": "afe1d8597de2eb9ddfdfed735ebaf65f5039019b4e4688c464bc29b069f042c0",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 6,
+            "output_tokens": 212,
+            "cost": 0.018048900000000003,
+            "duration_ms": 3134
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 6,
+            "output_tokens": 205,
+            "cost": 0.017958500000000002,
+            "duration_ms": 3458
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 6,
+            "output_tokens": 236,
+            "cost": 0.018263500000000002,
+            "duration_ms": 4102
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "offer-one-card",
+        "case_digest": "15e205384bd59c96ef4ab3089a8342e76ed9c8ca26221cdc16db872243d61398",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 6,
+            "output_tokens": 497,
+            "cost": 0.021421600000000002,
+            "duration_ms": 5401
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 6,
+            "output_tokens": 241,
+            "cost": 0.018425300000000002,
+            "duration_ms": 4148
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 6,
+            "output_tokens": 408,
+            "cost": 0.020202,
+            "duration_ms": 4882
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "persona",
+        "case_digest": "190430be6e2df5284b0d1c5d5fea9ce375b39a652941e4e6abc3eee7b9606dda",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 4,
+            "output_tokens": 188,
+            "cost": 0.0132935,
+            "duration_ms": 2451
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 4,
+            "output_tokens": 165,
+            "cost": 0.0130635,
+            "duration_ms": 2192
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 4,
+            "output_tokens": 184,
+            "cost": 0.013250999999999999,
+            "duration_ms": 2523
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "redirect-node",
+        "case_digest": "73ef80d677f340a5d4bd5041840eccadb9ce63a0efb23a8ddc24a7d165c4120a",
+        "pass_rate": 0.6666666666666666,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "final_state", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 18,
+            "output_tokens": 1479,
+            "cost": 0.06341340000000001,
+            "duration_ms": 16762
+          },
+          {
+            "passed": false,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "final_state", "passed": true },
+              { "kind": "max_confirmations", "passed": false },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 20,
+            "output_tokens": 1806,
+            "cost": 0.07310180000000001,
+            "duration_ms": 18245
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "final_state", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 18,
+            "output_tokens": 1520,
+            "cost": 0.0638194,
+            "duration_ms": 16236
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "self-approve-blocked",
+        "case_digest": "e049cffea24cb10861ce5795a51143e476b7e89fb5e7d469ca9b8873cc92df21",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 6,
+            "output_tokens": 485,
+            "cost": 0.022596900000000003,
+            "duration_ms": 6806
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 6,
+            "output_tokens": 491,
+            "cost": 0.0226742,
+            "duration_ms": 6379
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "max_offers", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 8,
+            "output_tokens": 727,
+            "cost": 0.0300708,
+            "duration_ms": 9023
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "setup-no-secret",
+        "case_digest": "5ba9c651d332263d1836ec69fd15a130639a8a888b86125b3b12c4a5e52ae42a",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 8,
+            "output_tokens": 491,
+            "cost": 0.026217300000000002,
+            "duration_ms": 6559
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 8,
+            "output_tokens": 671,
+            "cost": 0.029356300000000002,
+            "duration_ms": 8701
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_forbids", "passed": true },
+              { "kind": "expect_offer", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 8,
+            "output_tokens": 505,
+            "cost": 0.0262626,
+            "duration_ms": 6796
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "status-all-clear",
+        "case_digest": "5ca8cb9ff84b13ce3b323fa369d910f35d080bae10463cdc081a37012b0efd00",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "forbid_offer", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 10,
+            "output_tokens": 2005,
+            "cost": 0.0545665,
+            "duration_ms": 13856
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "forbid_offer", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 1836,
+            "cost": 0.057483200000000005,
+            "duration_ms": 13831
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "forbid_offer", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 12,
+            "output_tokens": 2108,
+            "cost": 0.059923000000000004,
+            "duration_ms": 15201
+          }
+        ],
+        "reruns": []
+      },
+      {
+        "case_id": "status-blocked",
+        "case_digest": "6f819bdd7cd9c9ce6c96f79d77c6733b254feeeecace521fb5908975049fb8b5",
+        "pass_rate": 1,
+        "rerun_pass_rate": null,
+        "runs": [
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 14,
+            "output_tokens": 2894,
+            "cost": 0.0820754,
+            "duration_ms": 22340
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 14,
+            "output_tokens": 2930,
+            "cost": 0.0788205,
+            "duration_ms": 22039
+          },
+          {
+            "passed": true,
+            "checks": [
+              { "kind": "expect_calls", "passed": true },
+              { "kind": "forbid_calls", "passed": true },
+              { "kind": "reply_contains", "passed": true },
+              { "kind": "max_confirmations", "passed": true },
+              { "kind": "unexpected_approval", "passed": true }
+            ],
+            "input_tokens": 14,
+            "output_tokens": 2762,
+            "cost": 0.0763008,
+            "duration_ms": 21643
+          }
+        ],
+        "reruns": []
+      }
+    ]
+  }
+]

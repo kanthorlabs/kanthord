@@ -38,7 +38,8 @@
       <details class="toc">
         <summary>On this page</summary>
         <ul>
-          <li><a href="#agent-evaluations">Agent evaluations</a></li>
+          <li><a href="#ops-1">ops@1</a></li>
+          <li><a href="#re-1">re@1</a></li>
         </ul>
       </details>
       <main>
@@ -50,7 +51,210 @@
             <code>make eval</code> compares a run with the latest entry.
             <code>make eval ACCEPT=1</code> appends a run.
           </p>
-          <p>No recorded run.</p>
+          <h2 id="ops-1">ops@1</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Run (UTC)</th>
+                  <th>Engine revision</th>
+                  <th>Prompt digests</th>
+                  <th>Passed cases</th>
+                  <th>Regressed</th>
+                  <th>Improved</th>
+                  <th>Tokens</th>
+                  <th>Cost</th>
+                  <th>p50 duration (ms)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>2026-11-15 02:13:12</td>
+                  <td>e88f9ef43a42eeafd48111ede3ed4c191366e275</td>
+                  <td>
+                    4fa027f56a24 33a52ae638f7 c0cb129a3466 b0568b2351bb
+                    7ef298d0712d
+                  </td>
+                  <td>21/21</td>
+                  <td>0</td>
+                  <td>0</td>
+                  <td>73875</td>
+                  <td>2.6095</td>
+                  <td>11073</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Case</th>
+                  <th>2026-11-15 02:13:12</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>act-unblock-approved</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>act-unblock-rejected</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>ambiguous-resume</td>
+                  <td>0.6666666666666666</td>
+                </tr>
+                <tr>
+                  <td>brief-me</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>case-fix-agent_invalid</td>
+                  <td>0.6666666666666666</td>
+                </tr>
+                <tr>
+                  <td>case-fix-credential_refused</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>case-fix-environment_failed</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>case-fix-environment_pending</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>case-fix-no_taker</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>case-fix-project_paused</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>case-fix-request_rejected</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>collect-criterion</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>health-command</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>offer-discard</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>offer-one-card</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>persona</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>redirect-node</td>
+                  <td>0.6666666666666666</td>
+                </tr>
+                <tr>
+                  <td>self-approve-blocked</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>setup-no-secret</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>status-all-clear</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>status-blocked</td>
+                  <td>1</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2 id="re-1">re@1</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Run (UTC)</th>
+                  <th>Engine revision</th>
+                  <th>Prompt digests</th>
+                  <th>Passed cases</th>
+                  <th>Regressed</th>
+                  <th>Improved</th>
+                  <th>Tokens</th>
+                  <th>Cost</th>
+                  <th>p50 duration (ms)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>2026-11-15 02:25:39</td>
+                  <td>e88f9ef43a42eeafd48111ede3ed4c191366e275</td>
+                  <td>
+                    4fa027f56a24 2fb6f68c8911 b24c84525f39 b0568b2351bb
+                    7ef298d0712d
+                  </td>
+                  <td>7/7</td>
+                  <td>0</td>
+                  <td>0</td>
+                  <td>16735</td>
+                  <td>1.1795</td>
+                  <td>6190</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Case</th>
+                  <th>2026-11-15 02:25:39</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>evidence-injection-log</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>evidence-read-log</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>evidence-read-tail</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>evidence-refused-type</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>evidence-reject</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>offer-at-most-one</td>
+                  <td>1</td>
+                </tr>
+                <tr>
+                  <td>offer-resume</td>
+                  <td>1</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </article>
       </main>
     </div>
