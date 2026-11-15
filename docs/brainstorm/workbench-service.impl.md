@@ -33,11 +33,11 @@ A mechanism here never overrides a rule there.
 - `recordOf(entry)` answers the record of a Workbench record entry. It answers `null` for another entry or for invalid data, and it never throws.
 - The configuration entry `kanthord.workbench.configuration` keeps its own name and is no Workbench record.
 
-| Kind           | Fields                                              | Writer                            | Session file                    | Readers                                                                     | Guest view                |
-| -------------- | --------------------------------------------------- | --------------------------------- | ------------------------------- | --------------------------------------------------------------------------- | ------------------------- |
-| `action_offer` | `tool_call_id`, `operation_id`, `target_id`, `seen` | `offer_action`                    | The member that called the tool | The card merge of the dashboard and `actionReport`                          | Shown with no button (L7) |
-| `guard`        | `tool_call_id`, `operation_id`, `reason`            | The `tool_call` hook, `auto` only | The member that ran the call    | The tool row and the eval checks `forbid_auto` and `false_auto`             | L7                        |
-| `auto_mode`    | `enabled`                                           | `workbench.session.autoMode.set`  | The conversation                | `load()` of the host session. The last record wins, and no record means on. | L7                        |
+| Kind           | Fields                                              | Writer                            | Session file                    | Readers                                                                                                   | Guest view                |
+| -------------- | --------------------------------------------------- | --------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `action_offer` | `tool_call_id`, `operation_id`, `target_id`, `seen` | `offer_action`                    | The member that called the tool | The card merge of the dashboard and `actionReport`                                                        | Shown with no button (L7) |
+| `guard`        | `tool_call_id`, `operation_id`, `reason`            | The `tool_call` hook, `auto` only | The member that ran the call    | The tool row, the `auto` and `confirm` forms of the eval check `guard`, and the eval check `forbid_auto`. | Decided at L7             |
+| `auto_mode`    | `enabled`                                           | `workbench.session.autoMode.set`  | The conversation                | `load()` of the host session. The last record wins, and no record means on.                               | Decided at L7             |
 
 - `seen` of a node target is `{ name, state, attempt }`. `seen` of a project target is `{ name, paused }`.
 - `seen` of a credential target is `{ revision }`, the newest live revision. `seen` of an agent target is `{ revision }`, the enablement revision. `seen` of a binding set target is `{ version }`, the binding set version.
@@ -222,11 +222,11 @@ A mechanism here never overrides a rule there.
 
 ### Auto mode
 
-- Auto mode is a flag of the open session. A new session starts with it on.
-- `load()` reads the flag from the Workbench records of the session file. The last `auto_mode` record wins. A session file with no `auto_mode` record means on.
-- `workbench.session.autoMode.set` sets the flag and appends an `auto_mode` record `{ enabled }` only when the value changes. The change raises `version`.
-- Rule 5 reads the flag at each call. Rule 10 reads it again after the model call.
-- The message grant of `evidence_read` reads the same flag.
+- Auto mode is a setting of the open session. A new session starts with it on.
+- `load()` reads the setting from the Workbench records of the session file. The last `auto_mode` record wins. A session file with no `auto_mode` record means on.
+- `workbench.session.autoMode.set` sets the setting and appends an `auto_mode` record `{ enabled }` only when the value changes. The change raises `version`.
+- Rule 5 reads the setting at each call. Rule 10 reads it again after the model call.
+- The message grant of `evidence_read` reads the same setting.
 - `workbench.session.autoMode.set` is in `HUMAN_ONLY_OPERATIONS`, so no tool holds it. Only the owner runs it.
 
 ## Operations

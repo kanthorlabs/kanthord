@@ -302,7 +302,7 @@ The Agent component owns these keys of the section `agent`.
 - A file that the reader rejects answers 409 `agent.prompt.template_invalid` with `file`, `path` and `reason` in `details`. `file` names the file, for example `swe@1.md`. An absent file selects the shipped text.
 - Every reader refuses in the same way: `agent.get`, the execution setup, the Workbench session open and the `pe@1` run. No reader replaces an invalid file with the shipped text.
 - The Repository prompt and the Binding prompt are the key `prompts` of the `config` JSON of a repository binding: `prompts.instruction_file`, `prompts.repository` and `prompts.agents`. The [Project Service](project-service.impl.md#validation) owns their validation.
-- The keys of `prompts.agents` are the agent names of the catalog. The catalog is the only list, so no new enum exists.
+- `prompts.agents` holds one key for each catalog agent except an internal agent. The catalog is the only list, so no new enum exists.
 - The composer reads the instruction file through the Project read `instructionFileOf`, with the Repository component reader. The reader follows a symbolic link inside the tree at the commit, so `AGENTS.md -> docs/agents.md` reads `docs/agents.md`.
 - The reader state `present` gives a part. `absent`, `not_regular_file` and `outside_root` give no part. `too_large`, `not_utf8` and `unreadable` answer 409 `agent.prompt.source_invalid`.
 - A present text passes the text validation of a prompt file. A text with a control character answers 409 `agent.prompt.source_invalid` with `reason: control_character`. A carriage return is a control character, so a file with CRLF line ends is invalid. The reader converts no newline.

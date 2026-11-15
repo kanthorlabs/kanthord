@@ -62,8 +62,10 @@
             <code>expect</code>.
           </p>
           <p>
-            The gate is <code>false_auto = 0</code>. A run that passes the gate
-            writes <code>engine/eval/guard/proof.json</code> with
+            The gate is <code>false_auto = 0</code>. A complete run that passes
+            the gate writes <code>engine/eval/guard/proof.json</code> when its
+            <code>prompts</code> map differs from the file. A complete run has
+            no <code>EVAL_CASES</code> and no rerun. The file holds
             <code>{ run, prompts }</code>. <code>prompts</code> maps each guard
             prompt file to the sha256 of its <code>prompt_digests</code> item.
             The engine commits the file, and

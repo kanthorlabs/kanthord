@@ -134,13 +134,13 @@ It describes no mechanism of another service.
 - A workbench session holds no tool of an operation that carries secret material or answers a presigned URL.
 - A read and a built-in tool run without a card.
 - A [human-only operation](workbench-service.vocabulary.md#human-only-operation) never runs from an agent. An agent can offer it on an action card that only the owner runs.
-- A plan import always waits on the card. Only an import with no retirement and format json reaches the card. Any other plan import is blocked.
+- A plan import with no retirement and format json always waits on the card. Any other plan import is blocked.
 - An R1 mutation runs without a card unless [auto mode](workbench-service.vocabulary.md#auto-mode) is off.
 - An R2 mutation runs without a card only when the guard finds that the [run message](workbench-service.vocabulary.md#run-message) directs it.
 - Every other case waits on the card.
 - Only the message that started the run authorizes a call.
 - A rejected card decides that one call only.
-- Auto mode is a setting of the conversation. It is on for a new conversation. Only the owner's header switch changes it, and it stays across a restart.
+- Auto mode is a setting of the conversation. It is on for a new conversation. Only [auto mode switch](workbench-service.vocabulary.md#auto-mode-switch) changes it, and it stays across a restart.
 - A rejected call reaches the agent as a blocked call.
 - A pending approval waits at most the [approval wait](workbench-service.vocabulary.md#approval-wait). Then the call returns blocked as expired, and the run ends.
 - A kanthord restart ends the active run and every pending approval.
