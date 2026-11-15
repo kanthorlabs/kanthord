@@ -199,7 +199,7 @@ A mechanism here never overrides a rule there.
 - The constants are in `engine/src/workbench/contract.ts`:
   - `GUARD_MAX_TOKENS` is 1024.
   - `GUARD_TIMEOUT_MS` is 10000.
-  - `GUARD_AUTO_CONFIDENCE` is `0.9`, the threshold that the guard eval confirms.
+  - `GUARD_AUTO_CONFIDENCE` is `0.8`, the threshold that the guard eval confirms.
   - `GUARD_REQUEST_MAX_BYTES` is 16384.
   - `GUARD_TEXT_KEEP_CHARS` is 64.
   - `GUARD_REASON_MAX_CHARS` is 300.
