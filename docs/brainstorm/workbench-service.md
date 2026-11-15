@@ -132,8 +132,10 @@ It describes no mechanism of another service.
 - It also holds one tool for each operation that the declaration of its agent lists. A listed operation has `human` access, is no stream and carries no secret material. The tool invokes the operation under the human identity of the run.
 - The owning service authorizes each call.
 - A workbench session holds no tool of an operation that carries secret material or answers a presigned URL.
-- A tool of a mutation operation runs only after the human approves that call.
-- A tool of a read operation and a built-in tool run without an approval.
+- A read and a built-in tool run without a card.
+- A [human-only operation](workbench-service.vocabulary.md#human-only-operation) never runs from an agent. No tool list holds it.
+- A plan import always waits on the card.
+- Every other mutation waits on the card.
 - A rejected call reaches the agent as a blocked call.
 - A pending approval waits at most the [approval wait](workbench-service.vocabulary.md#approval-wait). Then the call returns blocked as expired, and the run ends.
 - A kanthord restart ends the active run and every pending approval.
