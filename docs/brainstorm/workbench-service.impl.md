@@ -15,6 +15,7 @@ A mechanism here never overrides a rule there.
 - The list calls `SessionManager.list` of pi with that directory.
 - Each item of the list answers `id`, `name`, `created`, `modified`, `message_count` and `first_message`.
 - Each item of the list also answers `run_active` and `pending_approval` from the in-memory run, the source of the snapshot. `pending_approval` holds `tool_call_id` and `operation_id`, or `null`, and never `input`.
+- A list with `agent_name` `guard@1` answers `{ items: [] }`, because `guard@1` holds no Workbench session. A create for `guard@1` answers 409 `workbench.session.agent_refused`.
 - A resume opens the session whose `id` the human picks.
 - The `model_change` and `thinking_level_change` entries of pi carry `modelId` and `thinkingLevel`. pi writes them at each change of the model or of the thinking level.
 - A `custom` entry of pi with `customType` `kanthord.workbench.configuration` carries `{ agent_provider }`. The service appends it at the session create and at each change of `agent_provider`.
@@ -32,9 +33,11 @@ A mechanism here never overrides a rule there.
 - `recordOf(entry)` answers the record of a Workbench record entry. It answers `null` for another entry or for invalid data, and it never throws.
 - The configuration entry `kanthord.workbench.configuration` keeps its own name and is no Workbench record.
 
-| Kind           | Fields                                              | Writer         | Session file                    | Readers                                            | Guest view                |
-| -------------- | --------------------------------------------------- | -------------- | ------------------------------- | -------------------------------------------------- | ------------------------- |
-| `action_offer` | `tool_call_id`, `operation_id`, `target_id`, `seen` | `offer_action` | The member that called the tool | The card merge of the dashboard and `actionReport` | Shown with no button (L7) |
+| Kind           | Fields                                              | Writer                            | Session file                    | Readers                                                                     | Guest view                |
+| -------------- | --------------------------------------------------- | --------------------------------- | ------------------------------- | --------------------------------------------------------------------------- | ------------------------- |
+| `action_offer` | `tool_call_id`, `operation_id`, `target_id`, `seen` | `offer_action`                    | The member that called the tool | The card merge of the dashboard and `actionReport`                          | Shown with no button (L7) |
+| `guard`        | `tool_call_id`, `operation_id`, `reason`            | The `tool_call` hook, `auto` only | The member that ran the call    | The tool row and the eval checks `forbid_auto` and `false_auto`             | L7                        |
+| `auto_mode`    | `enabled`                                           | `workbench.session.autoMode.set`  | The conversation                | `load()` of the host session. The last record wins, and no record means on. | L7                        |
 
 - `seen` of a node target is `{ name, state, attempt }`. `seen` of a project target is `{ name, paused }`.
 - `seen` of a credential target is `{ revision }`, the newest live revision. `seen` of an agent target is `{ revision }`, the enablement revision. `seen` of a binding set target is `{ version }`, the binding set version.
@@ -54,7 +57,7 @@ A mechanism here never overrides a rule there.
 - Every tool name matches `^[a-zA-Z0-9_-]{1,64}$`, the form that the model providers accept.
 - The tool parameters are the input schema of the operation.
 - `toolOperations(operations, listed)` keeps the eligible operations whose id the agent lists. An operation is eligible when it has `human` access, is no stream and is no secret operation.
-- `operationToolDeclarations(operations, agentName)` answers one item for each tool of the agent, in the order of its list: `{ name, source: "operation", input_schema, description, guard_class }`. `guard_class` is `card` for a mutation and `read` otherwise.
+- `operationToolDeclarations(operations, agentName)` answers one item for each tool of the agent, in the order of its list: `{ name, source: "operation", input_schema, description, guard_class }`. `guard_class` is `read` for a non-mutation, `reversible` for an id of `REVERSIBLE_OPERATIONS`, `card` for a mutation that a floor rule decides, and `judged` for every other mutation.
 - `SECRET_OPERATION_IDS` holds the operations that carry secret material. It holds `intake.inbound.get`, `intake.storage.get`, `mission.evidence.asset.content.get` and `{intake,project}.credential.{create,rotate,check}`, and the credential operations of the LLM, repository and storage services that write or check a secret.
 - An operation whose answer holds a presigned URL is secret material. An operation whose body holds a typed secret is secret material.
 - The output test of `engine/src/workbench/tools.test.ts` asserts that no tool-eligible operation has an output key `get_url` or `put_url`.
@@ -62,13 +65,23 @@ A mechanism here never overrides a rule there.
 - The tool calls the direct adapter of the operation registry.
 - A mutation takes a new idempotency key for each tool call.
 - A refusal reaches the agent as a tool error that holds the code of the owning service.
-- The `tool_call` hook decides each operation tool call with `floorOf(operation, input)` of `engine/src/workbench/guard.ts`, after the `evidence_read` branch.
-- `floorOf` answers `run`, `block` with a reason, or `confirm`.
+- The `tool_call` hook decides each operation tool call with `guardDecision(operation, input, run)` of `engine/src/workbench/guard.ts`, after the `evidence_read` branch. It starts with `floorOf(operation, input)`.
+- `floorOf` answers `run`, `block` with a reason, `confirm` with its cause, or no answer. No answer leaves the call to rules 5 to 11.
+- `guardDecision` answers `run`, `block`, `confirm` with a `GuardInfo`, or `auto` with a reason.
 - Rule 1: a non-mutation runs with no card.
 - Rule 2: an id of `HUMAN_ONLY_OPERATIONS` blocks with `workbench.guard.human_only`.
 - Rule 2: `mission.import.apply` with a `confirmed_retirements` that is not an empty array blocks with `workbench.guard.human_only`.
 - Rule 2: `mission.import.apply` with `format: markdown` blocks with `workbench.guard.import_format`. The retirement rule comes first.
-- Rule 3: every other `mission.import.apply` call waits on the card. Every other mutation waits on the card.
+- Rule 3: every other `mission.import.apply` call waits on the card with the cause `import`. `floorOf` gives no answer for every other mutation.
+- Rules 0, 0a and 4 stay for L8. Rules 5 to 11 decide a mutation that rules 1 to 3 left open, in this order:
+  - Rule 5: when auto mode is off, the call waits on the card with the cause `auto_mode_off`. The guard calls no model.
+  - Rule 6: when auto mode is on, an id of `REVERSIBLE_OPERATIONS` runs. The hook appends a `guard` record with the reason `reversible`.
+  - Rule 7: every other mutation is a [classified operation](workbench-service.vocabulary.md#classified-operation). When the guard holds no classifier, the call waits on the card with the cause `unavailable`.
+  - Rule 8: when the request is above `GUARD_REQUEST_MAX_BYTES`, the call waits on the card with the cause `oversize`. The guard makes no model call.
+  - Rule 9: when the model call fails, times out, ends with no `guard_verdict` call or answers an invalid verdict, the call waits on the card with the cause `no_verdict`.
+  - Rule 10: the call waits on the card with the cause `classifier`, and the card carries the reason and the confidence of the verdict, unless rule 11 holds. When auto mode turned off during the model call, the card carries the cause `auto_mode_off`.
+  - Rule 11: the call runs when the tier is `auto`, the confidence is at least `GUARD_AUTO_CONFIDENCE`, and `request_quote` is not empty and is a substring of the run message. The hook appends a `guard` record with the reason of the verdict.
+- An abort of the run during the model call blocks the call with `WORKBENCH_REJECTION_REASON`.
 - A block answers `{ allowed: false, reason, terminate: false }`. It creates no pending approval and invokes no operation.
 - The block reasons are tool results. They are no HTTP error codes, so no error-code table holds them.
 - The three block texts are the following:
@@ -76,7 +89,7 @@ A mechanism here never overrides a rule there.
   - `workbench.guard.human_only: mission.import.apply with confirmed_retirements is a human-only action. Import with no retirement, or ask the human to retire the nodes.`
   - `workbench.guard.import_format: Agent imports use format json.`
 - The approval card of `mission.import.apply` lists each entry of `input.body.entries` as "create" (no `id`) or "update" (with `id`).
-- `HUMAN_ONLY_OPERATIONS` is a second check behind the tool lists. It holds 88 ids. The list below gives the damage class of each id, R3 or C.
+- `HUMAN_ONLY_OPERATIONS` is a second check behind the tool lists. It holds 89 ids. The list below gives the damage class of each id, R3 or C.
 - Mission node, evidence, finding, follow-up and inbox acts:
   - R3: `mission.node.discard`, `mission.node.retire`, `mission.node.rebind`, `mission.evidence.delete`, `mission.evidence.asset.delete`.
   - C: `mission.node.override`, `mission.node.ready`, `mission.finding.create`, `mission.finding.decide`, `mission.finding.update`, `mission.followup.decide`, `mission.inbox_item.done`.
@@ -101,14 +114,17 @@ A mechanism here never overrides a rule there.
   - R3: `footprint.backup.delete`, `footprint.cleanup.create`, `tracking.trace.delete`.
   - C: `footprint.alert.acknowledge`, `footprint.cleanup.cancel`, `footprint.measure.run`, `tracking.cause.label`.
 - The mutating `workbench.session.*` acts:
-  - C: `workbench.session.approve`, `workbench.session.message`, `workbench.session.create`, `workbench.session.configure`, `workbench.session.abort`, `workbench.session.queue.remove`, `workbench.session.action.report`.
+  - C: `workbench.session.approve`, `workbench.session.message`, `workbench.session.create`, `workbench.session.configure`, `workbench.session.abort`, `workbench.session.queue.remove`, `workbench.session.action.report`, `workbench.session.autoMode.set`.
 - The set rule: every mutation whose access is in `HUMAN_POLICIES` (`human`, `human_or_worker`, `human_or_service`) and that no tool list names is in the set.
 - `mission.proposal.decide` stays on the `ops@1` list.
 - A new human mutation fails the classification test until a ruling places it.
 - The force test asserts that every mutation with a body `force` is in the set.
 - The classification test asserts that every mutation whose access is in `HUMAN_POLICIES` is listed, human-only or secret.
 - The list test asserts that no tool list holds an id of the set.
-- The snapshot of a long poll adds `pending_approval`: `{ tool_call_id, operation_id, input }`.
+- `REVERSIBLE_OPERATIONS` is the set of the nine R1 ids: `mission.node.pause`, `mission.node.resume`, `mission.node.check`, `mission.node.priority.set`, `mission.dependency.add`, `mission.dependency.remove`, `project.pause`, `project.resume` and `agent.cooldown.clear`. It is in `engine/src/workbench/guard.ts`.
+- The coverage test of `workbench/tools.test.ts` asserts that every mutation that a tool list holds is in `REVERSIBLE_OPERATIONS`, is decided by a floor rule, or holds at least one guard eval case with `expect: auto` and `danger: false` and at least one case with `danger: true`. The cases are the YAML files of `engine/eval/guard/`.
+- The snapshot of a long poll adds `pending_approval`: `{ tool_call_id, operation_id, input, guard }`. `guard` is `null` for an evidence card. Every other card holds `{ cause, reason, confidence }`. `reason` and `confidence` are `null` for every cause other than `classifier`.
+- The snapshot of a long poll adds `auto_mode`, the boolean of the session.
 - A rejected call returns `{ block: true, reason: "The human rejected the call." }` to pi.
 - An abort of the run rejects every pending approval.
 - Each pending approval starts one timer of `workbench.approval_wait_ms`.
@@ -161,14 +177,57 @@ A mechanism here never overrides a rule there.
 - The hook of `toolApproval` calls `evidenceGrant` for the tool name `evidence_read` before it looks in the operation tool map (`toolOperationsByName`). The branch runs these steps in this order:
   - `evidenceFacts` runs the first step of the tool. A failure other than `workbench.evidence.asset_mismatch` blocks the call with the error text as reason and `terminate: false`. `asset_mismatch` passes this step, and the tool then fails on the same check, so no content goes out.
   - A node that `evidenceGrants` holds passes.
+  - A node that the message grant (EV6) holds passes. `messageGrants(session, nodeId)` of `engine/src/workbench/service.ts` computes the message grant on each call as `session.autoMode && session.run?.request.includes(nodeId)`. It never adds to `evidenceGrants`. It holds only while auto mode is on and only for the current owner-started run. It ends with the run and with auto mode.
   - Otherwise the branch waits on one card through `approval()`, with the [approval wait](workbench-service.vocabulary.md#approval-wait) and the same decision exit as a mutation.
-  - An approval adds the node id to `evidenceGrants`. A rejection or an expiry adds nothing and blocks the call as a mutation does.
+  - An approval adds the node id to `evidenceGrants`. Only an approved card adds a node id. A rejection or an expiry adds nothing and blocks the call as a mutation does.
 - The card holds `operation_id` `mission.evidence.asset.content.download` and `input` `{ node_id, attempt, evidence_id, asset_id, kind, offset?, length? }`. `kind` is the kind of the asset address. `offset` and `length` are present only when the call holds them.
 - The card shows the agent, `node_id`, `attempt`, `asset_id` and `kind`, and the line that Approve lets the conversation read every evidence asset of the node until kanthord restarts.
-- The branch takes no part in the approval of a mutation tool, and the tool never enters the operation tool map (`toolOperationsByName`). Auto mode and `guard@1` never decide it.
+- The branch takes no part in the approval of a mutation tool, and the tool never enters the operation tool map (`toolOperationsByName`). `guard@1` never decides it. Auto mode decides only the message grant.
 - The declaration of the tool comes from `workbenchToolDeclarations(agentName)`: `{ name: "evidence_read", source: "workbench", input_schema, description, guard_class: "card" }`.
 - The owner downloads through `GET /api/mission/evidence/asset/:asset_id/content/download` with the human token. The client builds a blob, and the browser saves it under the name of `Content-Disposition`. The blob limit is `EVIDENCE_DOWNLOAD_BLOB_MAX_BYTES`, 536870912 bytes.
 - An object above that limit shows the line "Too large for the dashboard. Use `kanthord mission evidence asset content get <asset_id>`."
+
+### Guard classifier
+
+- The classifier is the internal agent `guard@1`. It holds no tool, no operation and no Workbench session. `engine/static/prompt/guard.md` is its policy asset. `agent_prompt` of its declaration is that file.
+- The model of `guard@1` is the pinned `claude-sonnet-5`. The call forces the tool `guard_verdict` (`GUARD_TOOL_NAME`) and sets thinking off.
+- `classifyCall` of `engine/src/workbench/guard-classifier.ts` sends one request and reads one verdict. It sends the policy asset as the system prompt, the request as the only message and `guard_verdict` as the only tool.
+- The request is one user message whose content is the JSON `{ agent, request, call: { operation_id, description, input } }`. `agent` is the agent name of the session, `request` is the run message and `call.input` is the input after `redactForeignText`.
+- The strict tool `guard_verdict` takes `{ tier, confidence, request_quote, reason }`. `tier` is `auto` or `confirm`. `confidence` is a number from 0 to 1. `reason` holds at most `GUARD_REASON_MAX_CHARS` characters.
+- `redactForeignText` keeps the structure of the input and walks each string leaf. A string leaf above `GUARD_TEXT_KEEP_CHARS` characters that `Run.request` lacks becomes `"<agent text, N chars>"`, where N is its length. Every other leaf stays as it is.
+- The constants are in `engine/src/workbench/contract.ts`:
+  - `GUARD_MAX_TOKENS` is 1024.
+  - `GUARD_TIMEOUT_MS` is 10000.
+  - `GUARD_AUTO_CONFIDENCE` is `0.9`, the threshold that the guard eval confirms.
+  - `GUARD_REQUEST_MAX_BYTES` is 16384.
+  - `GUARD_TEXT_KEEP_CHARS` is 64.
+  - `GUARD_REASON_MAX_CHARS` is 300.
+  - `GUARD_TOOL_NAME` is `guard_verdict`.
+- The guard credential release: the classifier runs on the credential of the effective configuration of `guard@1`. `authorizeGuard(tx, requester, sessionId)` answers `{ credential, platform, agentProvider }`. It refuses with 403 `workbench.authorization.refused` when the session is not open or when `guard@1` holds no valid effective configuration. `resolveGuard` calls `authorizeGuard`, reads the credential metadata and takes the pinned model. The credential view of the classifier runtime uses `authorizeGuard` as its authorization.
+- A refusal of `resolveGuard` or a failed start of the classifier runtime gives no classifier, so the cause is `unavailable`. The session keeps one classifier runtime and starts a new one when the credential, the platform or the model changes.
+- The card text of a cause is the guard line of the dashboard:
+
+| Cause           | Card text                                |
+| --------------- | ---------------------------------------- |
+| `import`        | Guard: import always needs your approval |
+| `auto_mode_off` | Auto mode is off                         |
+| `unavailable`   | Guard: unavailable                       |
+| `oversize`      | Guard: the request is too large to judge |
+| `no_verdict`    | Guard: no verdict                        |
+| `classifier`    | Guard: <reason> (<confidence>)           |
+
+- The dashboard writes `<reason>` as "Model: <reason>" and `<confidence>` with two decimals. A `classifier` card with a `null` reason reads "Guard: no verdict".
+- A call that runs with no card shows "Ran without approval: <reason>" from its `guard` record. The reason `reversible` shows with no "Model: " prefix.
+- The `guard` record is written only for an `auto` decision, before the call runs. A card, a block and a read write none.
+
+### Auto mode
+
+- Auto mode is a flag of the open session. A new session starts with it on.
+- `load()` reads the flag from the Workbench records of the session file. The last `auto_mode` record wins. A session file with no `auto_mode` record means on.
+- `workbench.session.autoMode.set` sets the flag and appends an `auto_mode` record `{ enabled }` only when the value changes. The change raises `version`.
+- Rule 5 reads the flag at each call. Rule 10 reads it again after the model call.
+- The message grant of `evidence_read` reads the same flag.
+- `workbench.session.autoMode.set` is in `HUMAN_ONLY_OPERATIONS`, so no tool holds it. Only the owner runs it.
 
 ## Operations
 
@@ -184,12 +243,13 @@ Every operation has `human` access.
 | `workbench.session.approve`       | `POST /api/workbench/session/:session_id/approve` with `{ tool_call_id, approved }`                                                    | `unary`  | `{ session_id, tool_call_id, approved }`. The pending call runs or returns blocked.                                                           |
 | `workbench.session.abort`         | `POST /api/workbench/session/:session_id/abort`                                                                                        | `unary`  | `{ session_id, run_active: false, cleared }`. The active run stops and the queue clears. The answer has the same shape when no run is active. |
 | `workbench.session.queue.remove`  | `DELETE /api/workbench/session/:session_id/queue/:queued_message_id`                                                                   | `unary`  | `{ session_id, queued_message_id }`. 404 `workbench.session.queued_message_not_found`.                                                        |
+| `workbench.session.autoMode.set`  | `POST /api/workbench/session/:session_id/auto-mode` with `{ enabled }`                                                                 | `unary`  | `{ session_id, enabled }`. Human, owner only. A set to the current value changes nothing and appends no record.                               |
 | `workbench.session.action.report` | `POST /api/workbench/session/:session_id/action/:tool_call_id/report` with `{ outcome, error_code }`. `outcome` is `done` or `failed`. | `unary`  | `{ session_id, tool_call_id, outcome }`. 404 `workbench.session.action_not_found`. 409 `workbench.session.action_settled`.                    |
 | `workbench.session.events`        | `GET /api/workbench/session/:session_id/events` with `after` and `version`                                                             | `wait`   | The entries after `after` and the snapshot of the active run.                                                                                 |
 
 - `resume_command` is `pi --session <session file>`, with the home directory written as `~`. pi opens the file from any directory and takes the working directory from the session header.
 - `after` names the id of the last session entry that the client holds.
-- A poll answers the session entries after `after`, and a snapshot of the active run: `streaming_message`, `pending_tool_calls`, `pending_approval`, `run_active`, `queue` and `error_message`. Each item of `queue` is `{ id, text }`.
+- A poll answers the session entries after `after`, and a snapshot of the active run: `streaming_message`, `pending_tool_calls`, `pending_approval`, `run_active`, `queue`, `error_message` and `auto_mode`. Each item of `queue` is `{ id, text }`.
 - Each answer carries `version`, a number that the service raises at each change of the snapshot or of the entries.
 - A poll names `version`, the version of the last answer that the client holds. A poll answers at once when entries follow `after` or when its `version` differs from the current version. A poll with no `version` answers at once.
 - Otherwise a poll answers at the next change, or when its wait window ends.
@@ -263,24 +323,25 @@ Every operation has `human` access.
 
 ## Error codes
 
-| HTTP       | Code                                         | Condition                                                                    |
-| ---------- | -------------------------------------------- | ---------------------------------------------------------------------------- |
-| 404        | `workbench.session.not_found`                | The session identity names no session.                                       |
-| 404        | `workbench.session.approval_not_found`       | The tool call of an approval waits for no approval, or the approval expired. |
-| 404        | `workbench.session.action_not_found`         | The tool call of an action report names no action offer.                     |
-| 409        | `workbench.session.action_settled`           | An action report arrives for a card that holds a `done` result.              |
-| tool error | `workbench.action.operation_refused`         | `operation_id` of an offer is no act of `ACTION_CARD_OPERATIONS`.            |
-| tool error | `workbench.action.target_invalid`            | `target_id` of an offer is no identity of the target kind.                   |
-| tool error | `workbench.action.offer_limit`               | The run already offered one action card.                                     |
-| tool error | `workbench.action.target_refused`            | The credential of a `llm.credential.rotate` offer is archived.               |
-| tool error | `workbench.evidence.asset_mismatch`          | The evidence of an `evidence_read` holds no asset `asset_id`.                |
-| tool error | `workbench.evidence.not_granted`             | The owner did not grant the node of the evidence to the conversation.        |
-| tool error | `workbench.evidence.media_refused`           | The media type of the asset is no text media type.                           |
-| 409        | `workbench.session.run_active`               | A configure arrives while a run is active.                                   |
-| 409        | `workbench.session.queue_full`               | A message arrives while the session holds 10 queued messages.                |
-| 404        | `workbench.session.queued_message_not_found` | The queued message identity names no queued message.                         |
-| 409        | `workbench.session.configuration_invalid`    | The stored entries of the session hold no readable configuration.            |
-| 409        | `workbench.session.setup_refused`            | The runtime refuses the setup of the session.                                |
-| 403        | `workbench.authorization.refused`            | The Workbench Service refuses the credential release of the session.         |
-| local      | `workbench.lifecycle.stopped`                | A stopped service starts again.                                              |
-| 404        | `agent.catalog.not_found`                    | The agent name of a create or a list is absent from the agent catalog.       |
+| HTTP       | Code                                         | Condition                                                                           |
+| ---------- | -------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 404        | `workbench.session.not_found`                | The session identity names no session.                                              |
+| 404        | `workbench.session.approval_not_found`       | The tool call of an approval waits for no approval, or the approval expired.        |
+| 404        | `workbench.session.action_not_found`         | The tool call of an action report names no action offer.                            |
+| 409        | `workbench.session.action_settled`           | An action report arrives for a card that holds a `done` result.                     |
+| 409        | `workbench.session.agent_refused`            | A create names a catalog agent with no operation tool, such as `pe@1` or `guard@1`. |
+| tool error | `workbench.action.operation_refused`         | `operation_id` of an offer is no act of `ACTION_CARD_OPERATIONS`.                   |
+| tool error | `workbench.action.target_invalid`            | `target_id` of an offer is no identity of the target kind.                          |
+| tool error | `workbench.action.offer_limit`               | The run already offered one action card.                                            |
+| tool error | `workbench.action.target_refused`            | The credential of a `llm.credential.rotate` offer is archived.                      |
+| tool error | `workbench.evidence.asset_mismatch`          | The evidence of an `evidence_read` holds no asset `asset_id`.                       |
+| tool error | `workbench.evidence.not_granted`             | The owner did not grant the node of the evidence to the conversation.               |
+| tool error | `workbench.evidence.media_refused`           | The media type of the asset is no text media type.                                  |
+| 409        | `workbench.session.run_active`               | A configure arrives while a run is active.                                          |
+| 409        | `workbench.session.queue_full`               | A message arrives while the session holds 10 queued messages.                       |
+| 404        | `workbench.session.queued_message_not_found` | The queued message identity names no queued message.                                |
+| 409        | `workbench.session.configuration_invalid`    | The stored entries of the session hold no readable configuration.                   |
+| 409        | `workbench.session.setup_refused`            | The runtime refuses the setup of the session.                                       |
+| 403        | `workbench.authorization.refused`            | The Workbench Service refuses the credential release of the session.                |
+| local      | `workbench.lifecycle.stopped`                | A stopped service starts again.                                                     |
+| 404        | `agent.catalog.not_found`                    | The agent name of a create or a list is absent from the agent catalog.              |

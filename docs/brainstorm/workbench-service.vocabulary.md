@@ -98,17 +98,18 @@ Ulrich asks `swe@1` why a node failed. `swe@1` calls `evidence_read` on the log 
 The owner approval that lets one conversation read every evidence asset of one node until kanthord restarts.
 The term names no closed set.
 Ulrich approves the evidence card of "Add password reset". `swe@1` then reads every asset of that node with no new card, until kanthord restarts.
+While [auto mode](#auto-mode) is on, a run that the owner started with a message that holds a node id gets the same access for that run with no card. That access is the message grant. It never becomes an evidence grant.
 
 ## guard
 
-The decision of the Workbench Service on each operation tool call of an agent, before the call runs. In L3a it is the [guard floor](#guard-floor) only.
+The decision of the Workbench Service on each operation tool call of an agent, before the call runs. It is the [guard floor](#guard-floor), the [reversible operation](#reversible-operation) set and the classifier `guard@1`.
 The term names no closed set.
 Yumi calls the tool of `mission.node.pause` on "Add password reset". The guard decides that the call waits on the card, and Ulrich decides the card.
 
 ## guard floor
 
-The deterministic part of the [guard](#guard). It runs reads and blocks [human-only](#human-only-operation) calls. It holds every other mutation for the card, and a plan import only with no retirement and format json. It never calls a model.
-The closed set of answers is `run`, `block` and `confirm`.
+The deterministic part of the [guard](#guard). It runs reads and blocks [human-only](#human-only-operation) calls. It holds a plan import with no retirement and format json for the card. It leaves every other mutation to the later rules of the guard. It never calls a model.
+The closed set of answers is `run`, `block`, `confirm` and no answer.
 Yumi reads the plan of "Billing", and the guard floor answers `run`. Yumi then calls `mission.import.apply` with `format: markdown`, and the guard floor answers `block`. Yumi calls it again with `format: json`, the guard floor answers `confirm` for a json import, and Ulrich decides the card.
 
 ## human-only operation
@@ -120,5 +121,41 @@ Yumi asks to discard a node. No tool exists for it, and Ulrich discards the node
 ## Workbench record
 
 A server fact in a session file that no model reads.
-The closed set of kinds is `action_offer`.
+The closed set of kinds is `action_offer`, `auto_mode` and `guard`.
 The server appends an action offer to the session file when `offer_action` shows a card. The model never sees that entry.
+
+## auto mode
+
+The setting of a workbench session that lets the guard run a [reversible operation](#reversible-operation) with no card and a [classified operation](#classified-operation) when the [run message](#run-message) directs it. It is on for a new session. The [auto mode switch](#auto-mode-switch) changes it.
+The closed set of values is `on` and `off`.
+Ulrich asks Yumi to resume "Add password reset" with auto mode on, and the resume runs with no card. Ulrich turns auto mode off, and the next mutation of Yumi waits on a card.
+
+## reversible operation
+
+A mutation that the owner undoes with one act, so the guard runs it with no card while [auto mode](#auto-mode) is on. The set is fixed in code.
+The closed set is the nine ids of `REVERSIBLE_OPERATIONS`.
+Yumi pauses "Add password reset" with `mission.node.pause`. The call runs with no card, and Ulrich resumes the node if he disagrees.
+
+## classified operation
+
+An R2 mutation that the classifier `guard@1` decides. No floor rule decides it and it is no [reversible operation](#reversible-operation).
+The term names no closed set.
+Ulrich writes "Unblock Add password reset". Yumi calls `mission.node.unblock`, a classified operation. `guard@1` finds that the run message directs it, so the call runs with no card.
+
+## guard verdict
+
+The answer of `guard@1` on one classified operation call. It holds a tier, a confidence, a quote of the [run message](#run-message) and a reason.
+The closed set of tiers is `auto` and `confirm`.
+`guard@1` answers `auto` with confidence 0.97 and the quote "Unblock Add password reset". The guard runs the call. For the message "Is Add password reset stuck?", `guard@1` answers `confirm`, and the call waits on the card.
+
+## run message
+
+The human message that started the active [run](#run). It is the only text that authorizes a call.
+The term names no closed set.
+Ulrich writes "Unblock Add password reset". That message is the run message. A value that Yumi writes into a call never authorizes it.
+
+## auto mode switch
+
+The control in the chat header that sets [auto mode](#auto-mode) of the session. Only the owner changes it. The setting stays across a restart.
+The closed set of values is `on` and `off`.
+Ulrich turns the switch off before he asks Yumi to review a plan. Each mutation of the run that the guard does not block waits on a card.
