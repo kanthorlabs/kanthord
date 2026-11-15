@@ -989,9 +989,9 @@ This section records the eval harness of the engine node `l2-engine`.
 - `openSandbox` in `engine/src/eval/sandbox.ts` builds one sandbox for each agent run. It never shares a sandbox between two runs.
 - It calls `gatewayFixture` with a temporary state directory. The fixture removes the directory when the run ends.
 - It calls `provisionNativeAgent` with the eval key and `EVAL_CONFIGURATION`, so the subject resolves one `anthropic` credential.
-- For each fixture key of a case, `provisionWorkerProject` creates a project with one worker binding `general` of `claude-code@1` and `instance_count: 1`, and seeds one live registration for it. A sandbox fixture project has a live `general` binding by default.
-- `case-fix-no_taker` builds its no-taker state explicitly. Its `job_without_taker` seed step ends the registrations of `general`, sets `general` back to `instance_count: 0` and ages the job.
-- That binding covers every claim, and no fixture node runs in a worker. The mission import of the fixture entries then applies.
+- Each fixture project binds `coder` to `coder@1` with `worker_instances: [eval-coder-1]` and `reviewer` to `reviewer@1` with `worker_instances: [eval-reviewer-1]`, because every fixture node claims `Available` and `Waiting`. The sandbox creates both instances with a live connection and seeds one idle registration for each. No worker process runs.
+- `case-fix-no_taker` builds its no-taker state explicitly. Its `job_without_taker` seed step sets `coder` to `worker_instances: []`, ends the registrations of `coder` and ages the job.
+- These bindings cover every claim, and no fixture node runs in a worker. The mission import of the fixture entries then applies.
 - A turn waits up to `TURN_DEADLINE_MS`, 300000 ms. A turn that times out ends the case run.
 - `node --test-timeout`, set by `scripts/eval/run.sh` from `EVAL_TIMEOUT_MS`, bounds one agent run.
 
@@ -1006,11 +1006,12 @@ This section records the eval harness of the engine node `l2-engine`.
 - An unknown key of a case object fails the parse, because each object schema is strict. The `input`, `body` and `expect` values accept any key.
 - `id` equals the file name without `.yaml`. `fixtures` maps a key to a JSON file under `engine/eval/<agent>/fixtures/`.
 - `setup` lists operation calls. `turns` lists a `human` text and `approvals`, a map of operation id to `approve` or `reject`.
-- A placeholder resolves to a real id after the fixture import. It has four forms:
+- A placeholder resolves to a real id after the fixture import. It has five forms:
   - `{{<key>.project_id}}`
   - `{{<key>.node.<filename>}}`
   - `{{<key>.evidence.<filename>}}`
   - `{{<key>.evidence.<filename>.asset.<n>}}`
+  - `{{native.platform}}`: the platform of the sandbox credential `native-credential`, `anthropic` for a key source and `anthropic-subscription` for a subscription source. `native` is not a valid fixture key.
 - Placeholders work in `setup`, `seed`, `turns`, `checks` and the text assets. An unknown key or filename fails the parse.
 - `case_digest` is the SHA-256 of the canonical JSON of the case file, followed by the bytes of its fixture files and evidence asset files.
 
