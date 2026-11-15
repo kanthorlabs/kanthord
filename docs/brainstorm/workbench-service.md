@@ -145,7 +145,7 @@ It describes no mechanism of another service.
 - A click on the card reads the target again. A changed target runs no act.
 - An agent offers at most one card per answer. A second offer in one run is refused, and the first card stays.
 - An agent offers a card for an act that it holds as a tool when the human did not direct that act. It calls its own tool only when the human message directs the act.
-- The agent writes its full answer, the report included, before the card or right after it. It adds nothing after the full answer.
+- After the card, the agent writes its full answer: the report that the human asked for, then one sentence about the card.
 - The agent never sends the human to another agent, another page or the dashboard.
 
 Setup cards:
