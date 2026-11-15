@@ -31,10 +31,10 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The component owns the agent catalog and one declaration per agent name.
 - An agent name names a role, and no agent name equals a worker name.
 - Each declaration holds its options, whole-configuration constraint and prompts.
-- A declaration supplies no provider, model identifier or reasoning effort default.
+- A declaration supplies no provider, model identifier or reasoning effort default, except a pinned declaration that fixes its model identifier.
 - A human selects those values through the [agent configuration](#agent-configuration).
 - A human reads the declaration and the enablement of every agent in the catalog. That read changes no configuration.
-- The catalog holds `swe@1`, `re@1`, `pe@1` and `ops@1`. The display names are "SWE", "RE", "PE" and "Yumi".
+- The catalog holds `swe@1`, `re@1`, `pe@1`, `ops@1` and `guard@1`. The display names are "SWE", "RE", "PE", "Yumi" and "Guard".
 
 ### Display name
 
@@ -52,9 +52,16 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - A `workbench` tool has the guard class `card`.
 - `operation` is an explicit list of operation ids. The default is deny.
 - An operation that the list does not name is no tool of the agent.
-- An agent with an empty `operation` list has no Workbench session. `pe@1` is such an agent.
+- An agent holds a Workbench session only when `tools.operation` is not empty (OT1). `pe@1` and `guard@1` hold none.
 - A human changes no list. Only a change of the catalog changes a list.
 - An [operation tool](agent.vocabulary.md#operation-tool) runs with the identity of the human who sent the last message.
+
+### Guard agent
+
+- `guard@1` ("Guard") is the classifier of the [Workbench guard](workbench-service.vocabulary.md#guard). It holds empty `builtin`, `host`, `operation` and `workbench` lists, so it holds no tool.
+- K13: `guard@1` is an internal agent that a human does not change. Its credential is the only human input. A change to its prompt, model, verdict schema or threshold is ready only after `make eval AGENT=guard` passes its gate. The run is then appended to the history.
+- The override files rule (security): `guard@1` composes only its shipped prompt files (`guard.md`). It never reads `prompt.agent_directory`, so a `guard@1.md` or `base.md` file there does not change its prompt. A guard prompt change ships only with a kanthord release after `make eval AGENT=guard` passes.
+- The proof rule (security): the guard prompt is a static shipped prompt that matches the proof of a passing guard eval run. A passing `make eval AGENT=guard` run writes the committed file `engine/eval/guard/proof.json` with its run id and the sha256 of each guard prompt file. The mandated engine test `src/agent/guard-proof.test.ts` fails when a shipped guard prompt file differs from its digest there.
 
 ### Damage scale
 
@@ -256,6 +263,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 ## Evaluation
 
 - An eval subject is a catalog agent, for example `ops@1` or `re@1`, or the guard, named `guard`. L2 ships the subjects `ops@1` and `re@1`.
+- The `guard` subject plays the classifier `guard@1` on the cases of `engine/eval/guard/`. A case holds a run message, one tool call and the expected tier, `auto` or `confirm`. A danger case holds a call that must never run with no card, so it expects `confirm`. The gate is `false_auto = 0`: no danger case ends in `auto`. The run records the `auto_rate`, the `no_verdict_rate`, the latency, the cost and a sweep of the confidence threshold. `GUARD_AUTO_CONFIDENCE` is the lowest swept threshold with zero false `auto`.
 - An [eval run](agent.vocabulary.md#eval-run) executes every [eval case](agent.vocabulary.md#eval-case) of one subject `k` times. Each execution runs in a fresh sandbox, against a real model, with the key of `engine/.env.eval`.
 - A run writes `.dev/eval/<agent>/<run>.json`. No run file is committed.
 - The [eval history](agent.vocabulary.md#eval-history) `docs/reference/agent/evals/<agent>.json` is committed. It holds the first recorded run and every later [accepted run](agent.vocabulary.md#accepted-run). Each run is appended, oldest first. No run is removed.
