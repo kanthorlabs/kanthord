@@ -99,6 +99,24 @@ The owner approval that lets one conversation read every evidence asset of one n
 The term names no closed set.
 Ulrich approves the evidence card of "Add password reset". `swe@1` then reads every asset of that node with no new card, until kanthord restarts.
 
+## guard
+
+The decision of the Workbench Service on each operation tool call of an agent, before the call runs. In L3a it is the [guard floor](#guard-floor) only.
+The term names no closed set.
+Yumi calls the tool of `mission.node.pause` on "Add password reset". The guard decides that the call waits on the card, and Ulrich decides the card.
+
+## guard floor
+
+The deterministic part of the [guard](#guard). It runs reads and blocks [human-only](#human-only-operation) calls. It holds every other mutation for the card, and a plan import only with no retirement and format json. It never calls a model.
+The closed set of answers is `run`, `block` and `confirm`.
+Yumi reads the plan of "Billing", and the guard floor answers `run`. Yumi then calls `mission.import.apply` with `format: markdown`, and the guard floor answers `block`. Yumi calls it again with `format: json`, the guard floor answers `confirm` for a json import, and Ulrich decides the card.
+
+## human-only operation
+
+An operation that only a human runs, through the dashboard or the CLI. The set is fixed in code.
+The closed set is the ids of `HUMAN_ONLY_OPERATIONS`.
+Yumi asks to discard a node. No tool exists for it, and Ulrich discards the node in the node dialog.
+
 ## Workbench record
 
 A server fact in a session file that no model reads.

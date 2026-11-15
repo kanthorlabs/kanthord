@@ -62,7 +62,52 @@ A mechanism here never overrides a rule there.
 - The tool calls the direct adapter of the operation registry.
 - A mutation takes a new idempotency key for each tool call.
 - A refusal reaches the agent as a tool error that holds the code of the owning service.
-- The `beforeToolCall` hook of pi waits for the approval of a mutation tool.
+- The `tool_call` hook decides each operation tool call with `floorOf(operation, input)` of `engine/src/workbench/guard.ts`, after the `evidence_read` branch.
+- `floorOf` answers `run`, `block` with a reason, or `confirm`.
+- Rule 1: a non-mutation runs with no card.
+- Rule 2: an id of `HUMAN_ONLY_OPERATIONS` blocks with `workbench.guard.human_only`.
+- Rule 2: `mission.import.apply` with a `confirmed_retirements` that is not an empty array blocks with `workbench.guard.human_only`.
+- Rule 2: `mission.import.apply` with `format: markdown` blocks with `workbench.guard.import_format`. The retirement rule comes first.
+- Rule 3: every other `mission.import.apply` call waits on the card. Every other mutation waits on the card.
+- A block answers `{ allowed: false, reason, terminate: false }`. It creates no pending approval and invokes no operation.
+- The block reasons are tool results. They are no HTTP error codes, so no error-code table holds them.
+- The three block texts are the following:
+  - `workbench.guard.human_only: <operation_id> is a human-only action. Only the human runs it.`
+  - `workbench.guard.human_only: mission.import.apply with confirmed_retirements is a human-only action. Import with no retirement, or ask the human to retire the nodes.`
+  - `workbench.guard.import_format: Agent imports use format json.`
+- The approval card of `mission.import.apply` lists each entry of `input.body.entries` as "create" (no `id`) or "update" (with `id`).
+- `HUMAN_ONLY_OPERATIONS` is a second check behind the tool lists. It holds 88 ids. The list below gives the damage class of each id, R3 or C.
+- Mission node, evidence, finding, follow-up and inbox acts:
+  - R3: `mission.node.discard`, `mission.node.retire`, `mission.node.rebind`, `mission.evidence.delete`, `mission.evidence.asset.delete`.
+  - C: `mission.node.override`, `mission.node.ready`, `mission.finding.create`, `mission.finding.decide`, `mission.finding.update`, `mission.followup.decide`, `mission.inbox_item.done`.
+- Intake acts:
+  - R3: `intake.storage.delete`, `intake.inbound.create`, `intake.inbound.delete`, `intake.outbound.request.discard`, `intake.outbound.request.delete`, `intake.inbound.event.discard`, `intake.inbound.event.delete`.
+  - C: `intake.inbound.event.retry`.
+- Project setup and environment acts:
+  - R3: `project.bindingSet.write`, `project.create`, `project.rename`, `project.binding.environment.rebuild`, `project.binding.environment.set`, `project.environment.cache_volume.delete`, `project.environment.delete`.
+- The credential acts of `llm`, `repository`, `storage`, `intake` and `project`:
+  - R3: `llm.credential.archive`, `llm.credential.revoke`, `llm.credential.update_metadata`, `llm.credential.login`, `llm.credential.login_code`, `llm.credential.create`, `llm.credential.rotate`.
+  - R3: `repository.credential.archive`, `repository.credential.revoke`, `repository.credential.update_metadata`, `repository.credential.create`, `repository.credential.rotate`, `repository.credential.ssh_key_create`, `repository.credential.ssh_key_rotate`, `repository.host_key.pin`.
+  - R3: `storage.credential.archive`, `storage.credential.revoke`, `storage.credential.update_metadata`, `storage.credential.create`, `storage.credential.rotate`.
+  - R3: `intake.credential.archive`, `intake.credential.create`, `intake.credential.revoke`, `intake.credential.rotate`, `intake.credential.update_metadata`.
+  - R3: `project.credential.archive`, `project.credential.create`, `project.credential.revoke`, `project.credential.rotate`, `project.credential.update_metadata`.
+- Agent enablement acts:
+  - R3: `agent.enablement.put`, `agent.enablement.remove`, `agent.enablement.provider.add`, `agent.enablement.provider.remove`.
+  - C: `agent.enablement.enable`, `agent.enablement.disable`.
+- Worker registration, instance and machine acts and the worker cleanup deletes:
+  - R3: `worker.instance.archive`, `worker.instance.create`, `worker.instance.rotate`, `worker.instance.session.delete`, `worker.instance.tool_output.delete`, `worker.instance.workspace.delete`, `worker.machine.archive`, `worker.machine.create`, `worker.machine.rotate`, `worker.slot_image.delete`.
+  - C: `worker.registration.resume`.
+- The `footprint.*` and `tracking.*` mutations:
+  - R3: `footprint.backup.delete`, `footprint.cleanup.create`, `tracking.trace.delete`.
+  - C: `footprint.alert.acknowledge`, `footprint.cleanup.cancel`, `footprint.measure.run`, `tracking.cause.label`.
+- The mutating `workbench.session.*` acts:
+  - C: `workbench.session.approve`, `workbench.session.message`, `workbench.session.create`, `workbench.session.configure`, `workbench.session.abort`, `workbench.session.queue.remove`, `workbench.session.action.report`.
+- The set rule: every mutation whose access is in `HUMAN_POLICIES` (`human`, `human_or_worker`, `human_or_service`) and that no tool list names is in the set.
+- `mission.proposal.decide` stays on the `ops@1` list.
+- A new human mutation fails the classification test until a ruling places it.
+- The force test asserts that every mutation with a body `force` is in the set.
+- The classification test asserts that every mutation whose access is in `HUMAN_POLICIES` is listed, human-only or secret.
+- The list test asserts that no tool list holds an id of the set.
 - The snapshot of a long poll adds `pending_approval`: `{ tool_call_id, operation_id, input }`.
 - A rejected call returns `{ block: true, reason: "The human rejected the call." }` to pi.
 - An abort of the run rejects every pending approval.
@@ -93,7 +138,7 @@ A mechanism here never overrides a rule there.
 - Then the tool reads the target under the requester of the run. `TARGET_READS` maps `node` to `mission.node.get` with `node_id`, and `project` to `project.get` with `project_id`. A refused or failed read is a tool error with the code of the owning service.
 - The tool appends the `action_offer` record, then sets `Run.offerToolCallId`. A run holds at most one card.
 - The result text is fixed: "Card shown: <operation_id> on <target_id>. The owner decides. Do not state that the act ran. Now write the full answer: the report that the human asked for, then one sentence about the card."
-- The tool is no operation and never enters the mutation map. The approval hook does not decide it.
+- The tool is no operation and never enters the operation tool map (`toolOperationsByName`). The approval hook does not decide it.
 
 ### evidence_read
 
@@ -113,14 +158,14 @@ A mechanism here never overrides a rule there.
 - `details` holds block 1 only: `{ asset_id, node_id, attempt, media_type, size, offset, length, truncated }`. `size` is `X-Evidence-Size`, `length` is the number of bytes read and `truncated` is true when `offset + length` is below `size`. `details` holds no text.
 - The chat shows one evidence row for a successful call, from `details` or from block 1. The row shows the asset, the media type, the size and the range, and it hides block 2.
 - `evidenceGrants` is a `Set<string>` of node ids on the open session. The session creates it empty at create and at the open from its file.
-- The hook of `toolApproval` calls `evidenceGrant` for the tool name `evidence_read` before it looks in the mutation map. The branch runs these steps in this order:
+- The hook of `toolApproval` calls `evidenceGrant` for the tool name `evidence_read` before it looks in the operation tool map (`toolOperationsByName`). The branch runs these steps in this order:
   - `evidenceFacts` runs the first step of the tool. A failure other than `workbench.evidence.asset_mismatch` blocks the call with the error text as reason and `terminate: false`. `asset_mismatch` passes this step, and the tool then fails on the same check, so no content goes out.
   - A node that `evidenceGrants` holds passes.
   - Otherwise the branch waits on one card through `approval()`, with the [approval wait](workbench-service.vocabulary.md#approval-wait) and the same decision exit as a mutation.
   - An approval adds the node id to `evidenceGrants`. A rejection or an expiry adds nothing and blocks the call as a mutation does.
 - The card holds `operation_id` `mission.evidence.asset.content.download` and `input` `{ node_id, attempt, evidence_id, asset_id, kind, offset?, length? }`. `kind` is the kind of the asset address. `offset` and `length` are present only when the call holds them.
 - The card shows the agent, `node_id`, `attempt`, `asset_id` and `kind`, and the line that Approve lets the conversation read every evidence asset of the node until kanthord restarts.
-- The branch takes no part in the approval of a mutation tool, and the tool never enters the mutation map. Auto mode and `guard@1` never decide it.
+- The branch takes no part in the approval of a mutation tool, and the tool never enters the operation tool map (`toolOperationsByName`). Auto mode and `guard@1` never decide it.
 - The declaration of the tool comes from `workbenchToolDeclarations(agentName)`: `{ name: "evidence_read", source: "workbench", input_schema, description, guard_class: "card" }`.
 - The owner downloads through `GET /api/mission/evidence/asset/:asset_id/content/download` with the human token. The client builds a blob, and the browser saves it under the name of `Content-Disposition`. The blob limit is `EVIDENCE_DOWNLOAD_BLOB_MAX_BYTES`, 536870912 bytes.
 - An object above that limit shows the line "Too large for the dashboard. Use `kanthord mission evidence asset content get <asset_id>`."
