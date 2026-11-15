@@ -140,7 +140,7 @@ It describes no mechanism of another service.
 - Every other case waits on the card.
 - Only the message that started the run authorizes a call.
 - A rejected card decides that one call only.
-- Auto mode is a setting of the conversation. It is on for a new conversation. Only [auto mode switch](workbench-service.vocabulary.md#auto-mode-switch) changes it, and it stays across a restart.
+- Auto mode is a setting of the conversation. It is on for a new conversation. Only the [auto mode switch](workbench-service.vocabulary.md#auto-mode-switch) changes it, and it stays across a restart.
 - A rejected call reaches the agent as a blocked call.
 - A pending approval waits at most the [approval wait](workbench-service.vocabulary.md#approval-wait). Then the call returns blocked as expired, and the run ends.
 - A kanthord restart ends the active run and every pending approval.
