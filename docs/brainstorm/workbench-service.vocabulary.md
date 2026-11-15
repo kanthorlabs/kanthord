@@ -107,9 +107,9 @@ Yumi calls the tool of `mission.node.pause` on "Add password reset". The guard d
 
 ## guard floor
 
-The deterministic part of the [guard](#guard). It runs reads, blocks [human-only](#human-only-operation) calls and holds every plan import and every other mutation for the card. It never calls a model.
+The deterministic part of the [guard](#guard). It runs reads, blocks [human-only](#human-only-operation) calls and holds every other mutation, and a plan import with no retirement and format json, for the card. It never calls a model.
 The closed set of answers is `run`, `block` and `confirm`.
-Yumi reads the plan of "Billing", and the guard floor answers `run`. Yumi then asks to discard a node, and the guard floor answers `block`.
+Yumi reads the plan of "Billing", and the guard floor answers `run`. Yumi then calls `mission.import.apply` with `format: markdown`, and the guard floor answers `block`.
 
 ## human-only operation
 

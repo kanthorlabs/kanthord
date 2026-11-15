@@ -134,7 +134,7 @@ It describes no mechanism of another service.
 - A workbench session holds no tool of an operation that carries secret material or answers a presigned URL.
 - A read and a built-in tool run without a card.
 - A [human-only operation](workbench-service.vocabulary.md#human-only-operation) never runs from an agent. No tool list holds it.
-- A plan import always waits on the card.
+- A plan import with no retirement and format json always waits on the card. Any other plan import is blocked.
 - Every other mutation waits on the card.
 - A rejected call reaches the agent as a blocked call.
 - A pending approval waits at most the [approval wait](workbench-service.vocabulary.md#approval-wait). Then the call returns blocked as expired, and the run ends.
