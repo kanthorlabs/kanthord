@@ -1230,7 +1230,15 @@ Binding prompt of repository app:
               <a href="../reference/workbench/tools.html"
                 >operation tool reference</a
               >
-              lists every tool.
+              lists every tool. A read runs with no card. Auto mode is a setting
+              of the conversation, and it is on for a new conversation. While it
+              is on, a reversible change, such as a node pause or a project
+              resume, runs with no card. A change that needs rework to undo,
+              such as an unblock, runs with no card only when the guard finds
+              that your message directs it. The guard is the internal agent
+              <code>guard@1</code>. Every other change waits on your card. You
+              switch auto mode in the header of the conversation, and the
+              setting stays across a restart.
             </li>
             <li>
               <strong><code>offer_action</code></strong> (Workbench only) lets

@@ -53,6 +53,11 @@ mkdir -p "$(dirname "$OUTPUT")" "$(dirname "$HISTORY")"
 export EVAL_AGENT=$AGENT EVAL_REPEAT=$REPEAT EVAL_OUTPUT=$OUTPUT EVAL_HISTORY=$HISTORY
 
 engine_eval() {
+	if [ "$AGENT" = guard ]; then
+		(cd "$ENGINE_DIR" && EVAL_CASES=$1 EVAL_RERUN=$2 pnpm --silent run test:files \
+			--env-file="$ENV_FILE" --test-timeout="$EVAL_TIMEOUT_MS" src/eval/guard.eval.ts)
+		return
+	fi
 	(cd "$ENGINE_DIR" && EVAL_CASES=$1 EVAL_RERUN=$2 node --env-file="$ENV_FILE" --test \
 		--test-timeout="$EVAL_TIMEOUT_MS" src/eval/run.eval.ts)
 }

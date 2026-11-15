@@ -89,6 +89,7 @@ Custody grants no authority through possession of a credential reference.
 - It uses the agent provider of the pinned [agent selection](agent.vocabulary.md#agent-selection).
 - The claim pins that selection through the [Agent component](agent.md#selection).
 - Custody releases the material of a model inference call of a workbench session through the workbench session and the agent provider of its configuration, under the human identity of the message that started the run, inside the server process.
+- Custody releases the material of a guard call through the workbench session and the agent provider of [`guard@1`](agent.md#guard-agent), under the human identity of the message that started the run, inside the server process. The Workbench Service grants it while the session exists and the `guard@1` enablement is enabled and valid.
 - A refusal reaches no secret material.
 - Custody releases the material of an authorized grant inside the server process, and the holder performs its own operation.
 - A credential leaves the server only through a [credential handover](custody.vocabulary.md#credential-handover) to a kanthord worker application.
