@@ -1412,13 +1412,20 @@ Binding prompt of repository app:
             human changes no list.
           </p>
           <p>
-            A Workbench operation tool that changes state waits for the human.
-            The dashboard shows the pending call, and the human approves or
-            rejects it. A rejection, an abort, an expiry or the end of the run
-            counts as a rejection. A pending approval expires after
+            A read operation and a built-in tool run without approval. A
+            human-only operation never runs from an agent. The call fails with
+            <code>workbench.guard.human_only</code>, and the human runs the act
+            in the dashboard or the CLI. A plan import always waits for the
+            human. An import that retires a node fails with
+            <code>workbench.guard.human_only</code>. An agent import in
+            <code>format: markdown</code> fails with
+            <code>workbench.guard.import_format</code>. Every other operation
+            tool that changes state waits for the human. The dashboard shows the
+            pending call, and the human approves or rejects it. A rejection, an
+            abort, an expiry or the end of the run counts as a rejection. A
+            pending approval expires after
             <code>workbench.approval_wait_ms</code>, one hour by default. The
-            call returns blocked, and the run ends. A read operation and a
-            built-in tool run without approval. A Worker execution has no
+            call returns blocked, and the run ends. A Worker execution has no
             approval step, because no human is present.
           </p>
           <h2 id="a-session-inside-a-worker-execution">
