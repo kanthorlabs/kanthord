@@ -166,6 +166,7 @@
     "model_identifier",
     "reasoning_effort"
   ],
+  "pinned_model_identifier": null,
   "prompt": {
     "parts": [
       {
@@ -255,6 +256,17 @@
                   </td>
                 </tr>
                 <tr>
+                  <td><code>pinned_model_identifier</code></td>
+                  <td>string or null</td>
+                  <td>
+                    The model that the agent must use. <code>null</code> for an
+                    agent with no pin. <code>guard@1</code> answers
+                    <code>claude-sonnet-5</code>. An enablement of a pinned
+                    agent holds this model and no fallback. Another model
+                    answers 400 <code>agent.configuration.model_pinned</code>.
+                  </td>
+                </tr>
+                <tr>
                   <td><code>prompt.parts</code></td>
                   <td>array</td>
                   <td>
@@ -282,13 +294,16 @@
                     <code>operation</code> or <code>workbench</code>),
                     <code>input_schema</code>, <code>description</code> and
                     <code>guard_class</code>. <code>guard_class</code> is
-                    <code>read</code> or <code>card</code> for an
+                    <code>read</code>, <code>reversible</code>,
+                    <code>judged</code> or <code>card</code> for an
                     <code>operation</code> item, <code>card</code> for a
                     <code>workbench</code> item, and <code>null</code> for a
                     built-in or host item. Only an <code>operation</code> item
-                    and a <code>workbench</code>
-                    item have a description. The description of every other item
-                    is an empty string. A
+                    and a <code>workbench</code> item have a description. The
+                    description of every other item is an empty string. A
+                    <code>read</code> tool runs with no card. A
+                    <code>reversible</code> tool runs with no card while auto
+                    mode is on. The guard decides a <code>judged</code> tool. A
                     <code>card</code> tool waits for the approval of the human.
                   </td>
                 </tr>

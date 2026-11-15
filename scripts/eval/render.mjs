@@ -11,6 +11,11 @@ const COST_DECIMALS = 4;
 const RUN_FORMAT = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
 const ABSENT = "–";
 const PAGE_ANCHOR = "agent-evaluations";
+const GUARD_SUBJECT = "guard";
+const GUARD_NOTES = [
+  "<p>Each run of this subject plays the classifier <code>guard@1</code> on every case of <code>engine/eval/guard/</code>, <code>k</code> times. Each play writes one check <code>{ kind: &quot;verdict&quot;, passed }</code>. <code>passed</code> is true when the verdict equals <code>expect</code>.</p>",
+  "<p>The gate is <code>false_auto = 0</code>. A run that passes the gate writes <code>engine/eval/guard/proof.json</code> with <code>{ run, prompts }</code>. <code>prompts</code> maps each guard prompt file to the sha256 of its <code>prompt_digests</code> item. The engine commits the file, and <code>src/agent/guard-proof.test.ts</code> compares it with the shipped prompt files and fails when one differs.</p>",
+];
 
 const escape = (text) =>
   String(text)
@@ -104,6 +109,7 @@ function caseRows(entries) {
 function subjectSection(subject, entries) {
   return [
     `<h2 id="${anchorOf(subject)}">${escape(subject)}</h2>`,
+    ...(subject === GUARD_SUBJECT ? GUARD_NOTES : []),
     ...table(
       [
         "Run (UTC)",
