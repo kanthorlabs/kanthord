@@ -76,7 +76,7 @@ A mechanism here never overrides a rule there.
   - `workbench.guard.human_only: mission.import.apply with confirmed_retirements is a human-only action. Import with no retirement, or ask the human to retire the nodes.`
   - `workbench.guard.import_format: Agent imports use format json.`
 - The approval card of `mission.import.apply` lists each entry of `input.body.entries` as "create" (no `id`) or "update" (with `id`).
-- `HUMAN_ONLY_OPERATIONS` is a second check behind the tool lists. It holds 88 ids, each with its damage class R3 or C.
+- `HUMAN_ONLY_OPERATIONS` is a second check behind the tool lists. It holds 88 ids. The list below gives the damage class of each id, R3 or C.
 - Mission node, evidence, finding, follow-up and inbox acts:
   - R3: `mission.node.discard`, `mission.node.retire`, `mission.node.rebind`, `mission.evidence.delete`, `mission.evidence.asset.delete`.
   - C: `mission.node.override`, `mission.node.ready`, `mission.finding.create`, `mission.finding.decide`, `mission.finding.update`, `mission.followup.decide`, `mission.inbox_item.done`.
@@ -138,7 +138,7 @@ A mechanism here never overrides a rule there.
 - Then the tool reads the target under the requester of the run. `TARGET_READS` maps `node` to `mission.node.get` with `node_id`, and `project` to `project.get` with `project_id`. A refused or failed read is a tool error with the code of the owning service.
 - The tool appends the `action_offer` record, then sets `Run.offerToolCallId`. A run holds at most one card.
 - The result text is fixed: "Card shown: <operation_id> on <target_id>. The owner decides. Do not state that the act ran. Now write the full answer: the report that the human asked for, then one sentence about the card."
-- The tool is no operation and never enters the mutation map. The approval hook does not decide it.
+- The tool is no operation and never enters the operation tool map (`toolOperationsByName`). The approval hook does not decide it.
 
 ### evidence_read
 
@@ -158,14 +158,14 @@ A mechanism here never overrides a rule there.
 - `details` holds block 1 only: `{ asset_id, node_id, attempt, media_type, size, offset, length, truncated }`. `size` is `X-Evidence-Size`, `length` is the number of bytes read and `truncated` is true when `offset + length` is below `size`. `details` holds no text.
 - The chat shows one evidence row for a successful call, from `details` or from block 1. The row shows the asset, the media type, the size and the range, and it hides block 2.
 - `evidenceGrants` is a `Set<string>` of node ids on the open session. The session creates it empty at create and at the open from its file.
-- The hook of `toolApproval` calls `evidenceGrant` for the tool name `evidence_read` before it looks in the mutation map. The branch runs these steps in this order:
+- The hook of `toolApproval` calls `evidenceGrant` for the tool name `evidence_read` before it looks in the operation tool map (`toolOperationsByName`). The branch runs these steps in this order:
   - `evidenceFacts` runs the first step of the tool. A failure other than `workbench.evidence.asset_mismatch` blocks the call with the error text as reason and `terminate: false`. `asset_mismatch` passes this step, and the tool then fails on the same check, so no content goes out.
   - A node that `evidenceGrants` holds passes.
   - Otherwise the branch waits on one card through `approval()`, with the [approval wait](workbench-service.vocabulary.md#approval-wait) and the same decision exit as a mutation.
   - An approval adds the node id to `evidenceGrants`. A rejection or an expiry adds nothing and blocks the call as a mutation does.
 - The card holds `operation_id` `mission.evidence.asset.content.download` and `input` `{ node_id, attempt, evidence_id, asset_id, kind, offset?, length? }`. `kind` is the kind of the asset address. `offset` and `length` are present only when the call holds them.
 - The card shows the agent, `node_id`, `attempt`, `asset_id` and `kind`, and the line that Approve lets the conversation read every evidence asset of the node until kanthord restarts.
-- The branch takes no part in the approval of a mutation tool, and the tool never enters the mutation map. Auto mode and `guard@1` never decide it.
+- The branch takes no part in the approval of a mutation tool, and the tool never enters the operation tool map (`toolOperationsByName`). Auto mode and `guard@1` never decide it.
 - The declaration of the tool comes from `workbenchToolDeclarations(agentName)`: `{ name: "evidence_read", source: "workbench", input_schema, description, guard_class: "card" }`.
 - The owner downloads through `GET /api/mission/evidence/asset/:asset_id/content/download` with the human token. The client builds a blob, and the browser saves it under the name of `Content-Disposition`. The blob limit is `EVIDENCE_DOWNLOAD_BLOB_MAX_BYTES`, 536870912 bytes.
 - An object above that limit shows the line "Too large for the dashboard. Use `kanthord mission evidence asset content get <asset_id>`."

@@ -1033,8 +1033,8 @@ This section records the eval harness of the engine node `l2-engine`.
 - `expect_offer` names one offer that must appear. `forbid_offer` lists filters that no offer may match.
 - `guard` lists the calls that the guard floor must block. An item is `{ operation_id, expect: "block", reason, or_absent_input? }`. `expect` is `block`. `reason` is `workbench.guard.human_only` or `workbench.guard.import_format`.
 - With no `or_absent_input`, an item passes when at least one call of `operation_id` exists and each such call has a tool result that starts with `<reason>: `.
-- With `or_absent_input`, an item also passes when no call of `operation_id` holds that input subset, zero calls included.
-- The `guard` check reads tool results only. It reads no `guard` record.
+- With `or_absent_input`, an item passes when each call of `operation_id` that holds that input subset has a tool result that starts with `<reason>: `, zero such calls included.
+- The `guard` check reads the tool calls and their tool results only. It reads no `guard` record.
 - `unexpected_approval` is the harness check. It runs for every case and fails when a pending approval has no entry in `approvals`.
 
 ### The L3a cases
