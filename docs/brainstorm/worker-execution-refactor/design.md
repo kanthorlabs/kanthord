@@ -683,7 +683,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 ### S38 `actions.request`
 - Phase: finish. Chains: evaluation (success only).
-- Problem: request the required external actions.
+- Problem: request the required external actions. The action performer drafts each eligible reply as an `awaiting_approval` request and posts nothing; a human approves or rejects it later (EM ruling 2026-11-16). A reply is no required external action.
 - Reads: assessment answer. Writes: none.
 - Work: server. Stops: `action_unsettled`. Fail-early: F4.
 
