@@ -118,6 +118,7 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
 - [ ] Define how the workspace directory of a project relates to the execution workspaces under `workspaces/` of the state directory.
 - [ ] Define how a workbench session pulls and executes a task through the Worker and Scheduler Services. The Workbench Service owns no worker, no registration and no claim.
 - [ ] The composer of the chat shows a model picker and a reasoning-effort picker, as in the screenshot of Ulrich on 2026-10-06. Its `+` menu offers images and files, commands (`/`), context (`@`) and a shell command (`!`). Define each of the four from the capability of pi that serves it: prompt templates, file references, bash and image input.
+- [ ] Added 2026-11-16 from the worker execution refactor design (B2). Update `apps/src/lib/agent-prompt-parts.ts` to find the first `agent.turn` of a `worker.task` as a descendant, not a direct child. The span tree also needs a row and a pill for `worker.step` in `apps/src/lib/step-tree.ts`. Design: the work prompt entry `Work prompt <task id>` reads `agent.turn` descendants of the `worker.task` span after layer 4 of the refactor ships (D15, D21).
 
 ### Worker Service
 
@@ -178,7 +179,7 @@ After the first native-agent worker runs the acceptance path.
 ### Tracking Service
 
 - [ ] POSTPONED 2026-09-29 by Ulrich until the audit action is added. Added 2026-09-29 from the evidence redesign. Design the audit record of a human act, for example a content removal or a pending cleanup, so that a human who regrets a delete reads what it removed. A delete removes the row, and `architecture.impl.md` bans a soft delete. Added 2026-10-12 from the harness-1 run: the reason of an unblock, a pause, a resume and a ready is validated and stored nowhere. Only a block, a discard and an override store their reason, in the outcome. Added 2026-11-04: the cleanup record of the [Footprint Service](footprint-service.md#cleanup) is the audit of a cleanup only, and it covers no other human act.
-- [ ] Added 2026-10-12 from the worker tracing. The `steps` method of an `examine` node writes only verification spans, no `worker.phase` and no `worker.task` span.
+- [x] Added 2026-10-12 from the worker tracing. The `steps` method of an `examine` node writes only verification spans, no `worker.phase` and no `worker.task` span. CLOSED 2026-11-16: D15 of the worker execution refactor adds `worker.phase` and `worker.step` spans to all chains, including examine. See `design.md` rule 9 and section 5.6.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. RULED 2026-10-11 by Ulrich: [worker-contract.md](../explanation/worker-contract.html#identities) rules the span, record and text identities of worker records, the split of a text above 60 KiB, and the attribute names of the worker span catalog. Execution identity validation awaits the Scheduler contract.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. `telemetry ingest` awaits conflicting-record and repeated-value rules, status finalization, structural refusal codes and batch-failure boundaries. Operation contracts also need timeouts and partial acknowledgement schemas.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Ingestion awaits byte and count limits, local-log and segment bounds, and `fsync` bounds.

@@ -1,6 +1,6 @@
 # Audit: worker node execution refactor design
 
-Auditor: Aelita. Engine commit `2797a453`. Inputs: `design.md`, `review.md`, `facts.md`, HANDOFF rulings of 2026-11-14, `worker-service.md`, `worker-service.impl.md`.
+Auditor: Aelita. Engine commit `2797a453`. Inputs: `design.md` (including the code facts list), `review.md`, HANDOFF rulings of 2026-11-14, `worker-service.md`, `worker-service.impl.md`.
 Scope: every behavior of today's worker execution that the design does not cover, covers wrongly, or keeps although it is not reasonable ("change proposal").
 All paths are under `engine/src/` unless stated. Every item is checked in the code.
 

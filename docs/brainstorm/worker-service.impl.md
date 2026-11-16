@@ -1495,7 +1495,7 @@ It answers `{ claim, setup, revision, heads }` for any execution of a node that 
 - `revision`: the pinned node revision, read in-process through the Mission contract.
 - `heads`: the head of each node branch that the push records of the execution confirm, else the attempt base commit.
 
-It reads no credential and answers no credential, no SSH identity and no handover key.
+It reads no credential and answers no credential, no SSH identity and no handover key. The route removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. It holds no value of `containerEnv`, `remoteEnv` or the process environment.
 
 | HTTP | Code | Condition |
 | --- | --- | --- |
@@ -1578,9 +1578,10 @@ It proves that a reviewer execution takes no file of the workspace.
 - The worker unit opens a sealed item through the `sealed_credentials` function pair of its wrapper. Only the `worker` wrapper passes it. It opens the item with the key of the item `holder`: the instance key, or the key of the [machine configuration](#the-machine-configuration). An item that does not open ends the execution with `worker.handover.sealed_unopened`.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. Its body is `{ execution_id, nonce, ciphertext }`, where `nonce` and `ciphertext` carry the sealed refresh report, and it answers 204.
 - The plaintext of the report is `{ credential_id, digest, credential }` for a server-held credential. It is `{ credential_id, digest, sealed }` for a copy of an instance or a machine. For such a copy, the worker unit seals the refreshed credential to the key of the item `holder` through `sealed_credentials`. `digest` is then the digest of the stored sealed object. The application calls it after each refresh that pi-ai performs and once at the release.
-- The credential report request body permits at most 65,536 bytes; [Custody's serialized-credential budget](custody.impl.md#serialized-credential-budget) ensures the compact report fits. The application reports once at release even when the credential is unchanged.
+- The credential report request body permits at most 65,536 bytes; [Custody's serialized-credential budget](custody.impl.md#serialized-credential-budget) ensures the compact report fits. The application reports once before the first final call (`assessment.submit`, `execution.release` or the stop release), also when the credential is unchanged.
 - For both operations, the invocation chain proves the execution that the body field `execution_id` names.
 - The application discards every credential when the execution ends, and it writes none to a file.
+- Dispose order: release trees, base heads, agent session, node key and scratch store, SSH access, credential store and handover keys run in that order. The credential entry runs last. The telemetry sink closes after the credential discard. `run.dispose()` runs after the agent session entry.
 - A platform action runs through the action performer of the server.
 - The `worker` application takes the `client_secret` of each binding from the sealed connection answer of [The instance exchange](#the-instance-exchange). It reads no `client_secret` from a file, an environment variable or an option.
 - The `worker` application holds no `master_key`.
@@ -1692,7 +1693,7 @@ The fourth source is the host-supplied tools that the worker unit at every place
 An agent declaration names its host tools: `swe@1` holds `evidence-upload` and `link_update_list`, and `re@1` holds none.
 The evaluation method adds the `checkoutConfinement` hook of `src/agent/hooks/checkout-confinement.ts` to the `re@1` session.
 `re@1` has no `bash`, so the hook is its only path boundary. Without the hook, `read`, `grep`, `find` and `ls` reach every file of the worker user.
-The allowed roots are the review checkouts and the `evidence` directory of the workspace, which the review bundle lists. A workspace with no checkout holds the placed evidence itself, so it is the root.
+The hook resolves each `path` with the path function of pi (`resolveToCwd`: `@` prefix, `~`, `file://`, Unicode spaces), then follows symbolic links. The hook accepts the path when the result is inside one root. The hook refuses a path that it cannot resolve. A call with no `path` takes the agent root. With two checkouts the agent root is `review/checkouts`; the roots are the agent root and the `evidence` directory. A workspace with no checkout holds the placed evidence itself, so it is the root.
 The agent catalog `src/agent/catalog.ts` owns `EVIDENCE_UPLOAD_PARAMETERS`, the parameter schema of `evidence-upload`.
 `agent.get` lists a host tool with the source `host`.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
@@ -1717,7 +1718,7 @@ The steps method of `coder@1` on an `implement` node runs only coding turns of t
 The flow of one execution:
 
 1. Read the pinned revision. Read the verdict or the cleared assessment under [The unblock reads](#the-unblock-reads). Read the link updates under [The link update read](#the-link-update-read). The reads run in parallel on the client, and no server operation joins them.
-2. Prepare each checkout under [Workspace](#workspace), then run the restore sequence of [Gate G](#gate-g) to the head that the checkout step read.
+2. Prepare each checkout under [Workspace](#workspace), then run the restore sequence of [Gate G](#gate-g) to the head that the checkout step read. Validate the affected declaration of each checkout at `origin/<base branch>`; an invalid file stops with `environment_failed` `affected_invalid` before the first turn.
 3. Open the `swe@1` session. The session opens before merge step M, because a conflict turn needs it.
 4. Run merge step M under [The base merge](#the-base-merge). A conflict turn runs with no live setup.
 5. Run the live environment setup on the merged heads under [The environment setup](#the-environment-setup).
@@ -1738,7 +1739,7 @@ The coder report:
 The progress rule:
 
 - `changed` from gate G is the only measure of progress. A worker commit alone is not progress.
-- The unchanged-turn counter `unchangedTurns` lives in the state of the execution.
+- The unchanged-turn counter `unchangedTurns` lives in the `release_rounds` scope.
 - A revision turn with `changed` false adds one. A verdict turn that leaves the verdict rule false adds one.
 - A turn with `changed` true sets the counter to zero. The start of each planned unit sets it to zero. The worker sets it to zero once, before the first release gate. No other event sets it to zero, and a pass of a routed unit keeps it.
 - At `NO_PROGRESS_LIMIT` (2), the execution stops with `no_progress` before the next verification. One exception applies: a verdict turn at the limit that leaves the verdict rule false is waived, as [The verdict unit](#the-verdict-unit) states.
@@ -1755,21 +1756,20 @@ The progress rule:
 
 ## The capture hook
 
-When the environment variable `KANTHORD_CAPTURE_TASKS=1` is set for the worker process, `runChain` calls the capture hook once after the last node of the `start` phase. The hook writes a capture directory `captures/<execution_id>/` in the state directory of the instance with mode `0700`. The hook is not a chain node, so the golden chain file does not change.
+When the operator sets `KANTHORD_CAPTURE_TASKS=1` for the worker process, `runChain` calls the capture hook once after the last node of the `start` phase. The hook writes a capture directory `captures/<execution_id>/` in the state directory of the instance with mode `0700`. The hook is not a chain node, so the golden chain file does not change.
 
 The capture directory holds:
 
 - `seed.json` with `claim`, `setup`, `revision`, `heads`, `prior`, `refreshed`, `affectedTests`, `plan` and `elapsed_ms`.
-- `trees/<binding_id>.bundle`: one `git bundle` for each checkout, holding `refs/heads/<node_branch>` at the head, and `refs/heads/<b>` at `origin/<b>` for the base branch and the upstream branch.
 
-The hook writes no key that holds a path of the host or a live object: `checkouts`, `gitPaths`, `setupEntries`, `setupPending`, `setupInstruction`, `baseHead`, `memo` and `agent`. The hook writes no credential, no `ssh_identities`, no handover key, no agent session and no environment value.
+The hook writes no key that holds a path of the host or a live object: `checkouts`, `gitPaths`, `setupEntries`, `setupPending`, `setupInstruction`, `baseHead`, `memo` and `agent`. The hook writes no credential, no `ssh_identities`, no handover key, no agent session and no value of `containerEnv`, `remoteEnv` or the process environment. The hook removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`.
 
-A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture directory with the instance data. A test of the hook rejects a seed that holds any credential, SSH identity, handover key or environment value.
+A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture directory with the instance data. A test of the hook asserts no credential, no SSH identity, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.
 
 ## The further-work release
 
 - A budget end always releases with `further_work: true`. Only the release gate releases with `further_work: false`.
-- At a budget end, the execution aborts the agent, gives the release trees back to the pool, runs gate G in checkpoint mode under the cleanup deadline, pushes and releases.
+- At a budget end, the execution aborts the agent, runs gate G in checkpoint mode under the cleanup deadline, pushes and releases. The release gate gives the trees back at every outcome: a pass, a route, a budget-end exit and a stop.
 - The budget-end release sends the stop `{ reason: "budget_end", code, cause }` when no unit completed in the execution. `code` names the limit that ran out: `turns` or `wall_time`.
 - A unit completed when it passed, a checkout head holds its gate commit, and step 6 found no valid unit record for it. The result of the unit record put does not change the count. A pass of the verdict unit, or of the node unit with the cleared text, always counts as completed.
 - A violation that the checkpoint gate of a budget end finds stops the execution with that violation, not with the budget end.
@@ -1787,12 +1787,12 @@ Merge step M brings `origin/<base_branch>` into the node branch of each checkout
 - Markers left: the merge stays open, the worker commits nothing, and the next conflict turn lists the files that still hold markers.
 - A conflict turn that leaves the same marker files with the same content as the check before adds one to the marker counter of this merge. At 2, the resolution fails.
 - The marker counter belongs to one merge. It is separate from the unchanged-turn counter of the progress rule.
-- A budget end during a conflict turn runs the marker check once more. Markers left fail the resolution. With no marker left, the checkpoint gate runs the conflict-mode checks and commits the merge.
+- A budget end during a conflict turn runs the marker check once more. With no marker, `markers.check` sets `resolved: true` on `openMerge` and returns `exit: budget_end`; the checkpoint gate on `onExit.budget_end` then runs the conflict-mode checks and commits the merge. Markers left fail the resolution.
 - A failed resolution submits the conflict report, runs `git merge --abort` and stops with `conflict_unresolved`.
 - The conflict report is one evidence with one `produced` asset. It holds the content of each conflicted file and the list of the files that still hold markers.
 - The conflict report holds no repository asset, so it never becomes the review snapshot and never counts as the head commit evidence.
-- The stop detail names the conflicted files. The merge runs inside the `worker.git` span with the git step `merge_base`, which gives the cause of the stop.
-- Before the release, `onStop` pushes the node branch at the last gate commit under the cleanup context bounded by `expired_at`.
+- The conflict report cuts the content of each file at a byte limit so that the asset stays below 5 MiB, and marks each cut. A failed submit logs `conflict report failed`; the step still aborts the merge and stops with `conflict_unresolved`. The stop detail names the conflicted files, fitted to `STOP_DETAIL_MAX_LENGTH`. The merge runs inside the `worker.git` span with the git step `merge_base`, which gives the cause of the stop.
+- Before the release, `onStop` pushes `heads` under the cleanup context bounded by `expired_at`.
 - On the release with `conflict_unresolved`, the Mission Service moves the node to `Blocked` for a human, under [State transitions](mission-service.md#state-transitions).
 - The step logs `base merged` with the binding, the base branch, the head and the conflict count.
 
@@ -1810,9 +1810,10 @@ The steps for each checkout:
 
 | #   | Mode       | Check or act                                                                                                                                                                                                        |
 | --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| G0  | checkpoint | When `MERGE_HEAD` exists at a budget end with no conflict marker, run the conflict-mode rows and commit the merge as `<commit_type>: merge <base_branch>`. Else, when `MERGE_HEAD` exists, run `git merge --abort`. |
+| G0  | checkpoint | On `onExit.budget_end`: when `openMerge` has `resolved: true` and `MERGE_HEAD` holds the commit of `openMerge`, run the conflict-mode rows and commit the merge as `<commit_type>: merge <base_branch>`. Else, when `MERGE_HEAD` exists, run `git merge --abort`. On `onStop`: when `MERGE_HEAD` exists, run `git merge --abort`. An `openMerge` with no `MERGE_HEAD` counts as no merge. |
 | G1  | all        | `git symbolic-ref -q HEAD` is `refs/heads/<node branch>`. Else `worker.turn.branch_changed`.                                                                                                                        |
 | G2  | all        | `before` is an ancestor of `HEAD`. Else `worker.turn.history_rewritten`.                                                                                                                                            |
+| G2a | all        | When `HEAD` is not `before`: `git rev-list --merges --parents <before>..HEAD` lists no merge with a parent that is not `before` and not the commit of `openMerge`. Else `worker.turn.foreign_merge`.                |
 | G3  | conflict   | `MERGE_HEAD` is the commit that step M merged. Else `worker.turn.merge_missing`.                                                                                                                                    |
 | G3  | all        | No `rebase-merge`, `rebase-apply`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, and no `MERGE_HEAD` outside conflict mode. Else `worker.turn.git_in_progress`.                                                              |
 | G4  | all        | When `HEAD` is not `before`, run `git reset --soft <before>`.                                                                                                                                                       |
@@ -1823,23 +1824,25 @@ The steps for each checkout:
 | G9  | all        | With two or more checkouts, remove each entry of the agent root that is not a checkout or `.kanthord-scratch`. Log `root entries removed` with the names.                                                           |
 
 - Invariant I: the checkout is on `refs/heads/<node branch>`, `HEAD` equals `checkout.head`, the index matches `HEAD`, no untracked file exists apart from ignored files, and no git operation is in progress.
+- Status reads: one `git status --porcelain=v2 --branch --no-ahead-behind` before G3 and one after G8 (invariant I). Operation path existence uses the cached `gitPaths` paths from `workspace.node`; no `git rev-parse --git-path` runs during the gate.
+- Parallel run: all checkouts run rows G1 to G3 in parallel. The gate collects all branch results first, then calls `run.stop` once with the code of the lowest-index violation (section 2, rule 8 and section 5.3 rule 4). A violation restores every checkout to `before`.
 - A turn with `changed` true sets the unchanged-turn counter to zero.
 - The gated agent keeps the set of commits that its gate made. [The unit record](#the-unit-record) reads it.
 
 The violation path:
 
-- A failure of G1, G2 or G3 runs the restore sequence to `before` on every checkout and logs `turn violation` with the code and the detail.
+- A failure of G1, G2, G2a or G3 runs the restore sequence to `before` on every checkout and logs `turn violation` with the code and the detail.
 - The detail names the checkout and the cause, and passes through `reasonOf`, so the redaction of `redactReason` applies.
 - In write mode, in conflict mode and in the checkpoint of a budget end, the gate stops with `operation_failed`, the code and the detail.
 - In the checkpoint of a stop, the gate restores and commits nothing. The stop keeps its own reason.
 - The stop path skips the checkpoint after a violation stop and pushes the node branch at `before`.
 
-The restore sequence brings a checkout back to invariant I from any state. `restoreCheckout` runs it:
+The restore sequence brings a checkout back to invariant I from any state. `restoreCheckout` runs 4 processes per checkout:
 
-1. For each operation whose state exists, run `git rebase --quit`, `git am --quit`, `git cherry-pick --quit`, `git revert --quit` or `git merge --abort`.
+1. For each operation path in `gitPaths` whose file exists, run its quit command: `git rebase --quit`, `git am --quit`, `git cherry-pick --quit`, `git revert --quit` or `git merge --abort`.
 2. Run `git checkout --force -B <node branch> <target> --`.
 3. Run `git reset --hard HEAD` and `git clean -ffd`.
-4. Assert invariant I.
+4. Run `git status --porcelain=v2 --branch --no-ahead-behind` as invariant I.
 
 The target is `before` in the violation path, the head of the checkout step in prepare, and `checkout.head` after each live verification. Prepare keeps its `git clean -ffdx` on a branch switch under [Workspace](#workspace).
 
@@ -1876,16 +1879,17 @@ The unit record lives in the Worker Service and never in the repository. The wor
 
 `releaseGate` of `src/worker/unit/release-gate.ts` is the only entry to `further_work: false`.
 
-1. `refreshAtRelease` fetches the base of each checkout and runs merge step M. A budget end ends the gate.
+1. `refreshAtRelease` fetches the base of each checkout, per checkout in parallel, and runs merge step M. A budget end ends the gate.
 2. `verificationCommands(revision)` gives the node commands, then the commands of each task in plan order. `commandOwners` gives one owner for each index: the node unit for a node command, the task for a task command.
-3. The gate removes each entry of `workspaces/<node identity>/release/` that is not a current checkout. For each checkout, it takes a `command` tree of [the tree pool](#the-tree-pool) into `release/`, in the layout of the agent root, and runs the take guards. On a take, it fetches `+refs/remotes/origin/*:refs/remotes/origin/*` from the live checkout with `--prune --no-tags`, sets the `origin` URL to the repository address, fetches the branches and the tags of the live checkout with `--prune`, and scrubs the tree to `<checkout.head>`. The tags of the tree then equal the tags of the live checkout, as in a fresh clone. The scrub keeps each valid root of the setup record and removes every other untracked and ignored path. With no free tree, it runs `git clone --no-local --no-checkout -- <live checkout> <dir>`, fetches the branches and the tags of the live checkout, runs the same fetch and URL steps, runs `git checkout --detach <checkout.head>`, and deletes each local branch with `git branch -D`. The tree then shares no object file with the live checkout, and it holds the same refs and no `branch.*` config, as a reused release tree does. A take guard that answers rebuild, or a git failure of the reuse, deletes the tree and clones once. The gate logs `tree prepared` with `purpose: "release"` and `source` `pool` or `clone`.
-4. It runs the commands at the agent root of the clones with the runner of [The verifications](#the-verifications), under the wall deadline. It reruns a code failure up to 2 times to detect a flaky command, and logs `verification flaky` on a pass. A repeated command copies the result of its first run under [the result copy](#the-result-copy).
-5. The gate gives each tree back to the pool after the run, in a `finally` block, so a budget end and a stop also give it back. It deletes a tree whose `.git` is not a directory, and then the release directory.
-6. A budget-end class ends the gate with a budget end. An infrastructure failure stops the execution.
-7. When a command fails, the owner of the first failed index gets one revision turn with the `task-revision` text of the failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
-8. When every command passes, the gate runs [the affected test run](#the-affected-test-run) of each checkout in its release tree. The release tree holds `refs/remotes/origin/*` of the live checkout, and the base check uses `state.base`.
-9. The verdict `failed` gives the node unit one revision turn with the `task-revision` text of the affected failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
-10. When each verdict is `passed`, `base_red` or `absent`, the gate logs `release verified` with the affected verdict, and the flow goes to the push.
+3. The gate removes each entry of `workspaces/<node identity>/release/` that is not a current checkout. For each checkout, per checkout in parallel, it takes a `command` tree of [the tree pool](#the-tree-pool) into `release/`, in the layout of the agent root, and runs the take guards. On a take, it fetches `+refs/remotes/origin/*:refs/remotes/origin/*` from the live checkout with `--prune --no-tags`, sets the `origin` URL to the repository address, fetches the branches and the tags of the live checkout with `--prune`, and scrubs the tree to `<checkout.head>`. The tags of the tree then equal the tags of the live checkout, as in a fresh clone. The scrub keeps each valid root of the setup record and removes every other untracked and ignored path. With no free tree, it runs `git clone --no-local --no-checkout -- <live checkout> <dir>`, fetches the branches and the tags of the live checkout, runs the same fetch and URL steps, runs `git checkout --detach <checkout.head>`, and deletes each local branch with `git branch -D`. The tree then shares no object file with the live checkout, and it holds the same refs and no `branch.*` config, as a reused release tree does. A take guard that answers rebuild, or a git failure of the reuse, deletes the tree and clones once. The gate logs `tree prepared` with `purpose: "release"` and `source` `pool` or `clone`.
+4. The gate runs the environment setup of [The environment setup](#the-environment-setup) in each release tree. A setup failure on the node head writes the failure into the verification result; step 8 then routes it to the node unit. A base failure, or a node head equal to the base head, stops with `environment_failed` `setup_failed`; a budget end exits the gate.
+5. It runs the commands at the agent root of the clones with the runner of [The verifications](#the-verifications), under the wall deadline. It reruns a code failure up to 2 times to detect a flaky command, and logs `verification flaky` on a pass. A repeated command copies the result of its first run under [the result copy](#the-result-copy).
+6. The gate gives each tree back to the pool at the end of the round, on a pass, a route, a budget-end exit and a stop. It deletes a tree whose `.git` is not a directory, and then the release directory.
+7. A budget-end class ends the gate with a budget end. An infrastructure failure stops the execution.
+8. When a command fails, or when the setup wrote a failure, the owner of the first failed index gets one revision turn with the `task-revision` text of the failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
+9. When every command passes, the gate runs [the affected test run](#the-affected-test-run) of each checkout in its release tree. The release tree holds `refs/remotes/origin/*` of the live checkout, and the base check uses `state.base`.
+10. The verdict `failed` gives the node unit one revision turn with the `task-revision` text of the affected failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
+11. When each verdict is `passed`, `base_red` or `absent`, the gate logs `release verified` with the affected verdict, and the flow goes to the push.
 
 - A pass of the release gate proves the tracked files of the tested commit, plus the setup roots as left, plus the package store as left, plus this setup run. CI before the landing is the only from-scratch proof.
 - The release gate compares no trees. The verdict rule applies at the unit level.
@@ -1956,6 +1960,7 @@ A test checks base-branch heads and one tested commit per binding for an `examin
 A test checks the evidence-placement rule for an `examine` node that names no repository binding.
 A test checks that the reviewer of an `examine` node with one repository binding places the produced evidence in the `evidence` directory of the workspace.
 A test checks the same for an `implement` node with an evidence snapshot.
+The worker downloads the produced and object assets of the support evidence in parallel with the review setup, at most 4 downloads at a time, streamed to disk. Each stream goes to a file in the placement directory. The placement directory is `evidence/` beside the review checkouts. A workspace with no checkout uses the workspace directory itself.
 Both tests check that each checkout stays clean and that each asset path is relative to the agent root.
 A test checks one checkout per binding, one tested commit per binding and the stop with `operation_failed` on an evidence snapshot that misses a binding, for an `implement` node with two repository bindings.
 Tests prove that execution code, never the agent, runs verifications before judgement.
@@ -2034,7 +2039,7 @@ Tests assert that the action performer does not reuse an open pull request of th
 - The execution setup answers `environment` for each repository binding of the node, from the current revision of that binding at the claim: `{ source: "stored", document, digest }`, `{ source: "repository", digest }` at the `container` placement, `{ source: "detected" | "universal", document, digest }` at the `image` target, or null.
 - `digest` is the current digest of the group in the [Onboarding component](project-service.impl.md#the-digest-and-the-tag).
 - `worker/unit/environment-setup.ts` runs the setup of each checkout: each script of `updateContentCommand`, then each script of `postCreateCommand`. The object form runs its values one after another in key order.
-- The live setup of an `implement` execution runs after merge step M at the claim, on the merged heads. The setup also runs in each release tree, in the reviewer checkouts and in the examine checkouts.
+- The live setup of an `implement` execution runs after merge step M at the claim, on the merged heads. The setup also runs in each release tree, in the reviewer checkouts and in the examine checkouts. A stop or a budget end of the live setup restores each checkout to its merged head, pushes the node branch and releases. The budget end releases with further work and the stop `budget_end`.
 - Each command has the command limit of a verification, and the setup uses the wall deadline of the execution. Its time counts toward the budget of the execution.
 - At the `server` and the `worker` placements, only the setup commands of a stored environment run. The repository devcontainer reaches the worker only at the `container` placement, and the worker reads it at `origin/<base branch>` of its checkout. A non-regular entry counts as absent.
 - After a setup passes in a checkout, the worker appends each untracked path to `.git/info/exclude`, so no task commit takes the setup output.
@@ -2210,9 +2215,9 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 
 ### The evaluation
 
-1. The evaluation runs the listed commands and submits the evidence `Evaluation verification results`.
-2. When the listed commands and the setup pass, it runs the affected command of each checkout. The change set comes from the snapshot checkout, with the base of `addedFiles` of `evaluation-input.ts`.
-3. It submits the evidence `Affected test results`.
+1. The evaluation runs the listed commands. When a command fails, it records the class in `verification` and continues to step 3.
+2. When the listed commands and the setup pass, it runs the affected command of each checkout. The change set comes from the snapshot checkout, with the base of `addedFiles` of `evaluation-input.ts`. A skipped run writes `affected: null`.
+3. After the affected step, the submits run in parallel: the evidence `Evaluation verification results`, the evidence `Affected test results` (when `affected` holds a document), and the round patch evidence. New: the patch evidence goes out before the judgement.
 4. The verdict `failed` gives `criterion-not-met` with the stage `affected` and the affected failure report as the rationale. No agent judges it.
 5. The verdicts `passed` and `base_red` go to the reviewer in the [evaluation prompt](agent.impl.md#prompt-templates).
 
@@ -2528,7 +2533,7 @@ The execution enforces the turn budget on pi turn events and aborts the agent wh
 An agent that reaches its wall-time deadline ends the wall-time budget of the execution. The execution then takes the budget end, not a failure.
 The bash timeout of an agent command stays below the remaining wall-time budget and below the 10-minute command limit of a verification item. A lower timeout that the model sets stays.
 After the agent stops at budget end, the execution code, not the agent, runs gate G in checkpoint mode, pushes and releases with further work.
-Every budget end releases with further work. Only the release gate releases with no further work.
+Every budget end releases with further work. Only the release gate and a complete examine report release with no further work. A budget end of an `examine` steps execution releases with the stop `budget_end` and the limit as `code`. New: a complete examine turn keeps its report when the last assistant message has no tool call and no abort, and the last text is nonempty; the execution continues to `evidence.report` and releases with `further_work: false`.
 Every cleanup command, including the push, is bounded by `expired_at`, not by the remaining budget.
 A stop for a reason other than `revoked` aborts the agent and runs the same cleanup under a fresh context bounded by `expired_at`.
 A steps execution runs gate G in checkpoint mode, which commits the uncommitted work, pushes and releases with `further_work: true` and `stop: { reason, code, detail?, cause }`.
@@ -2639,9 +2644,11 @@ The pi session entries of an execution become its transcript telemetry, as the [
 - A resumed execution opens a new agent session, and a new session file, in the same directory.
 - When the session opens, the worker appends one `kanthord.pinned_context` entry as the marker of the system prompt. The entry holds `{ part: "system_prompt" }` and no text.
 - After each session event, the worker sends each entry beyond the count that it already sent.
-- The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span, with `Error` for `releaseStop` and `Ok` otherwise. A record after the release has no live claim, so the server refuses it.
+- The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span, with `Error` for `releaseStop` and `Ok` otherwise. A record after the release has no live claim, so the server refuses it. Kept: a revoke runs no final call and no flush, and the sink drops the queued records and logs `telemetry records dropped`. New: dispose closes the agent traces with `Error`.
 - A stop aborts the agent, so pi can still be inside a turn at the close. The close ends each open turn and tool span with `Error` and `error.type` `stopped`.
-- An `agent.turn` span stays a child of its enclosing worker span: `worker.task` for a turn on a unit, `worker.phase` for a conflict turn, and `worker.evaluation` for the reviewer. Its `gen_ai.conversation.id` names its session.
+- An `agent.turn` span is a child of the `worker.step` span of its LLM step. A reader finds the turns of a task as the `agent.turn` descendants of its `worker.task` span, not as its direct children. For the reviewer, that step span is under the `judge` phase span of `worker.evaluation`. Its `gen_ai.conversation.id` names its session.
+- The runner opens one `worker.phase` span with `kanthord.phase` `on_exit` or `on_stop` around the nodes of `onExit` and `onStop`. Each `worker.step` span under `onExit` or `onStop` nests under that phase span.
+- The runner adds one `worker.step` span per step for every chain, including examine. A `worker.phase` span covers each phase, `onExit` and `onStop`. The `kanthord.step.outcome` attribute is `next`, `exit` or `stop`. The span holds no error text and no stop detail.
 - The start of an `agent.turn` span holds `kanthord.prompt.template`: the `PromptTemplate` value of the instruction that drove the turn. It also holds `kanthord.prompt.template.digest`, the sha-256 hex digest of the source template, and `kanthord.prompt.work.digest`, the `WorkPrompt.digest` that `renderWorkPrompt` computes. The digest names the rendered work prompt before the redaction.
 - Before the worker sends an entry, it applies the sensitive text rule set to its copy. The secrets of every credential of the execution are the known secrets. Each finding becomes `<redacted:RULE>`.
 - The host of an execution keeps its own copy of each agent session. A reader [rebuilds](tracking-service.impl.md#the-rebuild-read) a cut entry from that copy while the host can serve it. The rebuild answers an error when the host cannot serve the entry, and never the cut entry. A stateless host loses the copy, and the Tracking Service still holds every entry that reached it. A human cleanup of the kind `session` removes the execution directory, and a later rebuild answers `session_absent` with the reason `not_kept`.
@@ -2649,7 +2656,7 @@ The pi session entries of an execution become its transcript telemetry, as the [
 
 pi keeps its own compaction logic, and kanthord designs nothing for it.
 The handover and the report enter no transcript telemetry.
-The steps method on an `implement` node writes one `worker.git` span for each base merge (`merge_base`), each fetch of the release gate (`fetch_base`) and the push of the finish or of a budget end (`push`). The push of a stop has no `worker.git` span. Each run of gate G writes one `worker.gate` span with `kanthord.gate.mode`, `kanthord.gate.changed` and `kanthord.gate.violation` on a violation, a restored one included. A run that commits ends the span with `kanthord.unit.id` and `kanthord.git.commit`, the new head of the checkout. The checkpoint of a budget end is a run of gate G in checkpoint mode, and it writes a `worker.gate` span with `kanthord.gate.mode: checkpoint`. The commit of the gate runs inside that span and writes no `worker.git` span. A failed commit throws `worker.git.commit_failed` with the redacted git stderr as the cause message, and ends the `worker.gate` span with `Error` and the telemetry text `error`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
+The steps method on an `implement` node writes one `worker.git` span for each base merge (`merge_base`), each fetch of the release gate (`fetch_base`) and the push of the finish, a budget end or a stop (`push`). The push of a stop also writes a `worker.git` span (`push`). Each run of gate G writes one `worker.gate` span with `kanthord.gate.mode`, `kanthord.gate.changed`, `kanthord.gate.violation` on a violation and `kanthord.git.process_count` (the count of git processes that the gate ran). A run that commits ends the span with `kanthord.unit.id` and `kanthord.git.commit`, the new head of the checkout. The checkpoint of a budget end is a run of gate G in checkpoint mode, and it writes a `worker.gate` span with `kanthord.gate.mode: checkpoint`. The commit of the gate runs inside that span and writes no `worker.git` span. A failed commit throws `worker.git.commit_failed` with the redacted git stderr as the cause message, and ends the `worker.gate` span with `Error` and the telemetry text `error`. A failed step ends its span with status `Error` and the telemetry text `error`. For a coded error, that text is the code and the cause message. For any other error, it is `system.operation.unknown: Operation failed.`
 
 ## Acceptance path
 
@@ -2729,7 +2736,7 @@ kanthord worker tasks compare <output-a> <output-b>
 - The help text and the command page state that `env.setup`, the verification commands and agent `bash` run on the host with its network.
 - `compare` prints differences in route, end, commits, unit results and `metrics.json`. It fails with `cli.worker.tasks.seed_mismatch` when the seed digests of the two runs differ.
 
-Files read by `run`: `<seed-folder>/seed.json`, each `<seed-folder>/trees/<binding_id>.bundle`, each `--tree` path, `--replay` file, `--system-prompt` file, each file of `--templates`. Files written by `run`: the output folder and its contents. Files read by `seed`: none on the local host (it fetches from the server and the git remote). Files written by `seed`: `<output>/seed.json` and each `<output>/trees/<binding_id>.bundle`. Files read by `compare`: `result.json` and `metrics.json` of each folder.
+Files read by `run`: `<seed-folder>/seed.json`, each `--tree` path, `--replay` file, `--system-prompt` file, each file of `--templates`, and with `--verify` the `outbox.json` and `spans.jsonl` of the recorded folder. Files written by `run`: the output folder and its contents. Files read by `seed`: none. Files written by `seed`: `<output>/seed.json`. Files read by `compare`: `result.json` and `metrics.json` of each folder.
 
 | Exit code | Condition |
 | --- | --- |

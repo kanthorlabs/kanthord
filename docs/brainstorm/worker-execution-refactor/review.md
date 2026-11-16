@@ -1,6 +1,6 @@
 # Review: worker node execution chain design
 
-Reviewer: Aelita, co-owner. Code base: engine commit `2797a453`. Input: `design.md` and `facts.md` in this directory.
+Reviewer: Aelita, co-owner. Code base: engine commit `2797a453`. Input: `design.md` (including the code facts list) in this directory.
 
 The design direction is right: a staged pipeline, a status-based gate G, a claim timer with a push fence, and a unit record outside the user repository. The review found 11 blockers. Each blocker changes behavior that the design claims to keep: gate precedence, the no-progress rule, the record guarantee across attempts, the stop accounting, the push before start, or the claim delay. All 11 blockers are fixed in `design.md`. Four suggestions stay open for Ulrich.
 

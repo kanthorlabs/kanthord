@@ -1,9 +1,9 @@
 # Worker node execution: chain design
 
-Status: design proposal for the EM, after one independent review (`review.md` in this directory). No code and no page changes yet.
-Sources: `facts.md` in this directory, and the engine code at `engine/src/worker/unit/` and `engine/src/apps/worker/` at engine commit `2797a453`. This document names each code fact that it adds to `facts.md`, with its file.
+Status: ruled design. The owning pages hold the rules; the code does not change yet.
+Sources: the engine code at `engine/src/worker/unit/` and `engine/src/apps/worker/` at engine commit `2797a453`, and the code facts list below. This document names each code fact in the list below, with its file.
 
-Code facts added to `facts.md`:
+Code facts:
 
 - `ExecutionRun.halt` cancels `operationContext` with the stop. `stopOnEnd` aborts the pi session on that cancel (`native-method.ts`). A revoke from a timer thus aborts a model turn and a verification command at once.
 - The verification runner stops at the first command that does not pass (`verification.ts:414`).
@@ -30,7 +30,7 @@ Code facts added to `facts.md`:
 - `submitAssessment`, `release` and `releaseStop` settle the credentials, close the agent traces and flush the spans for 5 s before the server call (`execution-run.ts:430-444`, `:476-478`, `:515-528`, `:561-562`).
 - `checkpointOnStop` uses `run.cleanupContext()`. `settleImplement`, the restore after a live verification and gate G after a turn use `budget.cleanupContext(operationContext)`. Both are bounded by `expired_at`, not by the wall budget (`steps-implement.ts:193`, `:290`, `:917`, `turn-gate.ts:141`).
 - Evaluation and examine turn a thrown `ContextCancelled` or `DeadlineExceeded` into the budget end when the budget is exhausted and `operationContext` is not aborted (`evaluation.ts:425-442`, `steps-examine.ts:152-161`).
-- Examine runs only the node commands, with no rerun, no copy, no baseline and no infrastructure or environment stop. It skips the run when no checkout exists (`steps-examine.ts:70-97`).
+- Examine runs only the node commands, with no flaky rerun, no copy, no baseline and no infrastructure or environment stop. The shared runner reruns an infrastructure-class command once; the second result goes into `verification`. It skips the run when no checkout exists (`steps-examine.ts:70-97`).
 - `runNativeExecution` selects the method from the worker declaration. A declaration with no method stops with `operation_failed` and no code (`native-method.ts:103-104`, `:146-149`).
 
 ## 1. Decisions
@@ -54,19 +54,19 @@ Code facts added to `facts.md`:
 - **D11 (own idea): keep the coder release gate and the reviewer verification as two separate runs, each in plan order.** Reason: the clean-clone check before push and the independent reviewer verification are invariants. A scrubbed tree needs the output of each earlier command, and the owner of a failure comes from its plan index.
 - **D12 (own idea): cut the restore sequence after a live verification from 9 git processes to 4 per checkout. Cache the tree id of each commit for the verification memo.** Reason: the 5 assert processes collapse into one status, and a tree id never changes for a commit.
 - **D13 (EM ruling 2026-11-16, own idea): at a budget end in a conflict turn, `markers.check` runs once more on the open merge. No marker: the checkpoint gate runs the conflict-mode checks and concludes the merge. Markers left: the D23 failure path runs.** Reason: today a complete resolution that ends with the budget is lost; the marker rule still blocks every bad merge.
-- **D14 (own idea): add `unit_id`, `template` and a redacted `agent_reason` of at most 512 characters to the `no_progress` detail. The detail fitting cuts `agent_reason` before `command`.** Reason: a human reads a counted stop with no reason today.
+- **D14 (own idea): add `unit_id`, `template` and a redacted `agent_reason` of at most 512 characters to the `no_progress` detail. The detail fitting cuts `agent_reason` before `command`. `agent_reason` is the last agent text after `run.reasonOf` redaction with the secret list of the execution; the redaction runs before the cut to 512 characters; when the secret list cannot be read, the detail holds no `agent_reason`.** Reason: a human reads a counted stop with no reason today.
 - **D15 (own idea): the chain runner opens one `worker.phase` span per phase and one new `worker.step` span per step, for all three chains. The `worker.gate` span gets `kanthord.git.process_count`.** Reason: today only `implement` has phase spans; middleware gives the spans to every step with no step code. The process count proves the D6 and D12 savings in production.
 - **D16 (own idea): place the reviewer assets in parallel with the review setup, with at most 4 downloads at a time, streamed to disk.** Reason: the downloads do not depend on the setup, the placement directory is outside each review tree (a workspace with no checkout runs no setup), and `arrayBuffer()` holds a whole object in memory.
 - **D17 (own idea): keep the tree pool size. Add `source` (`pool` or `clone`) and the duration to the workspace step span.** Reason: one slot per instance means one free Agent tree per address covers sequential executions; measure the misses before a change.
 - **D18 (own idea): keep one pi session per execution.** Reason: an execution runs on any instance, the prompt cache does not live across executions, and the Read context already carries the memory.
 - **D19 (own idea): each step that takes a resource registers its release on one `AsyncDisposableStack`. The runner disposes the stack once.** Reason: success, budget end and stop then share one cleanup path; Node 24 ships the type.
-- **D20 (EM ruling 2026-11-14, audit S1): in implement, run `env.setup(live)` after `base.refresh(claim)`, on the merged heads, in parallel with `units.plan`.** `agent.open` runs in prepare, in parallel with `workspace.static`, because the conflict turn needs the session. The conflict turn runs with no live setup; the marker check and the release gate decide correctness. Reason: the agent always works on an environment that matches the merged code.
+- **D20 (EM ruling 2026-11-14, audit S1): in implement, run `env.setup(live)` after `base.refresh(claim)`, on the merged heads, in parallel with `units.plan`.** `agent.open` runs in prepare as a member of `workspace.static`, because the conflict turn needs the session. The conflict turn runs with no live setup; the marker check and the release gate decide correctness. New: a setup stop or a setup budget end now runs `onStop` or `onExit` and pushes the merged heads. Reason: the agent always works on an environment that matches the merged code.
 - **D22 (EM ruling 2026-11-14): measure and improve the `Conflict` prompt during the refactor.** Keep one `swe@1` turn and add no second agent. Record per turn the conflicted file count, the model turns, the end, and a release gate failure on a command whose owner touched a conflicted file. Candidate: add the base-side log and diff since the merge base per conflicted file, cut at a byte limit. Compare before it becomes the default. Reason: the prompt asks to keep the base change intact but does not show it. HANDOFF holds the item under the Worker Service.
-- **D23 (EM ruling 2026-11-14): loop the conflict turn on a programmatic marker check.** The `conflict.revisions` loop runs `conflict.turn`, then `markers.check` (`conflictMarkerFiles` over the files of `openMerge`). Markers left: keep the merge open, commit nothing, and send a conflict turn that lists the files with markers. No marker: gate G in conflict mode commits the merge. Bound: the first `markers.check` of a merge sets the marker counter to 0; a later check that finds the same marker files with the same content adds 1; at 2 the resolution fails. A failed resolution loses no work (EM ruling 2026-11-14): the worker submits a conflict report evidence with the content of each conflicted file and the files that still hold markers, aborts the merge, and releases with a stop that closes the attempt into `Blocked` through a new Mission transition `Executing -> Blocked`. A budget end while markers are left takes the same path: report evidence, merge abort, node `Blocked` (EM ruling 2026-11-14). Blocked release (EM ruling 2026-11-14, audit B8): the stop reason and the transition rule are `conflict_unresolved`; `recordStop` moves the node to `Blocked` with no failure count. `onStop` pushes the branch at the last gate commit first. The conflict report is a produced asset only. The marker counter belongs to one merge, separate from the no-progress counter. The cause is the `merge_base` git step. Reason: today the first check with markers left ends the execution, and the work of the turn is lost.
+- **D23 (EM ruling 2026-11-14): loop the conflict turn on a programmatic marker check.** The `conflict.revisions` loop runs `conflict.turn`, then `markers.check` (`conflictMarkerFiles` over the files of `openMerge`). Markers left: keep the merge open, commit nothing, and send a conflict turn that lists the files with markers. No marker: gate G in conflict mode commits the merge. Bound: the first `markers.check` of a merge sets the marker counter to 0; a later check that finds the same marker files with the same content adds 1; at 2 the resolution fails. A failed resolution loses no work (EM ruling 2026-11-14): the worker submits a conflict report evidence with the content of each conflicted file and the files that still hold markers, aborts the merge, and releases with a stop that closes the attempt into `Blocked` through a new Mission transition `Executing -> Blocked`. New: a failed submit logs `conflict report failed`; the step still aborts the merge and stops with `conflict_unresolved`. A budget end while markers are left takes the same path: report evidence, merge abort, node `Blocked` (EM ruling 2026-11-14). Blocked release (EM ruling 2026-11-14, audit B8): the stop reason and the transition rule are `conflict_unresolved`; `recordStop` moves the node to `Blocked` with no failure count. `onStop` pushes `heads` first. The conflict report is a produced asset only. The marker counter belongs to one merge, separate from the no-progress counter. The cause is the `merge_base` git step. Reason: today the first check with markers left ends the execution, and the work of the turn is lost.
 - **D24 (EM ruling 2026-11-14): semantic branch names and commit messages with no id.** Commit: keep the header `<type>: <unit name>` and drop the id body. Branch: a name chosen once per attempt start and stored with the start point; the push guard checks the `node_branch` of the claim. Branch rule (EM ruling 2026-11-14): `<commit_type>/<node name slug>`, slug lower-case kebab, at most 50 characters; a `-2`, `-3` counter when the remote holds the name; a new attempt from the base gets the next free counter. Branch ownership (EM ruling 2026-11-14, audit B5 and B6): the server reserves each name per binding and never gives it out twice. The first push of an attempt uses `--force-with-lease=refs/heads/<branch>:` and expects the branch to be absent. The first handover of the attempt chooses the name: it skips each reserved name and each name that `git ls-remote` shows, then pins the name like `prompt_commits` (EM ruling 2026-11-16). A refused first push stops with `repository.node_branch.taken`; the name of an attempt never changes. Commit attribution (EM ruling 2026-11-14, audit B9): when gate G commits, the `worker.gate` span ends with `kanthord.unit.id` and `kanthord.git.commit`; the rule of worker-service.md:419 becomes attribution through that span. The create-only first push does not overwrite a branch, so the rule text becomes "No act deletes, renames or overwrites a node branch". `.kanthord/*` stays as the project configuration directory (EM ruling 2026-11-14, S16).
-- **D25 (gap found by Ulrich 2026-11-14): make credentials part of every chain.** A shared `claim` phase runs before `prepare`: `credentials.handover`, then `setup.read`, because the first handover writes the prompt pin that the setup read uses. Chain resources: `credential.store` (pi auth, refresh lease and report) and `ssh.access` (handed key or relay signer per binding). Every final call settles the credentials once before the call (audit B2). Dispose discards every credential, clears SSH access and zeroes the handover key. Section 5.4 holds the rules.
+- **D25 (gap found by Ulrich 2026-11-14): make credentials part of every chain.** A shared `claim` phase runs before `prepare`: `credentials.handover`, then `setup.read`, because the first handover writes the prompt pin that the setup read uses. Chain resources: `credential.store` (pi auth, refresh lease and report) and `ssh.access` (handed key or relay signer per binding). Every final call settles the credentials once before the call (audit B2). Dispose discards every credential, clears SSH access and zeroes the handover keys. Section 5.4 holds the rules.
 - **D26 (gap found by Ulrich 2026-11-14): make the agent tool set part of the `agent.open` contract.** The step reads the agent declaration (`tools`, `host_tools`) and writes the tool allowlist, the host tools and the hook list. Section 5.5 holds the rules.
-- **D27 (EM ruling 2026-11-14): confine the `re@1` read tools.** `agent.open` in the evaluation chain adds `checkoutConfinement`. The allowed roots are the review checkouts and the `evidence` directory. A workspace with no checkout places the assets in the workspace directory itself, so that directory is the root (`evaluation-input.ts:524-527`). New: the hook takes a list of roots. It resolves each tool path against the agent root, follows symbolic links, and accepts the path when the result is inside one root. A `..` segment or an absolute path is accepted on that condition. The review bundle keeps its paths relative to the agent root. Reason: `re@1` has no `bash`, so the hook is its only path boundary; today it can read every file of the worker user.
+- **D27 (EM ruling 2026-11-14): confine the `re@1` read tools.** `agent.open` in the evaluation chain adds `checkoutConfinement`. The allowed roots are the review checkouts and the `evidence` directory. A workspace with no checkout places the assets in the workspace directory itself, so that directory is the root (`evaluation-input.ts:524-527`). The hook resolves each `path` with the path function of pi (`resolveToCwd`: `@` prefix, `~`, `file://`, Unicode spaces), then follows symbolic links. The hook accepts the path when the result is inside one root. The hook refuses a path that it cannot resolve. A call with no `path` takes the agent root. With two checkouts the agent root is `review/checkouts`; the roots are the agent root and the `evidence` directory. The review bundle keeps its paths relative to the agent root. A test reads `@<absolute path>`, `~`, `file://` and a symbolic link that leaves the roots, and asserts a refusal. Reason: `re@1` has no `bash`, so the hook is its only path boundary; today it can read every file of the worker user.
 - **D28 (EM ruling 2026-11-14, audit S2): retry an indeterminate answer with the same idempotency key.** `run.call` keeps one key for all tries. It retries `Indeterminate` and 409 `gateway.idempotency.conflict` with `Backoff` for at most 30 s and never past `expired_at`. It stops at once on `closed` and on a stop of the run. After the bound it stops with `operation_failed`. `retryIndeterminate` takes the key outside its loop. Reason: the gateway replays a recorded answer by key, so a lost response must not cost a counted failure.
 - **D29 (EM ruling 2026-11-15, audit S10): submit one coder report per unit, directly after the unit passes.** The subject is `Coder report of unit <unit id>`. The reviewer keeps the newest coder report of each unit id of the pinned revision. At a budget end, only a unit that passed has a coder report; the checkpoint commit of the open unit has no report. Reason: today the report waits for the end of the execution, a budget end submits none, and the reviewer reads only the newest report, so the units of a budget-end execution never reach the reviewer.
 - **D30 (EM ruling 2026-11-16, audit S15): the commit identity is a property of the repository.** The repository binding config holds `commit_identity: { name, email }`, required for the first live binding of a `resource_identity`, copied for the next ones, and cascaded to every live binding of that `resource_identity` on a change. `execution.setup.get` sends it per repository; the worker sets `GIT_AUTHOR_*` and `GIT_COMMITTER_*` per checkout. `DEFAULT_IDENTITY` and the four identity names of `KEPT_GIT_VARIABLES` are deleted. Reason: the default `kanthord <kanthord@localhost>` puts the product name into user repositories, and the identity belongs to the repository, not to the worker host.
@@ -75,7 +75,7 @@ Code facts added to `facts.md`:
   2. Unit record, then removal of the trailer code (D5, D10).
   3. `ClaimWatch` and push fence (D4).
   4. Chain runner and middleware. Port the current steps with no behavior change. A test prints each built chain in the notation of section 4 and compares it with a golden file.
-  5. Parallel groups and fail-early order (D7, D8, D9, D16, D20).
+  5. Parallel groups and fail-early order (D7, D8, D9, D16, D20). `SpanRecorder` takes the parent from the scope of the branch, not from one stack.
   6. Checkpoint merge, telemetry and stop detail (D13, D14, D15).
 
   Reason: layers 1 to 3 each change one file group (`turn-gate.ts` and `local-git.ts`, `done-record.ts`, `execution-run.ts`) and give the cost cut that the EM asks for with no runner. Layer 4 then ports verified behavior, and the golden file keeps section 4 equal to the code.
@@ -91,10 +91,10 @@ Code facts added to `facts.md`:
 | Verdict rule semantics                           | Kept. The `rev-list` command and the judged-commit history check do not change.                                                                                                                                                                                                                                                                                                        |
 | No-progress rule                                 | Kept. The counter lives in the release-round scope with the reset rules of section 2.                                                                                                                                                                                                                                                                                                  |
 | Independent reviewer verification                | Kept (D11).                                                                                                                                                                                                                                                                                                                                                                            |
-| Clean-clone check before push                    | Kept. `release.gate` stays the only entry to `further_work: false`.                                                                                                                                                                                                                                                                                                                    |
+| Clean-clone check before push                    | Kept. the `release_gate` phase stays the only entry.                                                                                                                                                                                                                                                                                                                                    |
 | Trusted-link filtering                           | Kept. The server filters at read time; a parallel read does not change it.                                                                                                                                                                                                                                                                                                             |
-| Stop accounting codes                            | Kept. Evaluation still turns a budget end into `assessment_absent`. New: examine releases a budget end with the stop `budget_end/<limit>`. Implement still sends `budget_end` only when no unit completed. A stop order or a unit stop still releases with its own reason (section 2, rule 5a). D14 only adds fields to the `no_progress` detail JSON. D23 adds `conflict_unresolved`. |
-| No checkpoint and no push before the start phase | Kept. `onExit` and `onStop` of implement arm at the start phase.                                                                                                                                                                                                                                                                                                                       |
+| Stop accounting codes                            | Kept. Evaluation still turns a budget end into `assessment_absent`. New: examine releases a budget end with the stop `budget_end/<limit>`. Implement still sends `budget_end` only when no unit completed. A stop order or a unit stop still releases with its own reason (section 2, rule 5a). D14 only adds fields to the `no_progress` detail JSON. D23 adds `conflict_unresolved`. See section 2, rule 6 for the full `stopMapped` list. |
+| No checkpoint and no push before the start phase | Kept for prepare and earlier. New: a setup stop or a setup budget end of `env.setup(live)` in start runs `onStop` or `onExit` and pushes the merged heads. The checkpoint commits nothing after a setup end; the push sends the merged heads only.                                                                                                                                                                                                                             |
 | Claim check at every model turn                  | Replaced. Guarantee: a revoke stops spend within 60 s plus one round trip and one abort, and no push starts after a revoke that the server reports before the fence.                                                                                                                                                                                                                   |
 | Done record in the node branch                   | Replaced. Guarantee: a record counts only when its content digest matches and each recorded commit is in `origin/<base_branch>..HEAD` of its checkout. The release gate still decides correctness.                                                                                                                                                                                     |
 
@@ -103,7 +103,7 @@ Code facts added to `facts.md`:
 The runner is a staged pipeline. A step reads a typed slice of the context and returns a patch of its declared keys. Middleware wraps each step. Loops, parallel groups and nested phases are nodes of the chain, not step code.
 
 ```ts
-type ChainId = "implement" | "examine" | "evaluation";
+type ChainId = "implement" | "examine" | "evaluation" | "tasks_prepare";
 type Phase =
   | "claim"
   | "prepare"
@@ -116,10 +116,15 @@ type Phase =
   | "work";
 type WorkKind = "static" | "git" | "shell" | "server" | "llm";
 type StopCode = `${EndReason}` | `${EndReason}/${string}`;
+type ReleaseRoute =
+  | { kind: "passed" }
+  | { kind: "routed"; unit: TaskContent; instruction: string };
 
 interface ExecutionCtx {
   claim: MethodClaim;
   setup: ExecutionSetup;
+  credentials: ExecutionCredentials;
+  sshAccess: ReadonlyMap<BindingId, SshAccess>;
   revision: Revision;
   attemptEvidence: readonly Evidence[];
   prior: Prior;
@@ -132,7 +137,7 @@ interface ExecutionCtx {
   setupEntries: readonly SetupEntry[];
   setupPending: boolean;
   setupInstruction: string | null;
-  baseHead: BaseHead;
+  baseHead: BaseHead | null;
   memo: VerificationMemo;
   affectedTests: readonly AffectedTest[];
   refreshed: RefreshResult;
@@ -140,14 +145,16 @@ interface ExecutionCtx {
   agent: NativeAgent;
   plan: UnitPlan;
   currentUnit: TaskContent | null;
-  unitsEnd: UnitsEnd;
+  completedUnits: number;
   route: ReleaseRoute;
+  releaseTrees: ReleaseTrees;
   reviewWorkspace: ReviewWorkspace;
   placedAssets: readonly PlacedAsset[];
-  verification: VerificationRun;
+  setupFailure: SetupFailure | null;
+  verification: VerificationRun | null;
   affected: AffectedStep | null;
   evidenceIds: readonly EvidenceId[];
-  judgement: Judgement;
+  judgement: Judgement | null;
   report: string;
 }
 type Key = keyof ExecutionCtx;
@@ -169,9 +176,11 @@ interface UnitCtx {
   revisionCount: number;
   commits: ReadonlySet<Commit>;
   passed: boolean;
+  retry: boolean;
+  waived: boolean;
 }
 
-const ChainExit = { BudgetEnd: "budget_end", Settled: "settled" } as const;
+const ChainExit = { BudgetEnd: "budget_end" } as const;
 type ChainExit = (typeof ChainExit)[keyof typeof ChainExit];
 
 type StepResult<W extends Key> =
@@ -203,6 +212,8 @@ interface Step<R extends Key, W extends Key> {
 
 interface LoopStep<S, R extends Key, W extends Key> {
   id: StepId;
+  work: WorkKind;
+  deadline: DeadlineKind;
   reads: readonly R[];
   writes: readonly W[];
   stops: readonly StopCode[];
@@ -246,6 +257,7 @@ interface Chain {
   onExit: Readonly<Partial<Record<ChainExit, readonly ChainNode[]>>>;
   onStop: readonly ChainNode[];
   budgetEnd: { kind: "exit" } | { kind: "stop"; reason: EndReason };
+  finals: readonly { call: FinalCall; after: Phase | null }[];
   middleware: readonly Middleware[];
 }
 
@@ -263,6 +275,8 @@ interface ChainBuilder {
     nodes: (b: ChainBuilder) => ChainBuilder,
   ): ChainBuilder;
   onStop(nodes: (b: ChainBuilder) => ChainBuilder): ChainBuilder;
+  budgetEnd(rule: Chain["budgetEnd"]): ChainBuilder;
+  final(call: FinalCall, after: Phase | null): ChainBuilder;
   build(): Chain;
 }
 
@@ -272,9 +286,9 @@ declare function chain(
 ): ChainBuilder;
 declare function runChain(
   chain: Chain,
-  seed: Pick<ExecutionCtx, "claim" | "setup">,
+  seed: Pick<ExecutionCtx, "claim">,
   io: StepIo,
-): Promise<ExecutionEnd>;
+): Promise<ExecutionEnd | typeof SETUP_UNAVAILABLE>;
 
 declare function runPhase(
   chain: Chain,
@@ -289,6 +303,13 @@ interface PhaseSeed {
   resources: PhaseResources;
 }
 
+interface PhaseResources {
+  clients: MethodClients;
+  tools: HostTools;
+  credentials: CredentialStore;
+  trees: TreeService;
+}
+
 type PhaseEnd =
   | { kind: "completed"; ctx: ExecutionCtx }
   | { kind: "exit"; exit: ChainExit; ctx: ExecutionCtx }
@@ -297,50 +318,60 @@ type PhaseEnd =
 
 Rules of the runner:
 
-1. **Context.** The seed holds `claim` and `setup` from the pull loop. A step gets a shallow-frozen slice of its `reads`. A resource key (`agent`, `baseHead`, `memo`) holds a live object. The runner merges the patch into the context. A step never mutates a context object other than a resource. `heads` replaces the in-place `checkout.head` writes of today.
-2. **Build check.** `build()` walks every path of the chain. It rejects a read with no earlier writer on that path, two parallel branches that write one key, and an `onExit` or `onStop` node that reads a key that the earliest armed point can lack.
-3. **Loop scope.** A `LoopFrame` gets the scope of its outer loop in `init`. `ProgressCtx` lives in the `release_rounds` scope. `UnitCtx` lives in the `units` scope and holds a reference to `ProgressCtx`. A `LoopStep` returns its scope and a patch of its declared keys.
+1. **Context.** The seed holds `claim` from the pull loop; `setup.read` writes `setup`. The runner seeds `currentUnit = null`, `openMerge = null` and `completedUnits = 0` before the first phase. The build check counts the seed as a writer. A step gets a shallow-frozen slice of its `reads`. A resource key (`agent`, `baseHead`, `memo`) holds a live object. The runner merges the patch into the context. A step never mutates a context object other than a resource. `heads` replaces the in-place `checkout.head` writes of today.
+2. **Build check.** `build()` walks every path of the chain. It rejects a read with no earlier writer on that path, two parallel branches that write one key, and an `onExit` or `onStop` node that reads a key that the earliest armed point can lack. The build check also checks the reads of each final call at its position.
+3. **Loop scope.** A `LoopFrame` gets the scope of its outer loop in `init`. `ProgressCtx` lives in the `release_rounds` scope. `UnitCtx` lives in the `units` scope and holds a reference to `ProgressCtx`. The `base.refresh` scope holds `budgetEnded`. It starts as `false`; `conflict.turn` sets it when the budget ends inside the turn. `refreshed` and `openMerge` are context keys: `base.merge` and `markers.check` write them. A `LoopStep` returns its scope and a patch of its declared keys. The `revisions` frame `next` keeps `instruction` and `template` when the template is `CriterionRevision` and clears `retry`.
 4. **Progress resets.** These rules keep the current no-progress behavior:
    - In the planned round, each unit starts with `unchangedTurns = 0`.
    - After the planned round, the counter resets once and `planned` becomes false.
    - In a routed round, the counter carries from unit to unit and from round to round.
    - A turn with a gate commit resets the counter, except a verdict turn that leaves the verdict rule unmet. That turn puts back `turnStartUnchanged`.
-   - A revision turn with no gate commit adds one. A verdict turn that leaves the rule unmet adds one. A first Work turn never adds one.
+   - A conflict-mode gate commit of `base.refresh(release)` sets `progress.unchangedTurns` to 0.
+   - A `TaskRevision` turn with no gate commit adds one. A `CriterionRevision` turn adds one only through the verdict rule. A `Work` turn never adds one.
+   - A verdict turn that leaves the rule unmet adds one.
+   - `verify.own` fails after a waiver: `progress.rule` stops with `no_progress` and rule `verdict_rule_unmet`.
    - At 2, `progress.rule` stops with `no_progress`, and the detail holds `lastVerification`.
    - `verify.own` and `release.route` write `lastVerification`.
 5. **Stop.** A step calls `io.run.stop(reason, code, detail)`. The throw ends the phase. The first stop wins, as in `ExecutionRun.halt` today. For a stop that is not `revoked`, the runner first aborts the agent. When the chain reached `armedFrom`, it runs the `onStop` nodes. It then always runs `execution.release(stop)` (`releaseStop`). An `onStop` failure logs `checkpoint failed` and does not replace the stop. For `revoked`, the runner runs no `onStop` node and ends the execution.
    5a. **Requested stop.** A stop order (`human_paused`, `instance_archived`) and a unit stop (`worker_stopped`) cancel the joined `stop` context with an `ExecutionStop`. The runner adopts that abort reason through `run.stopOf` as the stop. It wins over the code of the step that it aborted, because `ExecutionRun.halt` reads the requested stop first. The `ClaimWatch` ends, `onStop` runs as in rule 5, and `execution.release(stop)` carries the ordered reason. The Scheduler accepts it, because the stop order exists. One test per reason proves the release reason. A stop order with reason `revoked` (D4) is not a requested stop: it calls `run.revoke()`, and rule 7 applies.
-6. **Budget end.** A step returns `exit: budget_end`, or the `budgetGuarded` middleware returns it before an `llm` step when the budget is exhausted. A step that throws `ContextCancelled` or `DeadlineExceeded` while `budget.exhausted()` holds and `operationContext` is not aborted also gives a budget end: `stopMapped` maps it, as `endedByBudget` and `endedByBudgetExhaustion` do today. `Chain.budgetEnd` decides the result:
-   - `implement`: before `armedFrom`, the stop `budget_end/wall_time`. From `armedFrom`, the exit runs `onExit.budget_end`.
+   5b. **Claim phase ends.** A `gateway.*` failure or an indeterminate answer of `credentials.handover` or `setup.read` ends the execution with no stop, no final call and the host result `SETUP_UNAVAILABLE`. An execution-end answer ends as `revoked`. S43 and S44 do not use `run.call`.
+6. **Budget end.** A step returns `exit: budget_end`, or the `budgetGuarded` middleware returns it before an `llm` step when the budget is exhausted. Exception: `conflict.turn` is not guarded by `budgetGuarded`; with an exhausted budget it sends no model call and sets `budgetEnded` in the `base.refresh` scope (rule 3), so `markers.check` can still run (S14, S14a). A step can throw `ContextCancelled` or `DeadlineExceeded` while `budget.exhausted()` holds and `operationContext` is not aborted. `stopMapped` maps that throw to the budget end, as `endedByBudget` and `endedByBudgetExhaustion` do today. `stopMapped` wraps every step of every chain after `setup.read`. Kept: the mapping in `affected.run(evaluation)`, `agent.open(evaluation)`, `judgement.turn`, and in `env.setup(examine)`, `dependencies.read`, `agent.open`, `verify.node`, `examine.turn` and `evidence.report` of examine. New: the mapping in `revision.read` and `workspace.examine` of examine, and in every other step of implement and evaluation. `Chain.budgetEnd` decides the result:
+   - `implement`: before `armedFrom`, the stop `budget_end/wall_time`. From `armedFrom`, the exit runs `onExit.budget_end`. For `kind: exit`, a budget end before `armedFrom` is the stop `budget_end/wall_time` in every chain.
    - `examine`: the exit runs `onExit.budget_end`, which releases with `further_work: true` and the stop `budget_end/<limit>`.
    - `evaluation`: the stop `assessment_absent`, as `endedByBudget` does today.
+
+   A step that returns `exit: budget_end` from the wall deadline calls `budget.wallDeadlineReached()` first, so `budget.limit()` holds at the release.
 7. **Revoke.** `ClaimWatch` calls `run.revoke()`. This sets the stop and cancels `operationContext`. The running step sees an aborted `io.signal`. The runner reads the stored stop and ends with `revoked`.
-8. **Parallel group.** The runner gives each branch a child `AbortSignal` and awaits all branches with `Promise.allSettled`. When one branch stops, the runner aborts its siblings. The first stop in time wins, because `run.stop` stores it. A step that must name one code for several branches collects the branch results first, then calls `run.stop` once. Gate G does this for its violations.
-9. **Telemetry.** The `spanned` middleware opens `worker.step` with `kanthord.step.id`, `kanthord.step.work` and the outcome `next`, `exit` or `stop`. The runner opens a phase span for each phase. The nested `release_gate` phase keeps the current `worker.release_gate` span. Every current span and attribute stays with the owning step of section 5.6. `worker.step` nests under the enclosing `worker.task`, `worker.phase` or `worker.evaluation` span. An `agent.turn` span becomes a child of the `worker.step` span of its LLM step.
-10. **Resources.** A step that takes a tree, a base head or an agent session calls `io.resources.defer(...)`. The runner disposes the stack after the final call (rule 12). This replaces the `finally` blocks of `runStepsImplement` and `runEvaluation`.
+8. **Parallel group.** The runner gives each branch a child `AbortSignal` and awaits all branches with `Promise.allSettled`. When one branch stops, the runner aborts its siblings. The first stop in time wins, because `run.stop` stores it. A step that must name one code for several branches collects the branch results first, then calls `run.stop` once. Gate G does this for its violations. When one branch returns `exit`, the runner aborts its siblings, awaits all branches, merges the patch of each branch that ended with `next`, and then takes the exit. A stop of a sibling before the abort wins over the exit.
+9. **Telemetry.** The `spanned` middleware opens `worker.step` with `kanthord.step.id`, `kanthord.step.work` and `kanthord.step.outcome`: `next`, `exit` or `stop`. The span holds no error text and no stop detail. The runner opens a phase span for each phase. The nested `release_gate` phase keeps the current `worker.release_gate` span. Every current span and attribute stays with the owning step of section 5.6. `worker.step` nests under the enclosing `worker.task`, `worker.phase` or `worker.evaluation` span. An `agent.turn` span becomes a child of the `worker.step` span of its LLM step. The runner opens `worker.evaluation` before the `verify` phase and ends it after the `judge` phase. It is the parent of both phase spans. The end takes the `kanthord.evaluation.*` attributes from `judgement`. A stop or a budget end ends it with `Error`. At the end of `release_gate`, the runner sets `.result` from `route.kind`, or `budget_end` on a budget-end exit, `.affected` from `affected`, and `.unit_id` from the routed unit; a stop ends the span with `Error`. The runner gives each branch of a parallel group, and each per-checkout task inside a step, its own span scope. The parent of that scope is the span that is open when the group starts. A span of one branch never becomes the parent of a span of another branch. The runner opens one `worker.phase` span with `kanthord.phase` `on_exit` or `on_stop` around the nodes of `onExit` and `onStop`.
+10. **Resources.** A step that takes a tree, a base head or an agent session calls `io.resources.defer(...)`. A nested phase can register a release that runs at the phase end. The runner disposes the stack once at every end: after the last final call, after a revoke and after each claim phase end. The stack runs in reverse order of registration. This replaces the `finally` blocks of `runStepsImplement` and `runEvaluation`.
 11. **Composition.** A chain file lists phases and steps with the builder. A step file holds one step. A test runs one step with a fake `StepIo` and a context slice. A golden test prints each built chain in the notation of section 4. The golden test also asserts the set of log messages of section 3 (`Logs:` of each step).
 12. **Final call.** `assessment.submit`, `execution.release` and `execution.release(stop)` are runner actions outside every phase. Before each final call, the runner does these steps in order:
-    1. End every open step span and phase span.
+    0. End the claim watch.
+    1. End every open step span, `worker.task` span, `worker.release_gate` span, phase span and `worker.evaluation` span. A stop ends each with `Error`; `worker.task` gets the `kanthord.stop.*` attributes of a `no_progress` stop.
     2. Settle the credentials once (section 5.4).
     3. Close the agent traces (`run.onTraceClose`), with `Error` for `execution.release(stop)` and `Ok` otherwise.
     4. Flush the spans for at most 5 s.
     5. Send the final call.
 
-    The runner disposes the agent after the first final call of the chain. After `assessment.submit`, `actions.request` and `execution.release` run with the traces closed, as today.
+    After `assessment.submit`, an outcome ends the chain as `closed` and a node state other than `Evaluating` ends it as `revoked`; the runner then runs no later node and no `execution.release`. A `success` result runs `actions.request` and `execution.release` with the traces closed, as today.
 
-    New: a revoke ends the execution with no final call. Dispose then closes the agent traces with `Error` and flushes the spans for at most 5 s. It sends no server call.
+    Kept: a revoke runs no final call and no flush, and the sink drops the queued records and logs `telemetry records dropped`. New: dispose closes the agent traces with `Error`.
+
+    A reader finds the turns of a task as the `agent.turn` descendants of its `worker.task` span, not as its direct children.
 
 13. **Deadline.** The runner builds `io.context` and `io.deadline` from `Step.deadline`:
-    - `work`: `operationContext`, and the wall deadline of the budget (`budget.wallDeadline()`), or the agent deadline for an LLM step.
+    - `work`: `io.context` is `operationContext`, bounded by `expired_at`. `io.deadline` is `budget.wallDeadline()`, or the agent deadline for an LLM step. Shell and git runners read `io.deadline`.
     - `cleanup`: a fresh context bounded by `expired_at`. In phases and in `onExit`, it is `budget.cleanupContext(operationContext)`. In `onStop`, it is `run.cleanupContext()`, because the stop already cancelled `operationContext`.
+    - Report (`worker.credential`): a context bounded by `expired_at` that a stop does not cancel. The lease joins that context with the signal of the session.
 
-    `gate.g`, `checkout.restore`, `checkpoint.gate`, `claim.fence`, `branch.push` and the final calls are `cleanup` steps. Every other step is a `work` step.
+    The steps of the `claim` phase are bounded by `expired_at`. `budgetGuarded` and the budget part of `stopMapped` start after `setup.read`. `gate.g`, `checkout.restore`, `checkpoint.gate`, `markers.check`, `conflict.report`, `claim.fence`, `branch.push` and the final calls are `cleanup` steps. New: `base.merge`, `base.fetch` and `release_trees.prepare` are `work` steps. Every other step is a `work` step. Kept: `run.call` uses `operationContext`, so `expired_at` bounds each server call of a step of either kind, not the wall deadline. After a stop, `run.call` throws the stored stop, so no `onStop` node uses `run.call`.
 
-14. **`LoopFrame.reads`.** Each `LoopFrame` declares the keys that `init` and `next` read from the outer context. The seed check of `runPhase` requires each listed key.
-15. **`runPhase`.** Seeds the context with `seed.keys`, then runs the nodes of the named phase with the chain middleware and the loop rules. It shares the node walker, the middleware and the loop rules with `runChain`. After the end, the caller disposes `io.resources` and sends no server call.
+14. **`LoopFrame.reads`.** Each `LoopFrame` declares the keys that `init` and `next` read from the outer context. The seed check requires a `LoopFrame.reads` key only when no node of the phase writes it before the first read of the frame. A scope field is no key and needs no seed.
+15. **`runPhase`.** `runPhase` seeds the context with `seed.keys`, then runs the nodes of the named phase with the chain middleware and the loop rules. It shares the node walker, the middleware and the loop rules with `runChain`. `runPhase` applies the runner defaults of rule 1 for a key that the seed lacks. It starts no `claim.watch`. On a stop it aborts the agent. It runs no `onExit` node, no `onStop` node and no final call, so it makes no checkpoint commit and no push. After the end, the caller disposes `io.resources` and sends no server call.
 16. **`until`.** When `options.until` names a phase, the walker ends with `completed` on entering that nested phase. The `--skip-release-gate` option sets `until` to `release_gate`.
 
-Standard middleware, outermost first: `spanned`, `stopMapped`, `budgetGuarded` (only `llm` steps). `stopMapped` maps `ContextCancelled` and `DeadlineExceeded` to the chain budget end when `budget.exhausted()` holds and `operationContext` is not aborted (rule 6). It maps an abort with an `ExecutionStop` reason to that stop (rule 5a). It maps every other unknown error to `run.stopOf`.
+Standard middleware, outermost first: `spanned`, `stopMapped`, `budgetGuarded` (only `llm` steps, except `conflict.turn`, rule 6). `stopMapped` maps `ContextCancelled` and `DeadlineExceeded` to the chain budget end when `budget.exhausted()` holds and `operationContext` is not aborted (rule 6). It maps an abort with an `ExecutionStop` reason to that stop (rule 5a). It maps every other unknown error to `run.stopOf`.
 
 ## 3. Step catalogue
 
@@ -348,7 +379,7 @@ Stop code notation: `<EndReason>` or `<EndReason>/<code>`. Every server step can
 
 Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
-`Logs:` names the log messages that the step writes today. The golden test asserts this set (section 2, rule 11). The host writes `credential handover received` (S43) and `execution ended` (host end, section 5.4). The span sink writes `telemetry write failed`, and the run writes `telemetry faults` at the trace close (rule 12).
+`Logs:` names the log messages that the step writes today. The golden test asserts this set (section 2, rule 11). The host writes `credential handover received` (S43), `execution ended` (host end, section 5.4) and `tasks capture failed` (capture hook, section 5.7). The run writes `telemetry faults` at dispose, and the span sink writes `telemetry write failed` and `telemetry records dropped`.
 
 ### C0 `claim.watch` (chain resource)
 
@@ -359,6 +390,47 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Stops: `revoked`, through `run.revoke()`.
 - Parallel: runs beside every step.
 - Fail-early: starts before the first step.
+
+### S43 `credentials.handover`
+
+- Phase: claim. Chains: implement, examine, evaluation (shared).
+- Problem: open the handover envelope, build the credential store and take the SSH identities.
+- Reads: `claim`. Writes: `credentials`, the handed SSH identities.
+- Work: server (`worker.handover`). The first handover of an attempt writes `mission_attempt.prompt_commits`. Retry `worker.handover.refresh_in_flight` until the claim expires. S43 adds each credential value to the known secrets of the run before it returns.
+- Stops: `operation_failed/worker.handover.decryption_failed`, `operation_failed/worker.handover.sealed_unopened`, `operation_failed/worker.credential.lease_mismatch`, `operation_failed/custody.handover.holder_refused`, `operation_failed/project.bindings.repository.ssh_unreachable`, `operation_failed/project.bindings.repository.base_branch_absent`.
+- Logs: `credential handover received`.
+- Parallel: none; first step of the claim phase.
+- Fail-early: F1.
+
+### S44 `setup.read`
+
+- Phase: claim. Chains: implement, examine, evaluation (shared).
+- Problem: read the execution setup, including the prompt commits that S43 pins.
+- Reads: `claim`. Writes: `setup`, `sshAccess`.
+- Work: server (`execution.setup.get`), with the retry of an indeterminate result. S44 gives `worker_name` and the environment digests to the run. The runner builds the budget from `setup.resource_budget`. It returns `unit_records` (D5).
+- Stops: `operation_failed/<code of the refusal>`, for example `worker.execution.prompt_record_failed`.
+- Parallel: serial after S43.
+- Fail-early: F1.
+
+### C1 `credential.store` (chain resource)
+
+- Phase: claim through end. Chains: implement, examine, evaluation (shared).
+- Problem: manage the pi auth view, the refresh lease and the credential report.
+- Reads: `credentials`. Writes: none.
+- Work: server. The pi auth view exposes only the credential of the effective agent provider at the pinned revision. A refresh takes `worker.credential.lease`, then sends `worker.credential`. A lease retry ends when the claim expires or `operationContext` aborts. No credential reaches a file, a span or a log.
+- Stops: `operation_failed/worker.credential.lease_mismatch`.
+- Parallel: runs in the background of every step.
+- Fail-early: registered in the claim phase, after S44.
+
+### C2 `ssh.access` (chain resource)
+
+- Phase: claim through end. Chains: implement, examine, evaluation (shared).
+- Problem: provide one signer per repository binding for every git network operation.
+- Reads: `sshAccess`. Writes: none.
+- Work: local signing or server relay. One signer per repository binding: the handed key at the `server` and `container` placements; the `worker.ssh.sign` relay at the `worker` placement. Each git network operation gets its own agent socket. With D7, parallel fetches and pushes open one socket each.
+- Stops: none.
+- Parallel: runs in the background of every git network step.
+- Fail-early: registered in the claim phase, after S44.
 
 ### S01 `revision.read`
 
@@ -385,7 +457,12 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: prepare. Chains: implement.
 - Problem: build the verdict and the cleared text, the only memory across executions.
 - Reads: `claim`, `setup`. Writes: `prior`.
-- Work: server. First parallel group: failed checks, rework assessment, link updates; today each execution reads all three. Then, by result, as today: review round (when rework exists); else cleared outcome (attempt 2 or later), then change requests (when the outcome is external-failed), then cleared assessment (attempt 2 or later, when no change request text exists). A read that the precedence skips today stays unread, so its failure cannot stop the execution.
+- Work: server. First parallel group: `failed_checks.read`, `rework_assessment.read`, `link_updates.read`. Then, by result:
+  - `review_round.read`: when rework exists.
+  - `cleared_outcome.read`: attempt 2 or later, when no failed checks and no rework exist.
+  - `change_requests.read`: when the cleared outcome is external-failed.
+  - `cleared_assessment.read`: attempt 2 or later, when no failed checks, no rework and no change request text exist.
+  A read that the precedence skips stays unread, so its failure cannot stop the execution.
 - Sub-reads: `failed_checks.read`, `rework_assessment.read`, `link_updates.read`, `review_round.read`, `cleared_outcome.read`, `change_requests.read` and `cleared_assessment.read` are sub-reads of `prior.read`. They write no context key. Only `prior.read` writes `prior`.
 - Verdict source: the source has one reader, the `failed_checks` test (`steps-implement.ts:972`). A verdict built from link updates alone carries the source `rework`.
 - Stops: none extra.
@@ -406,19 +483,25 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: prepare. Chains: examine, evaluation (examine intent).
 - Problem: get dependencies, outcomes and dependency evidence.
 - Reads: `claim`. Writes: `dependencies`.
-- Work: server, 3 paged reads, in parallel with each other.
+- Work: server, 3 paged reads, in parallel with each other. In the implement intent of evaluation the step writes an empty read with no server call.
 - Stops: none extra.
 - Parallel: sibling of S01 and the workspace branch.
-- Fail-early: F1, group 1. Today it runs after the setup.
+- Fail-early: F1, group 1. New: the evaluation read moves before the verification, so the judgement uses the dependency state of the prepare phase.
 
 ### S06 `workspace.node`
 
 - Phase: prepare. Chains: implement.
 - Problem: give each binding a coder checkout at the node branch.
-- Reads: `claim`, `setup`, `attemptEvidence`. Writes: `checkouts`, `heads`, `gitPaths`, `pushRecord`, `baseHead`, `memo`.
-- Work: git and network. Shared tree service: node-key reuse with a pending push, else Agent pool tree, else clone; `fetchAndCheckout`; `git fetch --prune origin`; one `git rev-parse --git-path` per checkout for `gitPaths`; then the restore sequence of prepare (`restoreCheckout`, section 5.3) to the head that the checkout read.
+- Reads: `claim`, `setup`, `sshAccess`, `attemptEvidence`. Writes: `checkouts`, `heads`, `gitPaths`, `pushRecord`, `memo`.
+- Work: git and network. Shared tree service, per checkout:
+  - Node-key reuse with a pending push, else Agent pool tree, else clone.
+  - `fetchAndCheckout`.
+  - `git fetch --prune origin`.
+  - One `git rev-parse --git-path` per checkout for `gitPaths`.
+  - Restore sequence of prepare (`restoreCheckout`, section 5.3) to the head that the checkout read.
 - Push record: `pushRecord` holds the push record of each binding. Rule 1: with no record and a remote node branch, the step writes `confirmed` = the remote head.
-- Hygiene, before the checkouts: give the leftover release trees of the node key back to the Command pool; `keepOnly` keeps the push record of the node branch and the checkout directories of the bindings and `.kanthord-scratch/`. After the checkouts: restore the scratch store of the node branch (one checkout: move the saved `.kanthord-scratch/` back; several checkouts: drop it when it belongs to another branch). Each new tree gets the `.kanthord-scratch/` line in `.git/info/exclude`.
+- Hygiene, before the checkouts: give the leftover release trees of the node key back to the Command pool; `keepOnly` keeps the push record of the node branch and the checkout directories of the bindings and `.kanthord-scratch/`.
+- Hygiene, after the checkouts: restore the scratch store of the node branch (one checkout: move the saved `.kanthord-scratch/` back; several checkouts: drop it when it belongs to another branch). Each new tree gets the `.kanthord-scratch/` line in `.git/info/exclude`.
 - Stops: `operation_failed/repository.node_checkout.pending_rebuild`, `operation_failed/repository.node_branch.missing`, `operation_failed/repository.connector.git_failed`.
 - Keep rule: on `repository.node_branch.missing`, the step keeps the created directories. On any other failure, it removes them (`workspace.ts:320-330`). The kept checkout protects unpushed work.
 - Dispose: give each coder tree back to the Agent pool, except a tree with a pending or unreadable push record; store the scratch of the node branch first.
@@ -430,7 +513,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: prepare. Chains: evaluation.
 - Problem: give each binding a review tree at the tested commit, and prove that the remote serves it.
-- Reads: `setup`, `attemptEvidence`, `reviewRound`. Writes: `reviewWorkspace`, `checkouts`, `heads`.
+- Reads: `claim`, `setup`, `sshAccess`, `attemptEvidence`, `reviewRound`. Writes: `reviewWorkspace`, `checkouts`, `heads`.
 - Work: git and network, shared tree service (`refreshSnapshot`, scrub). Before the trees, it gives the leftover review trees back to the Agent pool and removes the review key.
 - Workspace kind: implement intent with a snapshot of every binding gives the review trees. Implement intent with no snapshot gives an execution workspace with no checkout; `tested_input` then falls back to the newest placed asset (`evaluation-input.ts:497-499`). Examine intent gives examine trees at the base heads.
 - Stops: `operation_failed` (a snapshot for some bindings but not for all), `operation_failed` (no tested input), `operation_failed/repository.connector.git_failed`.
@@ -443,8 +526,8 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: prepare. Chains: examine.
 - Problem: give each binding a tree at its base head.
-- Reads: `setup`. Writes: `checkouts`, `heads`.
-- Work: git and network, shared tree service.
+- Reads: `claim`, `setup`, `sshAccess`. Writes: `checkouts`, `heads`.
+- Work: git and network, shared tree service. With no repository binding, the step makes the execution workspace `workspaces/<execution identity>/`, writes empty `checkouts` and `heads`, and registers its removal at dispose.
 - Stops: `operation_failed/repository.connector.git_failed`.
 - Parallel: per checkout; sibling of S01 and S05.
 - Fail-early: F1, group 1.
@@ -455,7 +538,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: prepare. Chains: implement. The evaluation chain keeps the read inside `affected.run`, which runs before its only LLM step.
 - Problem: read and validate `.kanthord/affected-tests.json` at `origin/<base>`.
-- Reads: `checkouts`, `setup`. Writes: `affectedTests`.
+- Reads: `checkouts`, `setup`. Writes: `affectedTests`. `affectedTests` feeds the prompts of S14 and S17 only.
 - Work: git (`git show`) and static parse.
 - Stops: `environment_failed/affected_invalid` (new position, D9).
 - Parallel: per checkout; sibling of S10.
@@ -464,40 +547,42 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 ### S10 `setup.entries`
 
 - Phase: prepare. Chains: implement, examine, evaluation (shared).
-- Problem: resolve the devcontainer setup scripts of each checkout.
-- Reads: `checkouts`, `setup`. Writes: `setupEntries`.
-- Work: static.
+- Problem: resolve the devcontainer setup scripts of each checkout, and build the base head for the node-failure fallback.
+- Reads: `checkouts`, `setup`. Writes: `setupEntries`, `baseHead`.
+- Work: git (`git show`) and static parse.
 - Stops: `environment_failed/setup_failed` on a parse failure.
 - Parallel: per checkout; sibling of S09.
-- Fail-early: F0.
+- Fail-early: F1.
+- States: S10 writes `null` for `baseHead` with no checkout (examine). S10 writes the `BaseHead` from the setup entries of each checkout (implement, evaluation).
+- Dispose: give the base-head tree of each checkout back to the `command` class (implement, evaluation).
 
 ### S11 `env.setup`
 
-- Phase: prepare (live, review, examine) and release_gate (release). Chains: all (shared, target given by the chain).
+- Phase: start (live), prepare (review, examine), release_gate (release). Chains: all (shared, target given by the chain).
 - Problem: run `updateContentCommand` and `postCreateCommand` on the target heads; on a node failure, run the base head.
-- Reads: `setupEntries`, `heads`, and `baseHead` for the node-failure fallback. `env.setup(examine)` reads `setupEntries` and `heads` only, because the examine heads are the base heads. Writes: `setupPending` and `setupInstruction` (implement live), or a setup failure in `verification` (evaluation), or a stop (examine). `env.setup(release)` writes no context key on a pass; a failure stops the execution.
+- Reads: `setupEntries`, `heads`, `setup` (templates, implement live), and `baseHead` for the node-failure fallback; `releaseTrees` for the release target. `env.setup(examine)` reads `setupEntries` and `heads` only, because the examine heads are the base heads. Writes: `setupPending` and `setupInstruction` (implement live), or `setupFailure` (evaluation and release), or a stop (examine). `env.setup(review)` and `env.setup(release)` write `setupFailure`. `env.setup(release)` stops with `environment_failed/setup_failed` on a base failure or a node head equal to the base head; a budget end takes `onExit.budget_end`.
 - Work: shell.
-- Stops: `environment_failed/setup_failed`; a budget end gives `budget_end/wall_time` (implement prepare), `assessment_absent` (evaluation), or a release with the stop `budget_end/<limit>` (examine).
+- Stops: `environment_failed/setup_failed`; a budget end of `env.setup(live)` takes `onExit.budget_end` (rule 6); a budget end of `env.setup(review)` gives `assessment_absent`; a budget end of `env.setup(examine)` gives a release with the stop `budget_end/<limit>`. Before a stop or a budget-end exit, `env.setup(live)` runs the restore sequence of section 5.3 to `heads` on each checkout, under the cleanup deadline.
 - Logs: `environment setup` (implement), `setup failed on the node head` (implement, evaluation), `tree prepared` and `tree deleted` (base tree).
 - Parallel: serial across checkouts. Sibling of S16 `assets.place` in evaluation, and of S15 `units.plan` in implement (D20).
-- Fail-early: F2, the first shell step, before any LLM step.
+- Fail-early: F2; in implement it runs after `conflict.turn` (D20).
 
 ### S12 `agent.open`
 
 - Phase: prepare (implement), judge (evaluation), work (examine). Chains: all (shared).
 - Problem: open the pi session with the prompt layers.
-- Reads: `claim`, `setup`, `checkouts`. Writes: `agent`.
+- Reads: `claim`, `setup`, `credentials`, `checkouts`, `reviewWorkspace` (evaluation). Writes: `agent`.
 - Work: static, and the model runtime of the credential. No model call. No workspace file read (`noContextFiles`).
 - Stops: `operation_failed`.
-- Parallel: sibling of `workspace.static` in implement (D20).
+- Parallel: implement: member of `workspace.static`, sibling of S09 and S10. examine: sibling of S25a in `work.inputs`. evaluation: none; first step of the `judgement` frame.
 - Fail-early: F0, before the first LLM step.
 
 ### S13 `base.merge` (loop step)
 
 - Phase: start (claim) and release_gate (release). Chains: implement.
 - Problem: merge `origin/<base_branch>`, then `upstream_branch`, into one checkout.
-- Reads: `checkouts`, `heads`, `setup`. Writes: `heads`, `refreshed`, `openMerge`.
-- Work: git. The ancestor check is one `git merge-base --is-ancestor origin/<b> HEAD`, not 2 processes. On a conflict, it writes `openMerge` with the directory, the merged commit and the unmerged files.
+- Reads: `checkouts`, `heads`, `setup`, `revision`. Writes: `heads`, `refreshed`, `openMerge`.
+- Work: git. The ancestor check is one `git merge-base --is-ancestor origin/<b> HEAD`, not 2 processes. On a conflict, it writes `openMerge` with the directory, the merged branch, the merged commit, the merge message and the unmerged files. A frame with no conflict writes `openMerge = null`. A frame writes `refreshed = merged` when this frame or an earlier frame merged; else `current`.
 - Stops: `operation_failed/repository.connector.git_failed`. The merge runs inside `worker.git` with the git step mark `merge_base`, which gives the stop cause.
 - Telemetry: new: a clean merge sets `kanthord.git.commit`, the merge commit, on its `worker.git` span with the git step mark `merge_base`.
 - Logs: `base merged`, at the end of the `base.refresh` frame, after `gate.g(conflict)`. The log names the merge commit.
@@ -508,9 +593,9 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: start and release_gate. Chains: implement.
 - Problem: let `swe@1` resolve the conflicts of one checkout. The first turn uses the `Conflict` template. A later turn lists the files that still hold markers (D23).
-- Reads: `agent`, `checkouts`, `heads`, `openMerge`; scope (marker files of the last check). Writes: none.
+- Reads: `agent`, `checkouts`, `heads`, `openMerge`, `claim`, `revision`, `setup`, `affectedTests`; scope (marker files of the last check). Writes: none.
 - Work: LLM (`Conflict` template).
-- Stops: `provider_failed/*`, budget end (`markers.check` then runs once more, D13).
+- Stops: `provider_failed/*`. At a budget end, `conflict.turn` returns no exit and sets `budgetEnded` in the scope. `budgetGuarded` does not guard `conflict.turn`; with an exhausted budget, the step sends no model call and sets `budgetEnded` (rule 6, D13).
 - Parallel: none; one agent.
 - Fail-early: F3.
 
@@ -518,13 +603,15 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: start and release_gate. Chains: implement.
 - Problem: decide after each conflict turn whether the merge is resolved.
-- Reads: `checkouts`, `openMerge`; scope (marker counter of this merge, marker files and content of the last check). Writes: scope.
+- Reads: `checkouts`, `openMerge`; scope (marker counter of this merge, marker files and content of the last check). Writes: `openMerge` (writes `resolved: true` when no marker); scope.
 - Work: git and file reads (`conflictMarkerFiles` over the files of `openMerge`).
+- Deadline: `cleanup` (section 2, rule 13).
 - Rules (D23):
-  - No marker: leave the loop; `gate.g(conflict)` commits the merge.
+  - No marker: writes `openMerge` with `resolved: true`; leave the loop; `gate.g(conflict)` commits the merge.
   - Markers left: keep the merge open, commit nothing, and run the next `conflict.turn` with the files that hold markers.
   - The first check of a merge sets the marker counter of this merge to 0. A later check that finds the same marker files with the same content as the last check adds 1. The counter is separate from the no-progress counter. At 2, the resolution fails.
-  - Budget end with markers left: the resolution fails.
+  - With `budgetEnded` and no marker: `markers.check` returns `exit: budget_end`.
+  - With `budgetEnded` and markers left: the resolution fails.
   - A failed resolution goes to `conflict.report` (S14b).
 - Stops: none. `conflict.report` owns the stop of a failed resolution.
 - Parallel: none. Fail-early: F1, directly after each conflict turn.
@@ -534,8 +621,9 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: start and release_gate, on a failed resolution only. Chains: implement.
 - Problem: own the failed resolution, and keep the partial resolution when the merge aborts.
 - Reads: `claim`, `checkouts`, `openMerge`; scope (marker files). Writes: `evidenceIds`.
-- Work: server, then git. In order: submit the report, run `git merge --abort`, then call `run.stop` with `conflict_unresolved`. The report is one evidence with the content of each conflicted file and the list of files that still hold markers. The evidence has one `produced` asset and no repository asset, so `hasEvidence` and `snapshotOf` never accept it.
-- Stops: `conflict_unresolved` (node `Blocked`, no failure count; `onStop` pushes the last gate commit first; the cause is the `merge_base` git step), and through `run.call` (D28). Parallel: none. Fail-early: F4.
+- Work: server, then git. In order: submit the report, run `git merge --abort`, then call `run.stop` with `conflict_unresolved`. The report cuts the content of each file at a byte limit so that the asset stays below 5 MiB, and marks each cut. The report is one evidence with the cut content of each conflicted file and the list of files that still hold markers. The evidence has one `produced` asset and no repository asset, so `hasEvidence` and `snapshotOf` never accept it. A failed submit logs `conflict report failed`; the step still aborts the merge and stops with `conflict_unresolved`.
+- Deadline: `cleanup` (section 2, rule 13).
+- Stops: `conflict_unresolved` (node `Blocked`, no failure count; `onStop` pushes `heads` first; the stop detail names the conflicted files, fitted to `STOP_DETAIL_MAX_LENGTH`; the cause is the `merge_base` git step), and through `run.call` (D28). Parallel: none. Fail-early: F4.
 
 ### S15 `units.plan`
 
@@ -565,14 +653,15 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Reads: scope. Writes: `currentUnit`; scope (`revisionCount = 0`, `progress.unchangedTurns = 0` when `progress.planned`).
 - Telemetry: opens the `worker.task` span of the unit (section 5.6). The span ends at the unit end.
 - Unit id: the verdict unit uses the node id as `unit_id`.
-- Logs: `task started` (task unit), `node instruction started` (verdict or node unit).
+- Setup instruction: `init` of the `units` frame gives `setupInstruction` to the first pending task of the planned round as its `instruction`, with template `TaskRevision`. No other unit takes it.
+- Logs: `task started` (task unit and node unit), `node instruction started` (verdict unit).
 - Work: static. Stops: none. Parallel: none. Fail-early: F0.
 
 ### S17 `unit.turn` (LLM, loop step)
 
-- Phase: tasks and release_gate. Chains: implement.
+- Phase: tasks. Chains: implement.
 - Problem: run one Work, TaskRevision or CriterionRevision turn for the current unit.
-- Reads: `agent`, `revision`, `checkouts`, `affectedTests`, `setupInstruction`; scope `UnitCtx`. Writes: scope (`turnStartUnchanged`).
+- Reads: `agent`, `revision`, `checkouts`, `affectedTests`, `setup`, `claim`; scope `UnitCtx`. Writes: scope (`turnStartUnchanged`).
 - Work: LLM.
 - Stops: `provider_failed/*`, budget end.
 - Parallel: none.
@@ -580,13 +669,13 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 ### S18 `gate.g` (loop step)
 
-- Phase: tasks, start (conflict mode), finish and onStop (checkpoint mode). Chains: implement.
+- Phase: tasks (write mode), start and release_gate (conflict mode); checkpoint mode is S29. Chains: implement.
 - Problem: check the turn for violations and commit it as the only author.
-- Reads: `checkouts`, `heads`, `gitPaths`, `openMerge` (conflict and checkpoint modes); scope. Writes: `heads`, `openMerge`; scope (`commits`, `changed`).
+- Reads: `checkouts`, `heads`, `gitPaths`, `openMerge` (conflict and checkpoint modes); scope. Writes: `heads`, `openMerge`; scope (`commits`, `changed`). Conflict mode in `release_gate` writes outer scope `progress.unchangedTurns`.
 - Work: git (section 5.3). Deadline: `cleanup` (section 2, rule 13). Conflict mode runs only after `markers.check` found no marker.
 - Hygiene: after each gate with no violation, `removeRootEntries` removes each entry of the workspace root other than the checkouts and `.kanthord-scratch/` (several checkouts only).
 - Stops: `operation_failed/worker.turn.branch_changed`, `.../worker.turn.history_rewritten`, `.../worker.turn.foreign_merge`, `.../worker.turn.merge_missing`, `.../worker.turn.git_in_progress`, `operation_failed/worker.git.commit_failed`.
-- Logs: `turn violation`, `root entries removed`, `task committed` (write mode, for every unit commit, with the head set). New: the verdict unit logs `task committed` with `unit_id` = the node id.
+- Logs: `turn violation`, `root entries removed`, `task committed` after each write-mode gate of a task unit or node unit.
 - Parallel: per checkout (D7), with a barrier: all checks end before the first restore or commit. On several violations, the lowest checkout index names the code, and the gate calls `run.stop` once.
 - Fail-early: F1, directly after each agent turn.
 
@@ -594,8 +683,8 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: tasks. Chains: implement.
 - Problem: apply the progress resets and counts of section 2, rule 4.
-- Reads: scope (`changed`, `turnStartUnchanged`, `progress`). Writes: scope (`progress`).
-- Work: static.
+- Reads: `agent` (`lastText`); scope (`changed`, `turnStartUnchanged`, `progress`, `unit`, `template`). Writes: scope (`progress`, `revisionCount`).
+- Work: static. Skipped when `retry` is true.
 - Stops: `no_progress` (detail per D14). The stop ends the `worker.task` span with the `kanthord.stop.*` attributes (section 5.6).
 - Parallel: none.
 - Fail-early: F0, before the verification.
@@ -604,9 +693,10 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: tasks. Chains: implement (verdict unit only).
 - Problem: check that a commit since the judged commits exists; retry once, then waive. An unmet rule puts back `turnStartUnchanged` before it counts.
-- Reads: `heads`, `checkouts`; scope. Writes: scope (`progress`).
+- Reads: `heads`, `checkouts`; scope. Writes: scope (`progress`, `revisionCount`, `retry`, `waived`).
 - Work: git (`git rev-list --first-parent --ancestry-path --no-merges --max-count=1 <judged>..HEAD`).
-- Stops: none. The retry counts one turn only while the count stays under the limit; at the limit it waives.
+- Stops: none. The retry counts one turn only while the count stays under the limit; at the limit it waives and sets `waived`.
+- Scope: `retry: boolean` — set when the rule is unmet under the limit and the same instruction goes again. `waived: boolean` — set when the rule is waived at the limit.
 - No judged commit: a verdict with no judged commit has no rule. The step is skipped: no `rev-list`, no retry, no waiver.
 - Logs: `verdict rule checked`, `verdict rule waived for review`.
 - Parallel: per judged checkout; the rule holds when one checkout holds.
@@ -616,16 +706,18 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: tasks. Chains: implement.
 - Problem: run the own commands of the unit in the live checkout. A pending setup runs first.
-- Reads: `revision`, `heads`, `baseHead`, `setupEntries`, `setupPending`, `memo`; scope. Writes: `setupPending`; scope (`passed`, `progress.lastVerification`, next instruction).
-- Work: shell.
-- Stops: `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent`, budget end.
-- Logs: `task verified` (task unit).
+- Reads: `revision`, `heads`, `baseHead`, `setupEntries`, `setupPending`, `memo`, `checkouts`, `gitPaths`, `setup`, `claim`; scope. Writes: `setupPending`; scope (`passed`, `progress.lastVerification`, `instruction`, `template`, `revisionCount`).
+- Work: shell. Skipped when `retry` is true.
+- Before a pass, a failure, a stop or a budget-end exit, `verify.own` runs the restore sequence of section 5.3 to `heads` on each checkout, then `removeRootEntries`, under the cleanup deadline, as S11 states for `env.setup(live)`.
+- Stops: `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent`, `operation_failed` (restore invariant failure), `no_progress` with rule `verdict_rule_unmet` when the verification fails and `waived` is true (detail per D14), budget end.
+- Logs: `task verified` (every unit).
+- Run state: calls `run.noteVerification(timed_out of the last result)`; the stop cause reads it.
 - Parallel: commands serial.
 - Fail-early: F2.
 
 ### S22 `checkout.restore`
 
-- Phase: tasks (after S21), gate violation path. Chains: implement. The restore of prepare belongs to `workspace.node` (S06).
+- Phase: gate violation path. Chains: implement. The restore of prepare belongs to `workspace.node` (S06). Called as a shared restore service by S06, S11, S18 and S21.
 - Problem: bring each checkout back to its head and drop every change of a command.
 - Reads: `checkouts`, `heads`, `gitPaths`. Writes: none.
 - Work: git (section 5.3, 4 processes). Deadline: `cleanup` (section 2, rule 13). After the restore of a live verification, `removeRootEntries` runs as in `gate.g`.
@@ -638,8 +730,8 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: tasks. Chains: implement.
 - Problem: record that the unit passed at the commits of its run.
-- Reads: `claim`, `heads`; scope (`commits`). Writes: scope (`recorded`).
-- Work: server (`worker.execution.unit_record.put`). It runs only for a task unit, or for the node unit of a node with no task (section 5.1). It runs only when a checkout head is in `commits`; else it logs `unit record skipped`.
+- Reads: `claim`, `heads`, `plan`; scope (`commits`). Writes: `completedUnits`; scope.
+- Work: server (`worker.execution.unit_record.put`). It runs only for a task unit, or for the node unit of a node with no task (section 5.1). On each pass, it adds one to `completedUnits` when the unit is the verdict unit, or when a checkout head is in `commits` and `plan` holds no valid record of the unit. The put runs only for a task unit or for a unit of a node with no task. With no eligible head, it logs `unit record skipped`.
 - Stops: `revoked` only. Another failure logs `unit record failed`, and the unit counts as not recorded (D10).
 - Logs: `unit recorded`, `unit record skipped`, `unit record failed` (replace `done recorded` and `done record skipped`).
 - Parallel: none.
@@ -649,20 +741,20 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: release_gate. Chains: implement.
 - Problem: fetch `base_branch` and `upstream_branch` of each checkout before the release merge.
-- Reads: `checkouts`, `setup`. Writes: none.
-- Work: network git (`transport.fetchBase`), inside `worker.git` with the git step mark `fetch_base`, which gives the stop cause.
+- Reads: `checkouts`, `setup`, `sshAccess`. Writes: none.
+- Work: network git (`transport.fetchBase`), inside `worker.git` with the git step mark `fetch_base`, which gives the stop cause. Deadline: `work`; a thrown deadline with an exhausted budget gives the budget-end exit (rule 6).
 - Stops: `operation_failed/repository.connector.git_failed`.
-- Parallel: per checkout and branch (D7).
+- Parallel: per checkout (D7). One `git fetch --prune origin` per checkout, then one `git rev-parse origin/<branch>` for each merged branch.
 - Fail-early: F1.
 
 ### S24 `release_trees.prepare`
 
 - Phase: release_gate. Chains: implement.
 - Problem: give each binding a clean Command tree at the head.
-- Reads: `checkouts`, `heads`. Writes: release tree paths in `route`.
-- Work: git (pool take or `clonePacked` from the live checkout).
-- Stops: `operation_failed/repository.connector.git_failed`.
-- Dispose: give each release tree back to the Command pool. A leftover release tree goes back at the next `workspace.node` (S06).
+- Reads: `checkouts`, `heads`. Writes: `releaseTrees`.
+- Work: git (pool take or `clonePacked` from the live checkout). Deadline: `work`; a thrown deadline with an exhausted budget gives the budget-end exit (rule 6).
+- Stops: `operation_failed` with no code.
+- Give: at the end of each `release_gate` phase, on a pass, a route, a budget-end exit and a stop, the runner gives each release tree back to the Command pool and removes the release directory. The dispose stack holds the give only as the fallback. A leftover release tree goes back at the next `workspace.node` (S06).
 - Logs: `tree prepared`.
 - Parallel: per checkout.
 - Fail-early: F1.
@@ -671,10 +763,11 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: release_gate (release), verify (evaluation). Chains: implement, evaluation (shared).
 - Problem: run every node and task command in clean trees, with `copyRepeated` and `reruns: 2`.
-- Reads: `revision`, `heads`, `baseHead`, the tree root of the chain, `memo` (release only). Writes: `verification`.
-- Work: shell.
-- Stops: `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent`, budget end.
+- Reads: `revision`, `heads`, `baseHead`, `claim`, `setup`, `checkouts`, `setupFailure` (release only), `releaseTrees` and `memo` (release only), `reviewWorkspace` (evaluation only). Writes: `verification`.
+- Work: shell. Skipped after a setup failure in the release gate only; `verify.all(evaluation)` always runs. Each command runs with `childEnvironment` and with no SSH agent socket, so its output holds no credential of the execution.
+- Stops (release only): `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent`, budget end.
 - Logs: `verification flaky` (release only).
+- Run state: calls `run.noteVerification(timed_out of the last result)`; the stop cause reads it.
 - Parallel: commands serial, in plan order (D11).
 - Fail-early: F2.
 
@@ -682,9 +775,10 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: work. Chains: examine.
 - Problem: give the examine turn the result of the node commands at the base heads.
-- Reads: `revision`, `checkouts`, `heads`. Writes: `verification` (null when no checkout exists).
-- Work: shell. Only the node commands (`revision.content.verifications`), in the examine workspace directory. No rerun, no copy, no baseline. The step skips the run when the workspace has no checkout (`tested_input` is null).
-- Stops: none extra. A failed, absent or timed-out command goes into `verification` and does not stop the examine. A budget end gives a release with `further_work: true` and the stop `budget_end/<limit>`.
+- Reads: `claim`, `setup`, `revision`, `checkouts`, `heads`. Writes: `verification` (`VerificationRun | null`; null when no checkout exists). S39 and S40 read `verification.verification`.
+- Work: shell. Only the node commands (`revision.content.verifications`), in the examine workspace directory. No flaky rerun, no copy, no baseline. The shared runner reruns an infrastructure-class command once; the second result goes into `verification`. The step skips the run when the workspace has no checkout (`tested_input` is null). Each command runs with `childEnvironment` and with no SSH agent socket, so its output holds no credential of the execution.
+- Stops: none extra. A failed, absent or timed-out command goes into `verification` and does not stop the examine. A command that the wall deadline ends, or that is not started at the wall deadline (class `budget_end`), gives `exit: budget_end`; the step reads `outcome` of `runVerificationsWithOutput` and calls `budget.wallDeadlineReached()` first.
+- Run state: calls `run.noteVerification(timed_out of the last result)`; the stop cause reads it.
 - Parallel: commands serial; sibling of `agent.open`.
 - Fail-early: F2.
 
@@ -692,9 +786,9 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: release_gate, verify. Chains: implement, evaluation (shared).
 - Problem: run the affected test command on the head, and on the base after a head failure.
-- Reads: `affectedTests`, `heads`, `baseHead`, `verification`. Writes: `affected`.
-- Work: shell.
-- Stops: `environment_failed/affected_invalid`, `environment_failed/affected_timeout`, `environment_failed/command_absent`, budget end.
+- Reads: `heads`, `baseHead`, `verification`, `claim`, `setup`, `checkouts`, `setupFailure` (release only), `releaseTrees` (release only), `reviewWorkspace` (evaluation only). Writes: `affected`. The step reads and validates the declaration at `origin/<base_branch>` of its tree, in both chains; an invalid file stops with `environment_failed/affected_invalid`.
+- Work: shell. In evaluation the step runs only in the implement intent, with one checkout or more, after a passed setup and a passed `verify.all`. A skipped step writes `affected: null`. Each command runs with `childEnvironment` and with no SSH agent socket, so its output holds no credential of the execution.
+- Stops: `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/affected_invalid`, `environment_failed/affected_timeout`, `environment_failed/command_absent`, budget end.
 - Parallel: serial across checkouts.
 - Fail-early: F2, only after `verify.all` passes.
 
@@ -702,7 +796,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: release_gate. Chains: implement.
 - Problem: pass the gate, or route the first failure to its owner unit with a TaskRevision instruction.
-- Reads: `verification`, `affected`, `revision`; scope (`progress`). Writes: `route`; scope (`progress.lastVerification`).
+- Reads: `verification`, `affected`, `setupFailure`, `revision`, `claim`, `setup`, `heads`; scope (`progress`). Writes: `route`; scope (`progress.lastVerification`). A setup failure routes to the node unit. Owners: a setup failure and an affected failure go to the node unit; a failed command goes to the owner of the first failed index.
 - Work: static.
 - Stops: none.
 - Logs: `release verified`, `release failure routed`.
@@ -713,7 +807,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: tasks, units loop, after S23. Chains: implement.
 - Problem: submit the report of one unit as soon as the unit passes, so a budget end loses no report (D29).
-- Reads: `currentUnit`, `agent` (`agent.lastText()`, the final agent text of the unit). Writes: `evidenceIds`. The unit report needs no `reports` key, because the step submits it in the unit frame (D29, audit S9).
+- Reads: `currentUnit`, `agent` (`agent.lastText()`, the final agent text of the unit). Writes: `evidenceIds`.
 - Work: server. Subject `Coder report of unit <unit id>`; the verdict unit uses `Coder report of unit <node id>`; body `## <unit id> <unit name>` and the final text. Skip when the final text is empty. Stops: through `run.call` (D28). Parallel: none. Fail-early: F4.
 
 ### S29 `checkpoint.gate`
@@ -721,7 +815,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: onExit budget_end and onStop. Chains: implement.
 - Problem: commit the partial work of the current unit before the push.
 - Reads: `checkouts`, `heads`, `gitPaths`, `currentUnit`, `openMerge`. Writes: `heads`.
-- Work: git (gate G in checkpoint mode; D13). Deadline: `cleanup` (section 2, rule 13). The message names `currentUnit`, or the node unit when it is null. An `openMerge` here has no marker, because `markers.check` ran at the budget end; the gate concludes it.
+- Work: git (gate G in checkpoint mode; D13). Deadline: `cleanup` (section 2, rule 13). The message names `currentUnit`, or the node unit when it is null. On `onExit.budget_end`, the gate concludes only an `openMerge` with `resolved: true`. It aborts each other `MERGE_HEAD`. An `openMerge` with no `MERGE_HEAD` counts as no merge. On `onStop`, the gate aborts every `MERGE_HEAD`.
 - Stops: `operation_failed/worker.turn.*` (onExit only; onStop restores instead).
 - Logs: `checkpoint failed` (onStop, on a failure that does not replace the stop).
 - Parallel: per checkout.
@@ -732,7 +826,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: finish, onExit budget_end and onStop. Chains: implement.
 - Problem: refuse a push after a revoke.
 - Reads: `claim`. Writes: none.
-- Work: server (`scheduler.claim.get`). Deadline: `cleanup` (section 2, rule 13). In onStop it uses `run.cleanupContext()` and no `requireActive`, because the stop already cancelled `operationContext`.
+- Work: server (`scheduler.claim.get`). `claim.fence` does not use `run.call`. A completed answer with a `claim_state` other than `running`, or an execution-end answer, is a revoke answer. Every other answer and a thrown error let the push continue. S30 never raises `operation_failed`. Deadline: `cleanup` (section 2, rule 13). In onStop it uses `run.cleanupContext()` and no `requireActive`, because the stop already cancelled `operationContext`.
 - Stops: `revoked` (finish and onExit). In onStop, a revoke answer skips the push, and the stored stop stays.
 - Parallel: none; directly before S31.
 - Fail-early: F1.
@@ -741,9 +835,9 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: finish, onExit budget_end and onStop. Chains: implement.
 - Problem: push each node branch, with the push record around each push.
-- Reads: `checkouts`, `heads`, `pushRecord`. Writes: none.
-- Work: git and network (fast-forward push), inside `worker.git` with the git step mark `push`, which gives the stop cause. Deadline: `cleanup` (section 2, rule 13).
-- Stops: `operation_failed/repository.connector.git_failed`.
+- Reads: `checkouts`, `heads`, `pushRecord`, `sshAccess`. Writes: `pushRecord`.
+- Work: git and network, inside `worker.git` with the git step mark `push`, which gives the stop cause. New: the push of `onStop` also writes a `worker.git` span. With no `confirmed` commit in `pushRecord`, the push is create-only (`--force-with-lease=refs/heads/<branch>:`, D24). Every later push is a fast-forward push. Deadline: `cleanup` (section 2, rule 13).
+- Stops: `operation_failed/repository.connector.git_failed`; New: `operation_failed/repository.node_branch.taken`.
 - Parallel: per checkout; one push record file per binding.
 - Fail-early: F4.
 
@@ -766,25 +860,25 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: verify. Chains: evaluation.
 - Problem: submit the verification evidence, the affected evidence and the round patch evidence.
-- Reads: `verification`, `affected`, `reviewWorkspace`, `heads`. Writes: `evidenceIds`.
+- Reads: `verification`, `affected`, `claim`, `placedAssets`, `reviewWorkspace`, `heads`. Writes: `evidenceIds`.
 - Work: server.
 - Stops: none extra.
-- Parallel: the three submits run in parallel; the order of `evidence_ids` stays verification, affected, patches, placed. The snapshot evidence is the first entry of the placed group.
+- Parallel: New: the submits run after `affected.run`, in parallel. New: the patch evidence goes out before the judgement. Kept: the verification evidence also goes out before a stop of `verify.all(evaluation)`; `verify.all(evaluation)` writes the stop class into `verification`, and `judgement.shortcut` raises `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent` or `assessment_absent` after `evidence.publish`. The affected submit runs only when `affected` holds a document. The order of `evidence_ids` stays verification, affected, patches, placed. The snapshot evidence is the first entry of the placed group.
 - Fail-early: F4.
 
 ### S35 `judgement.shortcut`
 
 - Phase: judge. Chains: evaluation.
 - Problem: write `criterion-not-met` with no LLM on a setup, verification or affected failure.
-- Reads: `verification`, `affected`, `reviewWorkspace`. Writes: `judgement` or nothing.
-- Work: static. Stops: none. Fail-early: F0, before S12 and S36.
+- Reads: `verification`, `affected`, `setupFailure`, `reviewWorkspace`. Writes: `judgement` (the shortcut assessment, or null).
+- Work: static. Stops: `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent`, `assessment_absent`. Fail-early: F0, before the `judgement` loop.
 
 ### S36 `judgement.turn` (LLM)
 
-- Phase: judge. Chains: evaluation.
+- Phase: judge. Chains: evaluation, inside the `judgement` loop. `LoopFrame.reads`: `judgement`.
 - Problem: get the `kanthord-judgement:` JSON line; one Repair turn on an invalid line.
-- Reads: `agent`, `revision`, `verification`, `affected`, `placedAssets`, `reviewWorkspace`, `reviewRound`, `dependencies`. Writes: `judgement`.
-- Work: LLM (`Evaluation`, then `Repair` when needed).
+- Reads: `agent`, `claim`, `setup`, `revision`, `verification`, `affected`, `placedAssets`, `reviewWorkspace`, `reviewRound`, `dependencies`. Writes: `judgement`.
+- Work: LLM (`Evaluation`, then `Repair` when needed). After each turn, an exhausted budget gives the budget end before the step parses the reply.
 - Result: in the examine intent, a judgement with proposals gives the result `Undetermined` (`evaluation.ts:282-299`). In the implement intent, the proposals are dropped.
 - Stops: `judgement_invalid`, `provider_failed/*`, budget end (`assessment_absent`).
 - Logs: `node judged`.
@@ -792,11 +886,11 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 ### S37 `assessment.submit`
 
-- Phase: finish. Chains: evaluation.
+- Phase: none; runner action (rule 12). Chains: evaluation.
 - Problem: submit the assessment with `tested_input` and the evidence set; keep prior blockers not in `fixed_finding_ids`.
-- Reads: `judgement`, `evidenceIds`, `heads`, `reviewRound`, and the resource `credentialStore` for the settle. Writes: the answer (outcome, node state).
+- Reads: `judgement`, `evidenceIds`, `heads`, `reviewRound`, `reviewWorkspace`, `dependencies`, and the resource `credentialStore` for the settle; it holds an empty set before S43 returns. Writes: the answer (outcome, node state).
 - Work: server. A final call (section 2, rule 12): the runner settles the credentials, closes the traces and flushes before it. The claim watch ends before this call, because an outcome closes the execution. `tested_input` is the tested commit set of the review trees, or the newest placed asset when the workspace has no checkout (S07).
-- Stops: `operation_failed` when the answer has no outcome, the node stays in `Evaluating` and the result is not `success` (`evaluation.ts:669-671`). An outcome ends the chain as `closed`. New: an accepted assessment whose answer moves the node out of `Evaluating` (for example a rework to `Available`) also ends the chain as `closed`. A `closed` end holds the assessment id and the outcome id, or null when no outcome exists. A refused submit because the node left `Evaluating` before the call ends the chain as `revoked`. A `success` result with no outcome continues to `actions.request`. Fail-early: F4.
+- Stops: `operation_failed` when the answer has no outcome, the node stays in `Evaluating` and the result is not `success` (`evaluation.ts:669-671`). An answer with no outcome and a node state other than `Evaluating` ends the chain as `revoked` (`evaluation.ts:663-668`). An outcome ends the chain as `closed` with the outcome id. A `success` result with no outcome continues to `actions.request`. Fail-early: F4.
 
 ### S38 `actions.request`
 
@@ -809,10 +903,10 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: work. Chains: examine.
 - Problem: get the examine assessment text.
-- Reads: `agent`, `revision`, `checkouts`, `verification`, `dependencies`. Writes: `report`.
+- Reads: `agent`, `claim`, `setup`, `revision`, `checkouts`, `verification`, `dependencies`. Writes: `report`.
 - Work: LLM (`Examine`).
 - Stops: `report_absent` on an empty last text, `provider_failed/*`, budget end.
-- Budget end: a budget end inside the turn exits with `budget_end`. New: a turn that completes with a nonempty last text keeps the report, also when the budget is exhausted after the turn; the chain continues to S40 and releases with `further_work` false.
+- Budget end: a budget end inside the turn exits with `budget_end`. New: a turn that completes with a nonempty last text keeps the report, also when the budget is exhausted after the turn; the chain continues to S40 and releases with `further_work` false. New: the step keeps the report only when the last assistant message has no tool call and no abort, and the last text is nonempty. With an exhausted budget and any other end, the step returns `exit: budget_end`. `report_absent` applies only when the budget is not exhausted.
 - Budget checks: the checks between the prepare steps fold into `budgetGuarded` before this step. `env.setup(examine)` keeps its own exit `budget_end`.
 - Fail-early: F3.
 
@@ -821,22 +915,23 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: finish. Chains: examine.
 - Problem: submit the Markdown report evidence.
 - Reads: `report`, `dependencies`, `verification`. Writes: `evidenceIds`.
-- Work: server. Fail-early: F4.
+- Work: server. Subject `Report on current dependency outcomes`. Deadline: the server call is bounded by `expired_at` through `run.call`, not by the wall deadline.
+- Stops: none extra. Logs: none. Parallel: none. Fail-early: F4.
 
 ### S41 `execution.release`
 
-- Phase: finish, onExit, onStop. Chains: all (shared).
+- Phase: none; runner action (rule 12). Chains: all (shared).
 - Problem: release with `further_work`, the budget limit, or the stop.
-- Reads: `claim`, `unitsEnd` or the chain exit, and the resource `credentialStore` for the settle. `execution.release(stop)` reads the same resource. Writes: none.
-- Work: server. A final call (section 2, rule 12): the runner settles the credentials, closes the traces and flushes before it. The claim watch ends before this call. Implement sends the stop `budget_end/<limit>` only when no unit completed (section 5.1). New: examine always sends the stop `budget_end/<limit>` on a budget end, because it has no unit that completes; the release then counts toward `mission.further_work_limit`. When both limits hold, the budget end names `turns` before `wall_time`.
-- Revoke: new: a revoke runs no final call. Dispose closes the agent traces with `Error` and flushes the spans for at most 5 s. It sends no server call.
+- Reads: `claim`, `completedUnits` or the chain exit, and the resource `credentialStore` for the settle; it holds an empty set before S43 returns. `execution.release(stop)` reads the same resource. Writes: none.
+- Work: server. A final call (section 2, rule 12): the runner settles the credentials, closes the traces and flushes before it. The claim watch ends before this call. Implement sends the stop `budget_end/<limit>` only when no unit completed (section 5.1). `<limit>` is `budget.limit()`. New: examine always sends the stop `budget_end/<limit>` on a budget end, because it has no unit that completes; the release then counts toward `mission.further_work_limit`. When both limits hold, the budget end names `turns` before `wall_time`.
+- Revoke: Kept: a revoke runs no final call and no flush, and the sink drops the queued records and logs `telemetry records dropped`. New: dispose closes the agent traces with `Error`.
 - Answer of `execution.release` (`execution-run.ts:466-512`):
   - A refused credential settle with an execution-end answer stops with `revoked`; another refused settle stops with `operation_failed/<code>`.
-  - An `Indeterminate` answer reads the claim. `finished` counts as released. Another state stops with `operation_failed`.
+  - An `Indeterminate` answer first takes the D28 retry with the same key. After the bound, the runner reads the claim. `finished` counts as released. Another state stops with `operation_failed`.
   - Another failure stops through `run.call`.
 - Answer of `execution.release(stop)` (`execution-run.ts:515-614`), always in `run.cleanupContext()`:
   - A refused credential settle with an execution-end answer ends as `revoked` with no release.
-  - An `Indeterminate` answer reads the claim. `finished` with a stop counts as released; an execution-end answer ends as `revoked`.
+  - An `Indeterminate` answer first takes the D28 retry with the same key. After the bound, the runner reads the claim. `finished` with a stop counts as released; an execution-end answer ends as `revoked`.
   - A completed answer releases with `further_work: true` and the stop. An execution-end answer ends as `revoked`.
   - Any other failure returns the stop itself as the end (`Ended` with the stop reason, code and detail).
 - Stops: a failed release that is not revoked returns the Diagnostic that ends the pull loop (unchanged).
@@ -844,7 +939,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 ## 4. Chains as call stacks
 
-Chain selection (`runNativeExecution`). The runner reads `method` of the worker declaration (`getWorkerDeclaration(setup.worker_name)`) and `setup.intent`:
+Chain selection (`runNativeExecution`). The runner runs the shared `claim` phase first. After `setup.read`, the runner reads `method` of the worker declaration (`getWorkerDeclaration(setup.worker_name)`) and `setup.intent` to select the chain. A stop inside the claim phase takes the path of "before `armedFrom`" for every chain.
 
 | `method`                                                | `intent`    | Chain                                          |
 | ------------------------------------------------------- | ----------- | ---------------------------------------------- |
@@ -864,19 +959,19 @@ chain implement
     step setup.read                           reads the prompt pin of credentials.handover
     resource credential.store                 pi auth, refresh lease and report
     resource ssh.access                       handed key or relay signer per binding
+    claim phase end                           gateway.* failure or indeterminate -> SETUP_UNAVAILABLE; execution-end -> revoked
   phase prepare
     [PAR] prepare.inputs
-      branch reads
-        step revision.read
-        step prior.read                       writes prior; the sub-reads below write no context key
-          [PAR] prior.first
-            step failed_checks.read
-            step rework_assessment.read
-            step link_updates.read
-          step review_round.read              when rework exists
-          step cleared_outcome.read           attempt 2 or later, when no failed checks and no rework exist
-          step change_requests.read           when the cleared outcome is external-failed
-          step cleared_assessment.read        attempt 2 or later, when no failed checks, no rework and no change request text exist
+      step revision.read
+      step prior.read                         writes prior; the sub-reads below write no context key
+        [PAR] prior.first
+          step failed_checks.read
+          step rework_assessment.read
+          step link_updates.read
+        step review_round.read                when rework exists
+        step cleared_outcome.read             attempt 2 or later, when no failed checks and no rework exist
+        step change_requests.read             when the cleared outcome is external-failed
+        step cleared_assessment.read          attempt 2 or later, when no failed checks, no rework and no change request text exist
       branch workspace
         step attempt_evidence.read
         step workspace.node                   [PAR] per checkout
@@ -889,11 +984,11 @@ chain implement
       step base.merge                         merge-base --is-ancestor, then merge
       loop conflict.revisions                 only when the merge conflicts; until no marker is left (D23)
         step conflict.turn                    [LLM] Conflict; later turns list the files with markers
-        step markers.check                    markers left -> next turn; same markers twice or budget end -> resolution fails
+        step markers.check                    markers left -> next turn; counter at 2, or budget end with markers left -> resolution fails; budget end with no marker -> exit budget_end
         step conflict.report                  failed resolution only; produced asset; then merge --abort, stop conflict_unresolved
       step gate.g(conflict)                   no marker left; commits the merge; stop worker.turn.*
     [PAR] start.inputs
-      step env.setup(live)                    on the merged heads; stop environment_failed/setup_failed; stop budget_end/wall_time
+      step env.setup(live)                    on the merged heads; stop environment_failed/setup_failed; exit budget_end
       step units.plan                         [PAR] per checkout: unit record range, judged history, verdict rule
   phase tasks
     loop release_rounds                       scope ProgressCtx; until route = passed or budget end
@@ -902,42 +997,42 @@ chain implement
         loop revisions                        until passed
           step unit.turn                      [LLM] Work | CriterionRevision | TaskRevision
           step gate.g(write)                  [PAR] per checkout; stop worker.turn.*
-          step verdict.rule                   verdict unit only
+          step verdict.rule                   verdict unit only; unmet under the limit -> next turn with the same instruction, no verify.own
           step progress.rule                  stop no_progress
-          step verify.own
-          step checkout.restore               [PAR] per checkout
+          step verify.own                     [PAR] per checkout restore on exit
         step unit_record.put                  on pass with a gate commit; a failure that is not revoked logs only
         step report.coder                     on pass with non-empty final text; subject `Coder report of unit <unit id>` (D29)
       phase release_gate
-        [PAR] base.fetch                      per checkout and merged branch
+        step base.fetch                       [PAR] per checkout
         loop base.refresh(release)            one frame per checkout and merged branch, in binding order
           step base.merge
           loop conflict.revisions             only when the merge conflicts; until no marker is left (D23)
             step conflict.turn                [LLM] Conflict; later turns list the files with markers
-            step markers.check                markers left -> next turn; same markers twice or budget end -> resolution fails
+            step markers.check                markers left -> next turn; counter at 2, or budget end with markers left -> resolution fails; budget end with no marker -> exit budget_end
             step conflict.report              failed resolution only; then merge --abort, stop conflict_unresolved
           step gate.g(conflict)               no marker left; commits the merge
         step release_trees.prepare            [PAR] per checkout
-        step env.setup(release)
-        step verify.all(release)              plan order
-        step affected.run(release)            only when verify.all passed
+        step env.setup(release)               node failure -> release.route; exit budget_end
+        step verify.all(release)              plan order; skipped after a setup failure
+        step affected.run(release)            only when verify.all passed; skipped after a setup failure
         step release.route                    passed -> leave release_rounds; routed -> owner unit, next round
+        give release trees                    at phase end, on every outcome
   phase finish
     step claim.fence                          stop revoked; the claim watch ends
     step branch.push                          [PAR] per checkout
     step evidence.head
   final execution.release                     further_work false
   onExit budget_end
-    step checkpoint.gate                      [PAR] per checkout; concludes a marker-free openMerge
+    step checkpoint.gate                      [PAR] per checkout; concludes openMerge with resolved: true; aborts each other MERGE_HEAD
     step claim.fence                          stop revoked
     step branch.push                          [PAR] per checkout
     final execution.release                   further_work true; stop budget_end only when no unit completed
   onStop not revoked
-    step checkpoint.gate(restore)             skipped after a turn violation
+    step checkpoint.gate(restore)             aborts an open merge
     step claim.fence                          revoke answer skips the push
-    step branch.push                          [PAR] per checkout; conflict_unresolved pushes the last gate commit
+    step branch.push                          [PAR] per checkout; pushes heads
     final execution.release(stop)             ordered stops carry their reason (rule 5a)
-  dispose resources                           agent session, node key and scratch store, base heads, release trees
+  dispose resources                           release trees, base heads, agent session, node key and scratch store, SSH access, credential store and handover keys
 
 chain evaluation
   resource claim.watch                        ends before assessment.submit or execution.release
@@ -947,6 +1042,7 @@ chain evaluation
     step setup.read                           reads the prompt pin of credentials.handover
     resource credential.store                 pi auth, refresh lease and report
     resource ssh.access                       handed key or relay signer per binding
+    claim phase end                           gateway.* failure or indeterminate -> SETUP_UNAVAILABLE; execution-end -> revoked
   phase prepare
     [PAR] prepare.reads
       step revision.read
@@ -963,19 +1059,20 @@ chain evaluation
         step assets.place                     at most 4 downloads at a time
   phase verify
     step verify.all(evaluation)               budget end -> stop assessment_absent
-    step affected.run(evaluation)             implement intent, verify.all passed, setup passed
+    step affected.run(evaluation)             implement intent, one checkout or more, verify.all passed, setup passed
     step evidence.publish                     [PAR] verification, affected, round patches
   phase judge
     step judgement.shortcut                   setup, verification or affected failure -> criterion-not-met
-    step agent.open                           only without a shortcut
-    step judgement.turn                       [LLM] Evaluation; budget end -> stop assessment_absent
-      step judgement.repair                   [LLM] Repair, once; stop judgement_invalid
+    loop judgement                            zero or one frame; init: null when judgement is not null
+      step agent.open
+      step judgement.turn                     [LLM] Evaluation, then Repair once; budget end -> stop assessment_absent; stop judgement_invalid
   final assessment.submit                     outcome -> closed; node not Evaluating -> revoked; other non-success -> stop operation_failed
-  step actions.request                        success only; traces closed; stop action_unsettled
+  phase finish
+    step actions.request                      success only; traces closed; stop action_unsettled
   final execution.release                     further_work false
   onStop not revoked
     final execution.release(stop)
-  dispose resources                           agent session, review trees, review base head
+  dispose resources                           review trees, review base head, agent session, SSH access, credential store and handover keys
 
 chain examine
   resource claim.watch                        ends before execution.release
@@ -985,6 +1082,7 @@ chain examine
     step setup.read                           reads the prompt pin of credentials.handover
     resource credential.store                 pi auth, refresh lease and report
     resource ssh.access                       handed key or relay signer per binding
+    claim phase end                           gateway.* failure or indeterminate -> SETUP_UNAVAILABLE; execution-end -> revoked
   phase prepare
     [PAR] prepare.inputs
       branch reads
@@ -997,8 +1095,8 @@ chain examine
   phase work
     [PAR] work.inputs
       step agent.open
-      step verify.node(examine)               node commands only; no rerun, copy or baseline; skipped with no checkout
-    step examine.turn                         [LLM] Examine; stop report_absent
+      step verify.node(examine)               node commands only; no flaky rerun, copy or baseline; infra rerun once; skipped with no checkout; exit budget_end
+    step examine.turn                         [LLM] Examine; stop report_absent; exit budget_end; New: kept report when complete, no tool call, no abort
   phase finish
     step evidence.report
   final execution.release                     further_work false
@@ -1006,7 +1104,7 @@ chain examine
     final execution.release                   further_work true, stop budget_end/<limit>
   onStop not revoked
     final execution.release(stop)
-  dispose resources                           agent session, examine trees
+  dispose resources                           examine trees or the execution workspace, agent session, SSH access, credential store and handover keys
 ```
 
 ## 5. Mechanism replacements
@@ -1024,7 +1122,7 @@ Storage: a new table `worker_unit_record` in the operational store.
 | `content_digest` | `units.plan` compares it with `digest(unit.content)` of `src/kernel/json.ts`.                                   |
 | `commits`        | JSON array of `{ binding_id, commit }`; `units.plan` checks each commit against the node range of its checkout. |
 
-`unit_id` is a task id, or the node id for a node without tasks. Only a task unit, or the node unit of a node without tasks, writes a record. The verdict unit and a node unit that a release failure routes to (`release-gate.ts` `commandOwners`) write no record in a node with tasks, because no reader reads a node-id record there.
+`unit_id` is a task id, or the node id for a node without tasks. Only a task unit, or the node unit of a node without tasks, writes a record. In a node with tasks, the verdict unit writes no record. A node unit that a release failure routes to (`release-gate.ts` `commandOwners`) writes no record there. No reader reads a node-id record in such a node.
 
 Unique key: `(node_id, unit_id)`. A put replaces the row. The table holds no attempt, no execution and no time column, because no decision reads them. Open question 1 holds `project_id` and the row deletion.
 
@@ -1067,24 +1165,25 @@ Removed code: `DONE_TRAILER`, `doneTrailerOf`, `amendTrailer`, `trailerValues`, 
 
 | Part           | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ClaimWatch`   | One timer per execution. It fires at `lastProofAt + 60 s` (`CLAIM_WATCH_INTERVAL_MS = 60000`, the registration heartbeat interval).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Proof          | One proof hook on the worker transport covers every call of an operation with `requiresExecution`: `run.call`, the host tools, the credential lease and report, `worker.ssh.sign`, and the telemetry writes. Each completed call sets `lastProofAt` and moves the timer. At the `worker` placement, each signed git operation thus moves `lastProofAt`. An execution-end answer of any such call calls `run.revoke()`, so a host-tool revoke also ends as `revoked`. The gateway answers such a call only for a claim with `ended_at` null and `expired_at` in the future, which is the `running` claim state. The execution-end answers are 403 `gateway.invocation.execution_proof_failed` and 409 `scheduler.execution.not_running`. |
+| `ClaimWatch`   | The watch starts when the runner starts, with `lastProofAt` set to that time. It fires at `lastProofAt + 60 s` (`CLAIM_WATCH_INTERVAL_MS = 60000`, the registration heartbeat interval).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Proof          | One proof hook on the worker transport covers every call of an operation with `requiresExecution`: `run.call`, the host tools, the credential lease and report, `worker.ssh.sign`, and the telemetry writes. A completed call is each answer that is not indeterminate and not an execution end, a refusal included. Each completed call sets `lastProofAt` and moves the timer. At the `worker` placement, each signed git operation thus moves `lastProofAt`. An execution-end answer of any such call calls `run.revoke()`, so a host-tool revoke also ends as `revoked`. The gateway answers such a call only for a claim with `ended_at` null and `expired_at` in the future, which is the `running` claim state. The execution-end answers are 403 `gateway.invocation.execution_proof_failed` and 409 `scheduler.execution.not_running`. |
 | Fire           | The timer sends `scheduler.claim.get`. `running` sets `lastProofAt`. Another state, or an execution-end answer, calls `run.revoke()`. A network error moves the timer by 60 s, as today `checkClaim` ignores it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `run.revoke()` | Sets the `revoked` stop and cancels `operationContext`. `stopOnEnd` aborts the pi session; the verification runner kills its command. No throw happens on the timer.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | End            | The watch ends at the first `claim.fence`, before `assessment.submit`, before `execution.release`, before `releaseStop`, and at any stop. A final call can end the claim, and the watch must not read that end as a revoke.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Fence          | `claim.fence` sends `scheduler.claim.get` directly before each `branch.push` (finish, budget end, stop). A revoke answer gives no push. A network error lets the push continue, as today. In `onStop`, the fence uses `run.cleanupContext()`, because the stop already cancelled `operationContext`.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Fence          | `claim.fence` does not use `run.call`. A completed answer with a `claim_state` other than `running`, or an execution-end answer, is a revoke answer. Every other answer and a thrown error let the push continue. S30 never raises `operation_failed`. In `onStop`, the fence uses `run.cleanupContext()`, because the stop already cancelled `operationContext`.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Removed        | The `turnCheck` call in `finishTurn` (`native-agent.ts:172-176`), `checkClaim` at `steps-implement.ts:525` and `:598`. The budget guard `budget.exhaustedAfterTurn()` in `finishTurn` (`native-agent.ts:171`) stays: it ends the session before a turn past the turn budget.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
-Stop delay: at most 60 s plus one `scheduler.claim.get` round trip plus one abort. Today the delay is one model turn, which can hold a bash tool of up to 600 s.
+Stop delay: at most 60 s plus one `scheduler.claim.get` round trip plus one abort.
 
 Safe state after a revoke in the middle of a step:
 
 - The revoked path runs no checkpoint and no push, as today.
 - A killed git process can leave `index.lock`. `normaliseGitState` removes each lock at the next take of the tree.
 - The watch ends at the fence, so the watch never kills a push. A push that the claim expiry kills keeps its `pending` push record, as today.
+- A stop order `revoked` during a push cancels the push; the `pending` push record stays.
 - `unit_record.put` and every evidence submit go through the server, which checks the claim.
 
-Stale push: a push is a fast-forward. The fence keeps the window between the last proof and the push to one round trip plus the push, as the per-turn check does today at best.
+Stale push: the window between the fence and the end of the push is one round trip plus the push.
 
 ### 5.3 Gate G git reduction
 
@@ -1158,7 +1257,7 @@ Rules of the new gate:
 6. Command 6 lists the staged set. The `M` entries with the same regular mode are the conversion candidates for command 7. The staged set minus the conversion-only paths decides the commit, and gives the changed paths for the span. This replaces `diff --cached --quiet` and `diff --name-only`.
 7. Status 10 is invariant I: `branch.head` is the node branch, `branch.oid` is the new head, no `u` line, no entry with an index-side change (X is not `.`), no `?` line, and no operation path exists. It also gives the new `heads` value. A conversion-only path can show a worktree-side change (Y), as today, and does not fail the invariant.
 8. Conflict mode runs only after `markers.check` found no marker (D23). `concludeMerge` (commands 5 to 9) then commits the merge.
-9. Checkpoint mode with `openMerge` runs the conflict-mode checks on that checkout and concludes the merge (D13). The `openMerge` has no marker, because `markers.check` ran at the budget end and a marker sends the chain to the D23 failure path. A `MERGE_HEAD` with no `openMerge` is aborted first, as today.
+9. Checkpoint mode on `onExit.budget_end`: the gate concludes an `openMerge` with `resolved: true` by running the conflict-mode checks (D13). It aborts each other `MERGE_HEAD`, as today. An `openMerge` with no `MERGE_HEAD` counts as no merge. Checkpoint mode on `onStop`: the gate aborts every `MERGE_HEAD`.
 
 Replacement map:
 
@@ -1181,14 +1280,16 @@ Today `hostExecution` (`apps/worker/execution.ts`) handles credentials before `r
 
 | Part                                 | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `credentials.handover` (S43, server) | `worker.handover` with `{ execution_id }`. Open the envelope with the handover key from `client_secret`. Open each sealed item with the key of its `holder`. Build the in-memory pi credential store. Take `ssh_identities`. The first handover of an attempt writes `mission_attempt.prompt_commits`. Retry `worker.handover.refresh_in_flight` until the claim expires. Stops: `worker.handover.decryption_failed`, `worker.handover.sealed_unopened`, `worker.credential.lease_mismatch`, `custody.handover.holder_refused`, `project.bindings.repository.ssh_unreachable`, `project.bindings.repository.base_branch_absent`. Logs: `credential handover received`. |
-| `setup.read` (S44, server)           | `execution.setup.get`, with the retry of an indeterminate result. It reads the prompt commits that S43 pins, so it runs after S43. It returns `unit_records` (D5).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Claim phase outcomes                 | A refusal of S43 or S44 (a coded failure that is not `gateway.*` and not an execution end) releases with a stop: an S43 refusal with an empty credential set, an S44 refusal with the handover credentials. A `gateway.*` failure, or an indeterminate answer after the retry, releases nothing: the host logs `worker.execution.setup_unavailable`, and the pull loop pauses with backoff (`execution.ts:52-62`, `:267-280`, `pull-loop.ts:160-161`). An execution-end answer releases nothing and ends the execution with no Diagnostic (`execution.ts:128-131`).                                                                                                    |
-| `credential.store` (C1, resource)    | The pi auth view exposes only the credential of the effective agent provider at the pinned revision. A refresh takes `worker.credential.lease`, then sends `worker.credential`. A lease retry ends when the claim expires or `operationContext` aborts, so a `ClaimWatch` revoke also ends it. A lease answer for another credential stops with `worker.credential.lease_mismatch`. No credential reaches a file, a span or a log.                                                                                                                                                                                                                                     |
+| `credentials.handover` (S43, server) | `worker.handover` with `{ execution_id }`. Open the envelope with the handover key from `client_secret`. Open each sealed item with the key of its `holder`. Build the in-memory pi credential store. Take `ssh_identities`. The first handover of an attempt writes `mission_attempt.prompt_commits`. Retry `worker.handover.refresh_in_flight` until the claim expires. S43 adds each credential value to the known secrets of the run before it returns. Stops: `operation_failed/worker.handover.decryption_failed`, `operation_failed/worker.handover.sealed_unopened`, `operation_failed/worker.credential.lease_mismatch`, `operation_failed/custody.handover.holder_refused`, `operation_failed/project.bindings.repository.ssh_unreachable`, `operation_failed/project.bindings.repository.base_branch_absent`. Logs: `credential handover received`. |
+| `setup.read` (S44, server)           | `execution.setup.get`, with the retry of an indeterminate result. It reads the prompt commits that S43 pins, so it runs after S43. It returns `unit_records` (D5). S44 gives `worker_name` and the environment digests to the run, and the runner builds the budget from `setup.resource_budget`. Stops: `operation_failed/<code of the refusal>`, for example `worker.execution.prompt_record_failed`.                                                                                                                                                                                                                                                                 |
+| Claim phase outcomes                 | A refusal is a coded failure that is not `gateway.*` and not an execution end. A refusal releases with a stop. An S43 refusal settles an empty credential set. An S44 refusal settles the handover credentials. New: a stop or an unknown error before S43 returns releases with an empty credential set; S43 discards each opened view and zeroes both keys before it throws. A `gateway.*` failure or an indeterminate answer after the retry releases nothing; the host logs `worker.execution.setup_unavailable`, and the pull loop pauses with backoff. An execution-end answer releases nothing and ends the execution with no Diagnostic.                            |
+| `credential.store` (C1, resource)    | The pi auth view exposes only the credential of the effective agent provider at the pinned revision. A refresh takes `worker.credential.lease`, then sends `worker.credential`. A lease retry ends when the claim expires or `operationContext` aborts, so a `ClaimWatch` revoke also ends it. A lease answer for another credential stops with `worker.credential.lease_mismatch`. No credential reaches a file, a span or a log. The report (`worker.credential`) uses a context bounded by `expired_at` that a stop does not cancel. The lease joins that context with the signal of the session.                                                                      |
 | `ssh.access` (C2, resource)          | One signer per repository binding: the handed key at the `server` and `container` placements, the `worker.ssh.sign` relay at the `worker` placement. Each git network operation gets its own agent socket. With D7, parallel fetches and pushes open one socket each.                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Final report                         | Every final call (`assessment.submit`, `execution.release`, `execution.release(stop)`) settles the credentials once before the call: `worker.credential` once for each credential, also when it is unchanged. The settle runs before `assessment.submit`, because that call can close the execution and `worker.credential` needs a live execution. A refused report with an execution-end answer ends the execution as `revoked` with no release.                                                                                                                                                                                                                     |
-| Host end                             | The host logs `execution ended` with the end kind, the reason, the code and the detail.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Dispose                              | Last entry of the `AsyncDisposableStack`: `sshAccess.clear()`, `credentials.discard()`, zero the handover key.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Host end                             | The host logs `execution ended` with the end kind, the reason, the code and the detail. The host removes `agent_reason` from the logged detail of a `no_progress` stop.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Dispose                              | The runner defers this entry first, so it runs last: `sshAccess.clear()`, `credentials.discard()`. The discard zeroes the handover key and the report key and empties the SSH identities. It runs at every end: final call, revoke, and each claim phase end. The telemetry sink closes after the credential discard. `run.dispose()` runs after the agent session entry.                                                                                                                                                                                                                                                                                                                                                                                                           |
+
+Only `agent.open` and `credential.store` read `credentials`. Only git network steps read `sshAccess`: `workspace.node`, `workspace.review`, `workspace.examine`, `base.fetch` and `branch.push`. No verification command and no affected command reads `credentials` or `sshAccess`.
 
 ### 5.5 Agent tooling
 
@@ -1198,7 +1299,7 @@ Today `hostExecution` (`apps/worker/execution.ts`) handles credentials before `r
 | `bash`          | Wrapped by `tool-table.ts`: timeout `min(remaining budget, 600 s)`, refused below 1 s; `childEnvironment` strips the provider environment; `killGroupAtEnd` kills the process group; each call records the requested and applied timeout.                                                                                                                                                  |
 | Host tools      | `evidence-upload` and `link_update_list` call the server through `hostToolsOf` with the execution context. The proof hook of the transport (section 5.2) moves the `ClaimWatch` timer on each completed call. An execution-end answer calls `run.revoke()`, in place of `state.revoked` and the cancel of the host context.                                                                |
 | Hooks, in order | `homeRelativeCwd`, redaction restore, `pinnedLayers` (the work prompt as the first user message), redaction. The resource loader loads no extension, skill, prompt template, theme or context file.                                                                                                                                                                                        |
-| Confinement     | `re@1` in the evaluation chain gets `checkoutConfinement` (D27), with the review checkouts and the `evidence` directory as roots. A workspace with no checkout has the workspace directory as its root. A path is accepted when it resolves, after symbolic links, inside one root. `swe@1` stays unconfined, because `bash` reaches every path anyway. `toolApproval` stays with `env@1`. |
+| Confinement     | `re@1` in the evaluation chain gets `checkoutConfinement` (D27). The hook resolves each `path` with the path function of pi (`resolveToCwd`: `@` prefix, `~`, `file://`, Unicode spaces), then follows symbolic links. The hook accepts the path when the result is inside one root. The hook refuses a path that it cannot resolve. A call with no `path` takes the agent root. With two checkouts the agent root is `review/checkouts`; the roots are the agent root and the `evidence` directory. A workspace with no checkout has the workspace directory as its root. `swe@1` stays unconfined, because `bash` reaches every path anyway. `toolApproval` stays with `env@1`. |
 | Revoke          | `ClaimWatch` cancels `operationContext`. `stopOnEnd` aborts the session, and `killGroupAtEnd` ends a running `bash` group.                                                                                                                                                                                                                                                                 |
 
 ### 5.6 Telemetry
@@ -1207,19 +1308,21 @@ Every span keeps today's name and attributes. The table names the owning step of
 
 | Span                     | Owning step                                                                                                                                                                                       | Attributes                                                                                                                                                                                                                                                                                                                                                 |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `worker.phase`           | Runner, one per phase                                                                                                                                                                             | `kanthord.phase`. The `prepare` span of implement ends with `kanthord.node.task_count`, `kanthord.node.verification_count` and `kanthord.node.binding_count`.                                                                                                                                                                                              |
-| `worker.step` (new, D15) | `spanned` middleware, one per step                                                                                                                                                                | `kanthord.step.id`, `kanthord.step.work`, the outcome.                                                                                                                                                                                                                                                                                                     |
-| `worker.task`            | `unit.enter` opens it; the unit end closes it                                                                                                                                                     | `kanthord.task.id`, `kanthord.evaluation.round` in a routed round. End: `kanthord.task.result`, `kanthord.task.revision_count`. A `no_progress` stop adds `kanthord.stop.reason`, `kanthord.stop.rule`, `kanthord.stop.count`, `kanthord.stop.limit` and, after a verification, `kanthord.stop.verification.passed`, `.timed_out`, `.index`, `.exit_code`. |
+| `worker.phase`           | Runner, one per phase                                                                                                                                                                             | `kanthord.phase`. New: the `claim` phase span, in every chain. It holds no credential id and no key. `kanthord.worker.name` is not set for a span that ends before S44. The `prepare` span of implement ends with `kanthord.node.task_count`, `kanthord.node.verification_count` and `kanthord.node.binding_count`.                                        |
+| `worker.step` (new, D15) | `spanned` middleware, one per step                                                                                                                                                                | `kanthord.step.id`, `kanthord.step.work`, `kanthord.step.outcome`: `next`, `exit` or `stop`. The span holds no error text and no stop detail.                                                                                                                                                                                                                                                                                                     |
+| `worker.task`            | `unit.enter` opens it; the unit end closes it                                                                                                                                                     | `kanthord.task.id`, `kanthord.evaluation.round` on the verdict unit. No span holds `agent_reason`. End: `kanthord.task.result`, `kanthord.task.revision_count`. A `no_progress` stop adds `kanthord.stop.reason`, `kanthord.stop.rule`, `kanthord.stop.count`, `kanthord.stop.limit` and, after a verification, `kanthord.stop.verification.passed`, `.timed_out`, `.index`, `.exit_code`. |
 | `worker.gate`            | `gate.g`, `checkpoint.gate`                                                                                                                                                                       | `kanthord.gate.mode`, `kanthord.gate.changed`, `kanthord.gate.violation`, `kanthord.git.changed_file_count`, `kanthord.git.changed_files`. New: `kanthord.git.process_count` (D15), and `kanthord.unit.id` and `kanthord.git.commit` on a gate commit (D24).                                                                                               |
 | `worker.verification`    | `verify.own`, `verify.all`, `verify.node`, `affected.run`                                                                                                                                         | `kanthord.verification.context`, `.kind`, `.owner_id`, `.index`, `.run`, `.class`, `.timed_out`, `.flaky`, `.signal`, `kanthord.commit`.                                                                                                                                                                                                                   |
-| `worker.git`             | `base.merge` (`merge_base`), `base.fetch` (`fetch_base`), `branch.push` (`push`)                                                                                                                  | `kanthord.git.step`. The git step mark of a failure gives the stop cause (`stop-cause.ts`). New: a clean merge of `base.merge` (`merge_base`) sets `kanthord.git.commit`, the merge commit.                                                                                                                                                                |
+| `worker.git`             | `base.merge` (`merge_base`), `base.fetch` (`fetch_base`), `branch.push` (`push`)                                                                                                                  | `kanthord.git.step`. The git step mark of a failure gives the stop cause (`stop-cause.ts`). New: a clean merge of `base.merge` (`merge_base`) sets `kanthord.git.commit`, the merge commit. New: the push of `onStop` also writes a `worker.git` span.                                                                                                                                                                |
 | `worker.setup`           | `env.setup`                                                                                                                                                                                       | `kanthord.setup.result`, `kanthord.setup.entry_count`.                                                                                                                                                                                                                                                                                                     |
 | `worker.release_gate`    | Nested phase `release_gate`                                                                                                                                                                       | `kanthord.release_gate.result`, `.affected`, `.unit_id`.                                                                                                                                                                                                                                                                                                   |
-| `worker.evaluation`      | Evaluation chain, from `verify.all(evaluation)` to the end of `judgement.turn`; it ends before `assessment.submit`                                                                                | `kanthord.commit`. End: `kanthord.evaluation.*`, `kanthord.judgement.repaired`.                                                                                                                                                                                                                                                                            |
-| `agent.session`          | `agent.open` opens it; the trace close of the final call ends it (rule 12). New: after a revoke, dispose closes the trace with `Error` and flushes the spans for at most 5 s, with no server call | `gen_ai.operation.name`, `gen_ai.conversation.id`, `gen_ai.agent.name`, `gen_ai.request.model`, `kanthord.agent.*`, `kanthord.session.format`, `kanthord.session.format_version`. End: `kanthord.session.entry_count` and the redaction counts.                                                                                                            |
+| `worker.evaluation`      | Runner, evaluation chain: opened before the `verify` phase, ended after the `judge` phase, before `assessment.submit`; parent of both phase spans. A stop or a budget end ends it with `Error`. End takes `kanthord.evaluation.*` from `judgement`. | `kanthord.commit`. End: `kanthord.evaluation.*`, `kanthord.judgement.repaired`.                                                                                                                                                                                                                                                                            |
+| `agent.session`          | `agent.open` opens it; the trace close of the final call ends it (rule 12). Kept: a revoke runs no final call and no flush, and the sink drops the queued records and logs `telemetry records dropped`. New: dispose closes the agent traces with `Error`. | `gen_ai.operation.name`, `gen_ai.conversation.id`, `gen_ai.agent.name`, `gen_ai.request.model`, `kanthord.agent.*`, `kanthord.session.format`, `kanthord.session.format_version`. End: `kanthord.session.entry_count` and the redaction counts.                                                                                                            |
 | `agent.turn`             | Each LLM step; child of its `worker.step` span                                                                                                                                                    | `gen_ai.*` request, response and usage, `kanthord.turn.index`, `kanthord.turn.model_duration_ms`, `kanthord.prompt.template`, `kanthord.prompt.template.digest`, `kanthord.prompt.work.digest`, `kanthord.usage.cost_usd`.                                                                                                                                 |
 | `agent.tool`             | Each tool call of an LLM step                                                                                                                                                                     | `gen_ai.tool.name`, `gen_ai.tool.call.id`, `kanthord.tool.outcome`, `kanthord.tool.duration_ms`, `kanthord.tool.timeout.requested_ms`, `kanthord.tool.timeout.applied_ms`, `kanthord.tool.killed`.                                                                                                                                                         |
 | Session entry records    | `agent.session`; sent at each session event and at the trace close                                                                                                                                | One record per pi session entry (`agent-telemetry.ts:259`).                                                                                                                                                                                                                                                                                                |
+
+A reader finds the turns of a task as the `agent.turn` descendants of its `worker.task` span, not as its direct children.
 
 ### 5.7 Standalone tasks run
 
@@ -1229,9 +1332,9 @@ Every span keeps today's name and attributes. The table names the owning step of
 
 `runPhase` runs the nodes of one phase with the chain middleware and the loop rules. It shares the node walker, the middleware and the loop rules with `runChain`.
 
-Before the first node, `runPhase` lists each key that a node of the phase reads before a writer inside the phase, and each key in `LoopFrame.reads` of each loop of the phase. Each listed key must be in `seed.keys`. A missing key fails with `cli.worker.tasks.seed_invalid`; the diagnostic names the missing keys.
+Before the first node, `runPhase` lists each key that a node of the phase reads before a writer inside the phase, and each key in `LoopFrame.reads` of each loop of the phase. Each listed key must be in `seed.keys`. A missing key fails with `cli.worker.tasks.seed_invalid`; the diagnostic names the missing keys. The seed check requires a `LoopFrame.reads` key only when no node of the phase writes it before the first read of the frame. A scope field is no key and needs no seed.
 
-With `until` set to `release_gate`, the walker ends with `completed` on entering the `release_gate` nested phase. After the end, the caller disposes `io.resources` and sends no server call.
+With `until` set to `release_gate`, the walker ends with `completed` on entering the `release_gate` nested phase. After the end, the caller disposes `io.resources` and sends no server call. It runs no `onExit` node, no `onStop` node and no final call, so it makes no checkpoint commit and no push.
 
 `MethodClients` holds every server call of a step of `tasks`. The local implementation `localMethodClients(outbox, seed)` records each write in call order and answers a synthetic identity whose ULID encodes the call position. Every read answers `operation_failed/cli.worker.tasks.read_not_seeded`, because no step of `tasks` makes a server read.
 
@@ -1239,23 +1342,26 @@ With `until` set to `release_gate`, the walker ends with `completed` on entering
 
 **Seed and local resolution**
 
-The seed keeps every id of production unchanged. The local run adds a resolver and does not change the phase contract. No step of `tasks` reads data from the server by id; ids are keys that steps compare, log and send back.
+The seed keeps every id of production unchanged. The local run adds a resolver and does not change the phase contract. No step of `tasks` reads data from the server by id; ids are keys that steps compare, log and send back. The command copies each tree source into a bare mirror `state/origin/<binding_id>.git` of the output folder. `origin` of the clone names the mirror. No tree holds the path of the source.
 
 | Input key | Production source | Local source |
 | --- | --- | --- |
-| `checkouts`, `heads`, `gitPaths` | `workspace.node` on the instance data root | `binding_id` → bundle or `--tree` → a local clone at `nodeDirectory(node_id, name)` under the output folder |
-| `baseHead`, `memo` | live objects of S06 of the instance | new objects under `state/` of the output folder |
+| `checkouts`, `heads`, `gitPaths` | `workspace.node` on the instance data root | `--tree <binding_id>=<path>` → a bare mirror at `state/origin/<binding_id>.git`; each clone sets `origin` to that mirror |
+| `memo` | live object of S06 of the instance | new object under `state/` of the output folder |
 | `agent` | `agent.open` with the custody credential store | `agent.open` with the frozen store, or the replay provider |
 | `credentials` (by `credential_id`) | `worker.handover` | the standard-input credential, bound to the same `credential_id` |
-| `setupEntries`, `setupPending`, `setupInstruction` | steps of `prepare` and `start` | the same steps in `tasks_prepare` |
+| `sshAccess` | S44 from `setup` | the command builds one entry per binding of `setup.repositories`; each entry holds no key and a signer that refuses each sign request |
+| `setupEntries`, `baseHead` | `setup.entries` (S10) of `prepare` and `start` | `setup.entries` with a tree service that has no pool and puts the base tree under `state/base/` |
+| `setupPending`, `setupInstruction` | `env.setup(live)` of `prepare` and `start` | `env.setup(live)` in `tasks_prepare` |
+| `plan`, `affectedTests` | git steps of `prepare` and `start` | `seed.json`, or the same steps in `tasks_prepare` |
 | ids of new records (evidence, unit records) | answers of the server | synthetic ids in the valid format, from the position of the call |
-| `revision`, `plan`, `setup`, `prior`, `claim` | server reads | `seed.json`, unchanged |
+| `revision`, `setup`, `prior`, `claim` | server reads | `seed.json`, unchanged |
 
 **Credentials**
 
 Input:
 
-- Live mode requires `--credential-stdin`. The command reads one JSON object from standard input before any other work.
+- Live mode requires `--credential-stdin`. The command validates the options and the seed, then reads one JSON object from standard input before it creates the output folder or a child process.
 - An `api_key` credential is `{ "provider_id": "anthropic", "credential": { "type": "api_key", "key": "<key>" } }`.
 - An `oauth` credential is `{ "provider_id": "anthropic", "credential": { "type": "oauth", "refresh": "<token>", "access": "<token>", "expires": <epoch ms> } }`.
 - `credential` follows `piCredentialSchema` of `src/custody/contract.ts`: the same shapes, the same well-formed check and the same byte limit as a custody handover item.
@@ -1277,53 +1383,54 @@ Lifetime:
 OAuth refresh:
 
 - The store is frozen. Its `modify` answers the stored value and never calls the refresh of pi-ai.
-- The run thus rotates no refresh token, and it sends no `worker.credential.lease` and no `worker.credential` report. Custody keeps a valid refresh token.
-- An access token that reaches the refresh window during the run goes to the provider unchanged. A provider refusal stops the phase with `provider_failed`.
+- The run rotates no refresh token, and it sends no `worker.credential.lease` and no `worker.credential` report. Custody keeps a valid refresh token.
+- A provider refusal stops the phase with `provider_failed`.
 - The command page tells the developer to use a credential that the developer owns.
 
 Leak paths:
 
 | Path | Rule |
 | --- | --- |
-| `turns.jsonl` | The recorder writes the model, the request context and the answer. It never writes the stream options, so it holds no `apiKey`. |
+| `turns.jsonl` | The recorder writes the request after the redaction hook of the session. It never writes the stream options, so it holds no `apiKey`. |
 | `spans.jsonl`, stop details | Each credential value joins the known secrets (`ExecutionRun.secrets`, `NativeAgentInput.knownSecrets`), so the session trace and `redactReason` redact it. |
 | `outbox.json` | `localMethodClients` and `localHostTools` hold no credential operation. The frozen store sends no report. |
-| `result.json`, `context.json`, `metrics.json` | They record the mode, `provider_id` and the overrides. No override takes a credential. `context.json` holds no resource key. |
+| `progress.json`, `outbox.json`, `uploads/` | The writer redacts each known secret. |
+| `result.json`, `context.json`, `metrics.json` | They record the mode, `provider_id` and the overrides. No override takes a credential. `context.json` omits `credentials`, `sshAccess`, `agent`, `baseHead` and `memo`. |
 | logs, diagnostics | No log field takes a credential. A diagnostic holds no embedded value. |
 | child processes | The environment rule of "Calls outside the worker" applies. |
-| seed, capture, export | No credential, no `ssh_identities`, no handover key and no environment value. |
-| core dump | The command page tells the developer to run `ulimit -c 0` first, as `repository.impl.md` rules for a host install. |
+| seed, capture, export | No credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. |
+| core dump | The command page tells the developer to run `ulimit -c 0` first; `repository.impl.md` states the core-dump risk of a host install. |
 
 SSH:
 
-- The run needs no SSH. `base.fetch` fetches from `origin` of the prepared tree, which is the bundle or the source repository on the local disk.
+- The run needs no SSH. `base.fetch` fetches from `origin` of the prepared tree, which is the mirror at `state/origin/<binding_id>.git`.
 - The command takes no SSH option and reads no `SSH_AUTH_SOCK`. `isolatedGitEnvironment` removes `SSH_AUTH_SOCK` from every `git` child.
-- The relay of each `ssh.access` entry refuses each sign request, so a git operation that reaches a remote fails with `repository.connector.git_failed`.
+- The resolver table row for `sshAccess` names the signer. The relay of each `ssh.access` entry refuses each sign request, so a git operation that reaches a remote fails with `repository.connector.git_failed`.
 
 **Production behavior**
 
-The command adds no server call, no step and no log message to the production execution. Code additions with no behavior change: `runPhase`, `LoopFrame.reads` and the chain id `tasks_prepare`. The only behavior addition is the capture hook; it runs only when `KANTHORD_CAPTURE_TASKS=1` is set for the worker process. The command never writes to the workspace of a live execution.
+The command adds no server call, no step and no log message outside the capture hook to the production execution. Code additions with no behavior change: `runPhase`, `LoopFrame.reads` and the chain id `tasks_prepare`. The only behavior addition is the capture hook; it runs only when the operator sets `KANTHORD_CAPTURE_TASKS=1` for the worker process. The command never writes to the workspace of a live execution.
 
 **Seed format**
 
-`seed.json` requires: `claim` (the `MethodClaim`), `setup` (the `ExecutionSetup` as `execution.setup.get` answers it), `revision` (the pinned node revision) and `heads` (the seed head of each binding). Optional: `plan`, `affectedTests`, `prior`, `refreshed`, `link_updates`, `elapsed_ms`. The seed holds no credential, no SSH identity, no handover key and no environment value.
+`seed.json` requires: `claim` (the `MethodClaim`), `setup` (the `ExecutionSetup` as `execution.setup.get` answers it), `revision` (the pinned node revision) and `heads` (the seed head of each binding). Optional: `plan`, `affectedTests`, `prior`, `refreshed`, `link_updates`, `elapsed_ms`. The seed holds no credential, no SSH identity, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The seed writer removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. The local run applies neither map; a developer names a variable with `--pass-env`.
 
 A hand-written seed omits `prompt.final` and `templates` of `setup`. The run takes them from `--system-prompt` and `--templates`. Without those options, such a seed fails with `cli.worker.tasks.seed_invalid`.
 
-Each binding gets one tree source: `trees/<binding_id>.bundle` in the seed folder, or `--tree <binding_id>=<path>`.
+Each binding gets one tree source: `--tree <binding_id>=<path>`.
 
 **Defaults and preparation (`tasks_prepare`)**
 
-The command runs a preparation chain `tasks_prepare` before `tasks` with `runPhase`. The chain builder builds it as `[PAR] affected.declaration, setup.entries, agent.open`, then `[PAR] env.setup(live), units.plan`. A step whose key the seed holds is not in the chain. `env.setup(live)` always runs, because its effect lives in the tree.
+The command runs a preparation chain `tasks_prepare` before `tasks` with `runPhase`. The chain holds one phase `prepare`. The chain builder builds it as `[PAR] affected.declaration, setup.entries, agent.open`, then `[PAR] env.setup(live), units.plan`. A step whose key the seed holds is not in the chain. `env.setup(live)` always runs, because its effect lives in the tree.
 
 | Key | Source |
 | --- | --- |
 | `claim.created_at` | start of the run, minus `elapsed_ms` (default 0) |
 | `claim.expired_at` | new `created_at`, plus `expired_at` minus `created_at` of the seed |
 | `checkouts`, `heads`, `gitPaths` | prepared trees |
-| `baseHead` | a `BaseHead` with no tree pool under `state/base/` of the output folder; clones from local checkouts |
 | `memo` | a new `VerificationMemo` |
-| `setupEntries` | `setup.entries`, always |
+| `sshAccess` | the command builds one entry per binding of `setup.repositories`; each entry holds no key and a signer that refuses each sign request |
+| `setupEntries`, `baseHead` | `setup.entries` with a tree service that has no pool and puts the base tree under `state/base/`, always |
 | `setupPending`, `setupInstruction` | `env.setup(live)` on the trees, always |
 | `agent` | `agent.open` with local resources, always |
 | `affectedTests` | `affected.declaration`, when the seed lacks the key |
@@ -1331,22 +1438,21 @@ The command runs a preparation chain `tasks_prepare` before `tasks` with `runPha
 
 **Capture hook**
 
-When `KANTHORD_CAPTURE_TASKS=1` is set, `runChain` calls the capture hook once, after the last node of `start`. The hook writes `captures/<execution_id>/` in the state directory of the instance with mode `0700`:
+When the operator sets `KANTHORD_CAPTURE_TASKS=1`, `runChain` calls the capture hook once, after the last node of `start`. The hook writes `captures/<execution_id>/` in the state directory of the instance with mode `0700`:
 
 - `seed.json` with `claim`, `setup`, `revision`, `heads`, `prior`, `refreshed`, `affectedTests`, `plan` and `elapsed_ms`.
-- `trees/<binding_id>.bundle`: one `git bundle` for each checkout, holding `refs/heads/<node_branch>` at the head, and `refs/heads/<b>` at `origin/<b>` for the base branch and the upstream branch.
 
-The hook writes no credential, no `ssh_identities`, no handover key and no environment value. A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture with the instance data.
+The hook writes no credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The hook removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture with the instance data.
 
 **Seed export**
 
-`worker.execution.seed.get` is a `human` read of `unary` lifetime at `GET /api/worker/execution/:execution_id/seed`, with the access policy of `scheduler.execution.get`. It answers `{ claim, setup, revision, heads }` for any execution of a node that is not closed. An export of a closed node answers 409 `worker.execution.seed_unavailable`. The route answers no credential, no SSH identity and no handover key. `worker-service.impl.md` holds the full route spec.
+`worker.execution.seed.get` is a `human` read of `unary` lifetime at `GET /api/worker/execution/:execution_id/seed`, with the access policy of `scheduler.execution.get`. It answers `{ claim, setup, revision, heads }` for any execution of a node that is not closed. An export of a closed node answers 409 `worker.execution.seed_unavailable`. The route answers no credential, no SSH identity and no handover key. The route removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. It holds no value of `containerEnv`, `remoteEnv` or the process environment. `worker-service.impl.md` holds the full route spec.
 
 **Calls outside the worker**
 
 The phase reaches no kanthord server and no git remote: `base.fetch` reads the local `origin`. In live mode, the agent calls the LLM provider. `env.setup`, the verification commands and agent `bash` run on the host with its network, and the help text states it.
 
-Each child process receives `PATH`, `HOME`, `LANG` and `TMPDIR` of the command, and each variable that `--pass-env <name>` names. No other variable of the shell reaches it. Each `--pass-env` value joins the known secrets of the run.
+Each child process receives `PATH`, `LANG` and `TMPDIR` of the command, and each variable that `--pass-env <name>` names. Each child process receives `HOME` set to `state/home/` of the output folder, not the developer home. No other variable of the shell reaches it. Each `--pass-env` value joins the known secrets of the run.
 
 SIGINT cancels the stop context with `worker_stopped`. The command then disposes the resources.
 
@@ -1367,7 +1473,7 @@ Overrides edit the seed before `tasks_prepare`. Replay mode refuses each overrid
 
 **Output**
 
-The command writes one output folder with mode `0700`. `result.json` records the `PhaseEnd` kind, the exit or stop, the step, the mode, `provider_id`, the overrides, the seed digest and the check results. `context.json` holds the context at phase end with no resource key. `progress.json` holds the last `ProgressCtx` and the last `UnitCtx` of each unit. `metrics.json` holds unit metrics, step run times and phase totals. `outbox.json` holds each server call and host tool call with its operation, body, step and time. `turns.jsonl` holds each model request and answer in replay format with a version header. `spans.jsonl` holds the spans. `uploads/` holds the files of `evidence-upload`. `state/` holds the trees, the base tree, the release trees and the pi directory.
+The command writes one output folder with mode `0700`. `result.json` records the `PhaseEnd` kind, the exit or stop, the step, the mode, `provider_id`, the overrides, the seed digest and the check results. `context.json` holds the context at phase end with no resource key, `credentials` or `sshAccess`. `progress.json` holds the last `ProgressCtx` and the last `UnitCtx` of each unit. `metrics.json` holds unit metrics, step run times and phase totals. `outbox.json` holds each server call and host tool call with its operation, body, step and time. `turns.jsonl` holds each model request and answer in replay format with a version header. `spans.jsonl` holds the spans. `uploads/` holds the files of `evidence-upload`. `state/` holds the trees, the base tree and the pi directory. The local tree service removes each release tree at the phase end.
 
 With `--verify`, the command runs these checks and records each result in `result.json`:
 
@@ -1377,7 +1483,7 @@ With `--verify`, the command runs these checks and records each result in `resul
 4. Each commit of `git rev-list <seed head>..HEAD` of each tree is a commit of the run: `spans.jsonl` holds it as `kanthord.git.commit` of a `worker.gate` span, or of a `worker.git` span with the git step mark `merge_base`.
 5. With the end `completed`, each tree has a clean status: no index change, no untracked file and no operation path.
 6. With the end `completed`, the route is `passed`. With `--skip-release-gate`, the route is absent.
-7. A stop code is in the `stops` list of the step that `result.json` names, or it is a code of the work kind of that step (section 3).
+7. A stop code is in the `stops` list of the step that `result.json` names, or it is a code of the work kind of that step (section 3), or it is a requested stop of rule 5a, or it is `read_not_seeded`.
 8. In replay mode, the outbox and the commits equal those of the recorded run in the folder of the `--replay` file. The comparison replaces each commit id with its tree id and its message.
 
 **Commands**
@@ -1389,14 +1495,14 @@ With `--verify`, the command runs these checks and records each result in `resul
 1. Golden chain test prints `tasks_prepare`. Both chains use the production chain builder.
 2. Module test asserts that no step file of `tasks` imports a transport or a client constructor.
 3. Each server step of `tasks` runs once with `localMethodClients` and once with a fake transport behind `MethodClients`. Both runs make the same operation and body.
-4. Live run with scripted provider; captured seed replayed; both compared by check 8 (`--verify`).
-5. Replay of `turns.jsonl` from test 4; a changed tool set stops it with `replay_diverged`.
-6. Capture hook rejects a seed with any credential, SSH identity, handover key or environment value.
-7. `runPhase` requires each phase read and each `LoopFrame.reads` key; `until` ends the phase.
-8. Minimal seed fills every `tasks_prepare` default.
-9. `--tree` leaves the source repository unchanged.
+4. A live run with a scripted provider writes a capture. A replay of that capture passes check 8 with `--verify`.
+5. A replay of `turns.jsonl` from test 4 with a changed tool set stops with `replay_diverged`.
+6. A capture contains no credential, no SSH identity, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.
+7. `runPhase` requires each phase read key and each `LoopFrame.reads` key that no node of the phase writes before the first read; `until` ends the phase.
+8. A minimal seed fills every `tasks_prepare` default.
+9. `--tree` leaves the source repository unchanged; an agent `git push origin` fails.
 10. `compare` shows each section of difference and refuses two seeds with different digests.
-11. Canary test: a live run with a canary credential and scripted provider searches every output file and both standard streams for each canary value and expects no match.
+11. Canary test: a live run with a canary credential, one `--pass-env` canary value and a scripted provider searches every output file, including `context.json`, and both standard streams for each canary value and expects no match. A test asserts that `context.json` holds no `credentials` key and no `sshAccess` key.
 12. Credential test proves each refusal, the empty `auth.json` path under the pi directory and the frozen store.
 13. Replay mode reads no standard input and calls no provider.
 14. Route test of `worker.execution.seed.get`.
@@ -1413,7 +1519,8 @@ With `--verify`, the command runs these checks and records each result in `resul
 | Release gate reruns every command after the units; the reviewer runs them again on the same commit | Both runs stay, in plan order (D11)                                                                                                   | No change.                                                                                                                                                                                                           |
 | Serial loops per checkout (gate, refresh, setup, clones)                                           | Parallel git per checkout (D7); merges and setup stay serial (D3)                                                                     | With N checkouts, the wall time of the gate, the restore, the fetch, the tree build and the push goes from the sum to about the maximum (estimate). No change for one checkout.                                      |
 | Serial server reads in Read context                                                                | Parallel reads, overlapped with Prepare (D8)                                                                                          | Estimate: 4 to 7 serial round trips become 2 to 4 dependent rounds, hidden behind the clone and the fetch.                                                                                                           |
-| Agent open after the setup                                                                         | Agent open in parallel with `env.setup(live)` (D20)                                                                                   | The open time hides behind the setup.                                                                                                                                                                                |
+| Agent open after the setup                                                                         | Agent open in prepare, in parallel with `affected.declaration` and `setup.entries` (D20)                                              | Implement: the conflict turn has its session before the first merge. Examine: the open time hides behind the node commands.                                                                                           |
+| Dependency read in evaluation after the judgement turns                                            | `dependencies.read` moves to prepare, before the verification (S05)                                                                   | The judgement uses the dependency state of the prepare phase.                                                                                                                                                        |
 | Pool size 1 Agent tree; full network clone on miss                                                 | No change; add `source` and duration to the span (D17)                                                                                | No effect yet. The data then shows how often a miss happens.                                                                                                                                                         |
 | Reviewer downloads all assets and pages all evidence                                               | Downloads in parallel with the review setup, at most 4 at a time, streamed (D16); dependency reads move into the first parallel group | Estimate: download time hides behind the setup. Peak memory is one stream buffer per download, not the whole object.                                                                                                 |
 | `no_progress` stop detail has no agent reason                                                      | Add `unit_id`, `template`, redacted `agent_reason` (D14)                                                                              | A human sees why the agent made no change, with no session file.                                                                                                                                                     |
@@ -1422,31 +1529,25 @@ With `--verify`, the command runs these checks and records each result in `resul
 | Complete conflict resolution lost at a budget end                                                  | Check the markers once more, then conclude a marker-free merge (D13)                                                                  | The next execution starts from the merged head and needs no new conflict turn.                                                                                                                                       |
 | Telemetry phases only in implement                                                                 | Phase and step spans in all chains (D15)                                                                                              | Every step has a duration and an outcome in the trace.                                                                                                                                                               |
 
-## 7. Open questions
+## 7. Rulings on the questions
 
-1. **Unit record table. DECIDED 2026-11-14 by Ulrich: approved.** The verdict unit writes a record only for a node without tasks. Column review (EM ruling 2026-11-14): no `project_id`, because the table is node-scoped. The Mission Service deletes the rows of a node through a `unitRecords.deleteNode` port in the transaction to `Completed`, `Discarded` or retired, and in the transaction that opens an attempt from `base_branch`. Original text: I want to add `worker_unit_record` with the four columns in section 5.1, because the value cannot be computed and `units.plan` reads each column. AGENTS.md asks for a separate review round for a column list. That round also decides two points. First, AGENTS.md puts `project_id` as the second key column of a project-scoped table, and no decision reads it here. Second, no reader reads a row after its node closes, so the Worker Service deletes the rows of a node at its close.
-   - Alternative: an evidence with subject `Unit done <unit_id> <digest>` and repository assets. No new table, but the release obligation (`hasEvidence`) and the reviewer `snapshotOf` then accept it, so both need a subject filter.
-   - Alternative: a trailer with a neutral key. No server change, but the record stays in the user repository and the amend stays.
-2. **Agent text in the `no_progress` detail. DECIDED 2026-11-14 by Ulrich: a redacted excerpt of at most 512 characters goes in the stop detail.** worker-service.impl.md states that a stop detail is not a log record. Original text: I want a redacted excerpt of at most 512 characters of the last agent text in the detail, because the stop has no reason today. The log rule of `worker-service.impl.md` forbids agent content in a log record; a stop detail is not a log record, but the same intent can apply.
-   - Alternative: put the excerpt only in the `worker.step` span text. No agent content in the stop, but a human then needs the trace.
-3. **Fence on a network error. DECIDED 2026-11-14 by Ulrich: the push continues.** Original text: I want the push to continue when the fence gets a network error, because that matches the current tolerance of `checkClaim` and a push is a fast-forward.
-   - Alternative: skip the push and keep the pending push record. No stale push, but a server outage at the finish keeps work local until the next execution on the same instance.
-4. **Later server shape. DECIDED 2026-11-14 by Ulrich: client-side parallel reads only, no API change.** Original text: I want to stop at the client-side parallel reads now, because they need no API change.
-   - Alternative: one `worker.execution.context.get` that returns the revision, the prior, the review round and the link updates from one database snapshot. One round trip and one snapshot, but it crosses the Mission and Worker owners.
-   - Alternative: the worker heartbeat answer lists the revoked executions of the instance. No claim call at all, but the Worker Service heartbeat then reads Scheduler state.
-5. **Partial conflict resolution. DECIDED 2026-11-14 by Ulrich: a programmatic marker check follows each conflict turn; markers left send `swe@1` another conflict turn until no marker is left (D23).** Original text: I want to accept the loss of a resolution that still holds markers at a budget end, because a pushed partial merge needs a new evidence kind and a new prompt input.
-   - Alternative: store the resolved files as a produced evidence and give them to the next Conflict turn. Saves conflict work, but adds a contract.
-6. **Scope of the trademark concern. DECIDED 2026-11-14 by Ulrich: branches and commits carry no id. A branch gets a semantic name and a commit a semantic message (D24). The branch rule is approved.** Original text: I want to remove only the trailer now, because the EM named the trailer. The node branch prefix `kanthord/` and the file `.kanthord/affected-tests.json` also put the name in the user repository.
-   - Alternative: rename the branch prefix and the declaration path in the same release. One migration for every name, but each in-flight node branch and each declaration file then needs a move.
+1. **Unit record table. DECIDED 2026-11-14 by Ulrich: approved.** The table is `worker_unit_record` with four columns (`node_id`, `unit_id`, `content_digest`, `commits`). No `project_id`: the table is node-scoped. The verdict unit writes a record only for a node without tasks. The Mission Service deletes the rows of a node through a `unitRecords.deleteNode` port in the transaction to `Completed`, `Discarded` or retired, and in the transaction that opens an attempt from `base_branch`.
+2. **Agent text in the `no_progress` detail. DECIDED 2026-11-14 by Ulrich: a redacted excerpt of at most 512 characters goes in the stop detail.** A stop detail is not a log record. The host removes `agent_reason` from the logged detail.
+3. **Fence on a network error. DECIDED 2026-11-14 by Ulrich: the push continues.**
+4. **Later server shape. DECIDED 2026-11-14 by Ulrich: client-side parallel reads only, no API change.**
+5. **Partial conflict resolution. DECIDED 2026-11-14 by Ulrich: a programmatic marker check follows each conflict turn; markers left send `swe@1` another conflict turn until no marker is left (D23).**
+6. **Scope of the trademark concern. DECIDED 2026-11-14 by Ulrich: branches and commits carry no id. A branch gets a semantic name and a commit a semantic message (D24). The branch rule is approved.**
 
 ## Pages that record the rulings
 
 - `worker-service.md`: the done record paragraphs (lines 437-446) and the sequence diagrams (lines 517, 891).
 - `worker-service.vocabulary.md`: `done record` becomes `unit record`.
-- `worker-service.impl.md`: the done record, gate G, the restore sequence, the claim check, the no-progress counter scope, the affected declaration position, the agent open position, the telemetry phases, the `agent.turn` parent rule under `worker.step` (Traces), the final call order (Traces), the cleanup deadlines (Stop and budget), and section 5.7: the capture hook, `KANTHORD_CAPTURE_TASKS`, `worker.execution.seed.get` and the three `kanthord worker tasks` commands.
+- `worker-service.impl.md`: the done record, gate G, the restore sequence, the claim watch, its end points and the fence, the no-progress counter scope, the affected declaration position, the agent open position, the telemetry phases, the release gate fetch and tree build (D7), the `agent.turn` parent rule under `worker.step` (Traces), the final call order (Traces), the cleanup deadlines (Stop and budget), the `claim` phase, its three ends and the dispose order (D25, section 5.4), the D16 parallel reviewer asset download rule, the examine `budget_end/<limit>` stop rule, the S39 kept-report rule and its completion test, and section 5.7: the capture hook, `KANTHORD_CAPTURE_TASKS`, `worker.execution.seed.get` and the three `kanthord worker tasks` commands.
 - `custody.impl.md`: section 5.7: the frozen store of a local run and `--credential-stdin`.
-- `architecture.impl.md`: the `kanthord worker tasks` group.
-- `scheduler-service.impl.md` or the owner of `scheduler.claim.get`: the watch interval, the watch end points and the fence.
-- `docs/reference/erd/`: `worker_unit_record`, after the column review.
-- `engine/docs/cli/` worker page: the new operation and its error codes, and section 5.7: command rows, files, exit and diagnostic codes.
-- `HANDOFF.md`: one item per open question above, and two items for section 5.7, under the Worker Service.
+- `architecture.impl.md`: the `kanthord worker tasks` group and the span tree row and pill of `worker.step`, and the first turn of a `worker.task` as a descendant.
+- `mission-service.md` and `mission-service.impl.md`: `conflict_unresolved` (D23).
+- `repository.md` and `repository.impl.md`: `repository.node_branch.taken` (D24).
+- `project-service.impl.md`: `commit_identity` (D30).
+- `agent.impl.md`: `checkoutConfinement` (D27).
+- Open in HANDOFF (Architecture): `docs/reference/erd/` (`worker_unit_record`), `engine/docs/cli/` worker page (new operation, error codes, section 5.7 commands).
+- `HANDOFF.md`: the D22 item, the two section 5.7 items and the Architecture documents item under the Worker Service.
