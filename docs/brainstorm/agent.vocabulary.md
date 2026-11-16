@@ -20,7 +20,7 @@ The phrase states that the catalog holds an agent declaration; it is no state va
 ## display name
 
 The unique name that a human uses to address an agent in a mention.
-The catalog holds `swe@1` as "SWE", `re@1` as "RE", `pe@1` as "PE" and `ops@1` as "Yumi" and `plan@1` as "Jeremy".
+The catalog holds `swe@1` as "SWE", `re@1` as "RE", `pe@1` as "PE", `ops@1` as "Yumi" and `plan@1` as "Jeremy".
 The mention `@yumi` matches "Yumi", and the mention `@YUMI` matches it too.
 
 ## operation tool
