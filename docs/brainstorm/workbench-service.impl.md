@@ -118,7 +118,7 @@ The constants are in `engine/src/workbench/contract.ts`:
 
 ### Summarizer
 
-- The prompt is `assets/prompt/fork-summary.md`. It is the system prompt of the summarizer and the asset `engine/static/prompt/fork-summary.md`. `FORK_SUMMARY_PROMPT` of `engine/src/agent/prompt-assets.ts` loads it.
+- The prompt is [assets/prompt/fork-summary.md](assets/prompt/fork-summary.md). It is the system prompt of the summarizer and the asset `engine/static/prompt/fork-summary.md`. `FORK_SUMMARY_PROMPT` of `engine/src/agent/prompt-assets.ts` loads it.
 - The prompt fixes six headings: Goal, Facts and ids, Decisions, Acts done in the earlier conversation, Open in the earlier conversation, and Guest text (attributed).
 - The prompt states past acts in the past tense, open work as a fact and guest text with its author. It forbids an imperative, a request and a secret value.
 - `engine/src/workbench/fork-summary.ts` holds `forkSummaryRequest`, `summarize` and `visibleText`.
@@ -140,7 +140,7 @@ The constants are in `engine/src/workbench/contract.ts`:
 ### Guard summary check
 
 - `checkSummary` of `engine/src/workbench/guard-classifier.ts` sends one request to `guard@1`. It sends `guard-summary.md` as the system prompt and the JSON `{ instruction, summary }` as the only message. It sends `guard_summary_verdict` as the only tool, forces it and sets thinking off.
-- The prompt is `assets/prompt/guard-summary.md`, the asset `engine/static/prompt/guard-summary.md`. `agent.get` of `guard@1` with `task` `summary` answers it.
+- The prompt is [assets/prompt/guard-summary.md](assets/prompt/guard-summary.md), the asset `engine/static/prompt/guard-summary.md`. `agent.get` of `guard@1` with `task` `summary` answers it.
 - The strict tool takes `{ verdict, reason, confidence }`. `verdict` is `pass` or `refuse`. `confidence` is a number from 0 to 1. A `reason` above `GUARD_REASON_MAX_CHARS` characters is cut.
 - The decision is `pass` only when `verdict` is `pass` and `confidence` is at least `GUARD_SUMMARY_PASS_CONFIDENCE`. Otherwise it is `refuse`.
 - The call uses `GUARD_MAX_TOKENS`, `GUARD_TIMEOUT_MS` and `GUARD_REQUEST_MAX_BYTES`.
