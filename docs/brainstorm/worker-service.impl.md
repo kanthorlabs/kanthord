@@ -1578,7 +1578,7 @@ It proves that a reviewer execution takes no file of the workspace.
 - The worker unit opens a sealed item through the `sealed_credentials` function pair of its wrapper. Only the `worker` wrapper passes it. It opens the item with the key of the item `holder`: the instance key, or the key of the [machine configuration](#the-machine-configuration). An item that does not open ends the execution with `worker.handover.sealed_unopened`.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. Its body is `{ execution_id, nonce, ciphertext }`, where `nonce` and `ciphertext` carry the sealed refresh report, and it answers 204.
 - The plaintext of the report is `{ credential_id, digest, credential }` for a server-held credential. It is `{ credential_id, digest, sealed }` for a copy of an instance or a machine. For such a copy, the worker unit seals the refreshed credential to the key of the item `holder` through `sealed_credentials`. `digest` is then the digest of the stored sealed object. The application calls it after each refresh that pi-ai performs and once at the release.
-- The credential report request body permits at most 65,536 bytes; [Custody's serialized-credential budget](custody.impl.md#serialized-credential-budget) ensures the compact report fits. The application reports once before the first final call (`assessment.submit`, `execution.release` or the stop release), also when the credential is unchanged.
+- The credential report request body permits at most 65,536 bytes; [Custody's serialized-credential budget](custody.impl.md#serialized-credential-budget) ensures the compact report fits. The application reports once before the first of `assessment.submit`, `execution.release` or the stop release, also when the credential is unchanged.
 - For both operations, the invocation chain proves the execution that the body field `execution_id` names.
 - The application discards every credential when the execution ends, and it writes none to a file.
 - Dispose order: release trees, base heads, agent session, node key and scratch store, SSH access, credential store and handover keys run in that order. The credential entry runs last. The telemetry sink closes after the credential discard. `run.dispose()` runs after the agent session entry.
@@ -1739,7 +1739,7 @@ The coder report:
 The progress rule:
 
 - `changed` from gate G is the only measure of progress. A worker commit alone is not progress.
-- The unchanged-turn counter `unchangedTurns` lives in the `release_rounds` scope.
+- The unchanged-turn counter `unchangedTurns` lives in the `progress` context key.
 - A revision turn with `changed` false adds one. A verdict turn that leaves the verdict rule false adds one.
 - A turn with `changed` true sets the counter to zero. The start of each planned unit sets it to zero. The worker sets it to zero once, before the first release gate. No other event sets it to zero, and a pass of a routed unit keeps it.
 - At `NO_PROGRESS_LIMIT` (2), the execution stops with `no_progress` before the next verification. One exception applies: a verdict turn at the limit that leaves the verdict rule false is waived, as [The verdict unit](#the-verdict-unit) states.
@@ -1787,7 +1787,7 @@ Merge step M brings `origin/<base_branch>` into the node branch of each checkout
 - Markers left: the merge stays open, the worker commits nothing, and the next conflict turn lists the files that still hold markers.
 - A conflict turn that leaves the same marker files with the same content as the check before adds one to the marker counter of this merge. At 2, the resolution fails.
 - The marker counter belongs to one merge. It is separate from the unchanged-turn counter of the progress rule.
-- A budget end during a conflict turn runs the marker check once more. With no marker, `markers.check` sets `resolved: true` on `openMerge` and returns `exit: budget_end`; the checkpoint gate on `onExit.budget_end` then runs the conflict-mode checks and commits the merge. Markers left fail the resolution.
+- A budget end during a conflict turn runs the marker check once more. With no marker, `markers.check` sets `resolved: true` on `openMerge` and returns `budget_end`; the checkpoint gate on `onExit` then runs the conflict-mode checks and commits the merge. Markers left fail the resolution.
 - A failed resolution submits the conflict report, runs `git merge --abort` and stops with `conflict_unresolved`.
 - The conflict report is one evidence with one `produced` asset. It holds the content of each conflicted file and the list of the files that still hold markers.
 - The conflict report holds no repository asset, so it never becomes the review snapshot and never counts as the head commit evidence.
@@ -1810,7 +1810,7 @@ The steps for each checkout:
 
 | #   | Mode       | Check or act                                                                                                                                                                                                        |
 | --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| G0  | checkpoint | On `onExit.budget_end`: when `openMerge` has `resolved: true` and `MERGE_HEAD` holds the commit of `openMerge`, run the conflict-mode rows and commit the merge as `<commit_type>: merge <base_branch>`. Else, when `MERGE_HEAD` exists, run `git merge --abort`. On `onStop`: when `MERGE_HEAD` exists, run `git merge --abort`. An `openMerge` with no `MERGE_HEAD` counts as no merge. |
+| G0  | checkpoint | On `onExit`: when `openMerge` has `resolved: true` and `MERGE_HEAD` holds the commit of `openMerge`, run the conflict-mode rows and commit the merge as `<commit_type>: merge <base_branch>`. Else, when `MERGE_HEAD` exists, run `git merge --abort`. On `onStop`: when `MERGE_HEAD` exists, run `git merge --abort`. An `openMerge` with no `MERGE_HEAD` counts as no merge. |
 | G1  | all        | `git symbolic-ref -q HEAD` is `refs/heads/<node branch>`. Else `worker.turn.branch_changed`.                                                                                                                        |
 | G2  | all        | `before` is an ancestor of `HEAD`. Else `worker.turn.history_rewritten`.                                                                                                                                            |
 | G2a | all        | When `HEAD` is not `before`: `git rev-list --merges --parents <before>..HEAD` lists no merge with a parent that is not `before` and not the commit of `openMerge`. Else `worker.turn.foreign_merge`.                |
@@ -1825,7 +1825,7 @@ The steps for each checkout:
 
 - Invariant I: the checkout is on `refs/heads/<node branch>`, `HEAD` equals `checkout.head`, the index matches `HEAD`, no untracked file exists apart from ignored files, and no git operation is in progress.
 - Status reads: one `git status --porcelain=v2 --branch --no-ahead-behind` before G3 and one after G8 (invariant I). Operation path existence uses the cached `gitPaths` paths from `workspace.node`; no `git rev-parse --git-path` runs during the gate.
-- Parallel run: all checkouts run rows G1 to G3 in parallel. The gate collects all branch results first, then calls `run.stop` once with the code of the lowest-index violation (section 2, rule 8 and section 5.3 rule 4). A violation restores every checkout to `before`.
+- Parallel run: all checkouts run rows G1 to G3 in parallel. The gate collects all branch results first, then calls `run.stop` once with the code of the lowest-index violation (section 2, rule 6 and section 5.3 rule 4). A violation restores every checkout to `before`.
 - A turn with `changed` true sets the unchanged-turn counter to zero.
 - The gated agent keeps the set of commits that its gate made. [The unit record](#the-unit-record) reads it.
 
@@ -2512,12 +2512,11 @@ The Mission Service queues the stop order `revoked` for every revoked claim, exc
 At the `server` and the `container` placements, the pool host sends the stop order at once through the slot `stopOrders` call, under [The server instances](#the-server-instances).
 At the `worker` placement, the process reads the stop order on the next instance heartbeat, every 15 s, under [The instance exchange](#the-instance-exchange).
 The worker unit then calls `run.revoke()` with no release. The 60 s registration heartbeat carries no stop order.
-`ClaimWatch` is the fallback for a lost slot message or a lost instance heartbeat. It is one timer for each execution, and it fires `scheduler.claim.get` 60 s after the last proven server call.
-Each completed call of an operation that requires a live execution proves the claim and moves the timer.
-A claim that is not `running`, or a read that the Scheduler refuses as ended, calls `run.revoke()`. A read that fails for another reason moves the timer by 60 s and ends nothing.
+`ClaimWatch` is the fallback for a lost slot message or a lost instance heartbeat. It fires `scheduler.claim.get` every 60 s from the start.
+A claim that is not `running`, or a read that the Scheduler refuses as ended, calls `run.revoke()`. A read that fails for another reason ends nothing.
 `run.revoke()` sets the `revoked` stop and cancels `operationContext`, which aborts the pi session and any running command.
-The watch ends at the first `claim.fence`, before each final call and at any stop.
-`claim.fence` reads the claim directly before each push. A revoke answer gives no push. On a network error at the fence, the push continues.
+The watch ends when `branch.push` starts, before `assessment.submit`, before `execution.release`, before the stop release, and at any stop.
+The first act of `branch.push` reads the claim. A revoke answer gives no push. On a network error at the fence read, the push continues.
 `run.call` of `src/worker/unit/execution-run.ts` retries an `Indeterminate` answer and a 409 `gateway.idempotency.conflict` with the same idempotency key.
 The retry uses `Backoff` for at most 30 s and never past `expired_at`. It stops at once on `closed` and on a stop of the run.
 After the bound, the execution stops with `operation_failed`.
@@ -2533,7 +2532,7 @@ The execution enforces the turn budget on pi turn events and aborts the agent wh
 An agent that reaches its wall-time deadline ends the wall-time budget of the execution. The execution then takes the budget end, not a failure.
 The bash timeout of an agent command stays below the remaining wall-time budget and below the 10-minute command limit of a verification item. A lower timeout that the model sets stays.
 After the agent stops at budget end, the execution code, not the agent, runs gate G in checkpoint mode, pushes and releases with further work.
-Every budget end releases with further work. Only the release gate and a complete examine report release with no further work. A budget end of an `examine` steps execution releases with the stop `budget_end` and the limit as `code`. New: a complete examine turn keeps its report when the last assistant message has no tool call and no abort, and the last text is nonempty; the execution continues to `evidence.report` and releases with `further_work: false`.
+Every budget end releases with further work. Only the release gate and a complete examine report release with no further work. A budget end of an `examine` steps execution releases with the stop `budget_end` and the limit as `code`. New: a complete examine turn keeps its report when the last assistant message has no tool call and no abort, and the last text is nonempty; the execution continues to the report submit of `examine.turn` and releases with `further_work: false`.
 Every cleanup command, including the push, is bounded by `expired_at`, not by the remaining budget.
 A stop for a reason other than `revoked` aborts the agent and runs the same cleanup under a fresh context bounded by `expired_at`.
 A steps execution runs gate G in checkpoint mode, which commits the uncommitted work, pushes and releases with `further_work: true` and `stop: { reason, code, detail?, cause }`.
@@ -2644,11 +2643,11 @@ The pi session entries of an execution become its transcript telemetry, as the [
 - A resumed execution opens a new agent session, and a new session file, in the same directory.
 - When the session opens, the worker appends one `kanthord.pinned_context` entry as the marker of the system prompt. The entry holds `{ part: "system_prompt" }` and no text.
 - After each session event, the worker sends each entry beyond the count that it already sent.
-- The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span, with `Error` for `releaseStop` and `Ok` otherwise. A record after the release has no live claim, so the server refuses it. Kept: a revoke runs no final call and no flush, and the sink drops the queued records and logs `telemetry records dropped`. New: dispose closes the agent traces with `Error`.
+- The agent trace closes once, before the telemetry flush of `release`, of `releaseStop` and of `submitAssessment`, or at the dispose of the agent. The close sends the remaining entries and ends the `agent.session` span, with `Error` for `releaseStop` and `Ok` otherwise. A record after the release has no live claim, so the server refuses it. Kept: a revoke runs no `assessment.submit`, no `execution.release`, no `releaseStop` and no flush, and the sink drops the queued records and logs `telemetry records dropped`. New: dispose closes the agent traces with `Error`.
 - A stop aborts the agent, so pi can still be inside a turn at the close. The close ends each open turn and tool span with `Error` and `error.type` `stopped`.
-- An `agent.turn` span is a child of the `worker.step` span of its LLM step. A reader finds the turns of a task as the `agent.turn` descendants of its `worker.task` span, not as its direct children. For the reviewer, that step span is under the `judge` phase span of `worker.evaluation`. Its `gen_ai.conversation.id` names its session.
+- An `agent.turn` span is a child of the `worker.step` span of its LLM step. A reader finds the turns of a task as the `agent.turn` descendants of its `worker.task` span, not as its direct children. For the reviewer, that step span is under `worker.evaluation`. Its `gen_ai.conversation.id` names its session.
 - The runner opens one `worker.phase` span with `kanthord.phase` `on_exit` or `on_stop` around the nodes of `onExit` and `onStop`. Each `worker.step` span under `onExit` or `onStop` nests under that phase span.
-- The runner adds one `worker.step` span per step for every chain, including examine. A `worker.phase` span covers each phase, `onExit` and `onStop`. The `kanthord.step.outcome` attribute is `next`, `exit` or `stop`. The span holds no error text and no stop detail.
+- The runner adds one `worker.step` span per step for every chain, including examine. A `worker.phase` span covers each phase, `onExit` and `onStop`. The `kanthord.step.outcome` attribute is `next`, `budget_end` or `stop`. The span holds no error text and no stop detail.
 - The start of an `agent.turn` span holds `kanthord.prompt.template`: the `PromptTemplate` value of the instruction that drove the turn. It also holds `kanthord.prompt.template.digest`, the sha-256 hex digest of the source template, and `kanthord.prompt.work.digest`, the `WorkPrompt.digest` that `renderWorkPrompt` computes. The digest names the rendered work prompt before the redaction.
 - Before the worker sends an entry, it applies the sensitive text rule set to its copy. The secrets of every credential of the execution are the known secrets. Each finding becomes `<redacted:RULE>`.
 - The host of an execution keeps its own copy of each agent session. A reader [rebuilds](tracking-service.impl.md#the-rebuild-read) a cut entry from that copy while the host can serve it. The rebuild answers an error when the host cannot serve the entry, and never the cut entry. A stateless host loses the copy, and the Tracking Service still holds every entry that reached it. A human cleanup of the kind `session` removes the execution directory, and a later rebuild answers `session_absent` with the reason `not_kept`.
