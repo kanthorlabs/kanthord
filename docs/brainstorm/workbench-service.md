@@ -68,6 +68,14 @@ It describes no mechanism of another service.
 - New Session opens the route `/workbench/new` with no API call. The route shows a greeting from the display name of the agent. The quick action of the agent list opens it with its agent.
 - The first Send calls `workbench.session.create`, then `workbench.session.message`. A closed tab with no message writes nothing.
 - The `/workbench/new` route names the agent providers of the enablement and links to the agent page, where a human adds one.
+- A [conversation](workbench-service.vocabulary.md#conversation) is its [host session](workbench-service.vocabulary.md#host-session). The agent picked in New Session is the host. On Home, the host is `ops@1`.
+- A new conversation opens with a host greeting from `greeting.md`, with the display name and the model. The server writes it with no model call.
+- An untagged first message runs the host. A leading mention in the first message runs the mentioned member (H4).
+- One [participant session](workbench-service.vocabulary.md#participant-session) exists per member. Another agent joins at its first [mention](workbench-service.vocabulary.md#mention).
+- Only a leading `@<display name>` routes, case-insensitively. An untagged message goes to the member that answered last (D8). The greeting counts as the answer of the host.
+- One run exists per conversation (D14). The queue item stores its mention target, and an untagged item resolves at its start (Q2).
+- A queued row shows "to @<display name>", or "to last answer" for an untagged item.
+- `get`, `events`, `message`, `abort`, `queue.remove` and `autoMode.set` on a participant session id answer 409 `workbench.session.not_host`.
 - A [workbench session implementation](workbench-service.impl.md#workbench-session) declares the workbench directory and the list.
 
 ## Home

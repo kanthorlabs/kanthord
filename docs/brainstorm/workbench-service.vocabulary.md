@@ -14,6 +14,30 @@ The term names no closed set.
 Ulrich picks `swe@1` on the Agents page and starts a workbench session in the chat.
 In that session, `swe@1` pulls "Add password reset", a dependency of "Account recovery", and reads the plan of "Billing".
 
+## conversation
+
+The exchange of one human with the member agents that share one host Workbench session.
+The term names no closed set.
+Ulrich opens a conversation with Yumi, then asks `@SWE` a question. Yumi and SWE answer in the same transcript.
+
+## host session
+
+The workbench session that starts a [conversation](#conversation) and owns its run, its queue and its settings.
+The term names no closed set.
+Ulrich picks `swe@1` in New Session. That session is the host session, and every later member joins it.
+
+## participant session
+
+The workbench session of one more agent that joins a [conversation](#conversation) at its first [mention](#mention). A conversation holds one for each agent.
+The term names no closed set.
+Ulrich writes "@RE check this plan" in a conversation with `swe@1`. The server creates one participant session for `re@1`.
+
+## mention
+
+A leading `@<display name>` in a human message. It names the member that runs the message and matches case-insensitively.
+The term names no closed set.
+Ulrich writes "@yumi Report the system status". Yumi runs the message. A message with no leading mention goes to the member that answered last.
+
 ## run
 
 The work of the agent on one human message of a workbench session.

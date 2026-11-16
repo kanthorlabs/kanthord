@@ -22,6 +22,62 @@ A mechanism here never overrides a rule there.
 - A resume takes the last entry of each kind, and the Agent component validates the three values as a complete entry.
 - The credential view of a workbench session exposes only the credential of the agent provider that the configuration of the session names.
 
+## Conversation
+
+### Members
+
+- A participant session is a pi session file of its own agent. Its pi header holds `parentSession`, the path of the host session file.
+- The parent link is the only membership record. The host id is the part of the file name of `parentSessionPath` after the first `_`. The service never opens that path (D7).
+- An open of a session with a `parentSession` opens its host first. An open of a host lists the sessions of every Workbench agent whose host id is its id, ordered by `created`.
+- The host session holds the run, the queue, `version`, the auto mode setting and `evidenceGrants` of the conversation. A participant session holds its own file and its own approvals.
+- `evidenceGrants` is set on the host `OpenSession`. A grant covers every member that holds `evidence_read` (EV5).
+- A leading mention resolves through `resolveMention`. A name that no catalog agent holds answers 404 `agent.catalog.not_found` with `{ mention }`. A disabled agent answers 400 `agent.enablement.unavailable`.
+- An untagged message resolves to the member whose latest final assistant entry has the newest timestamp. When no member answered, the host runs it.
+- A queued item keeps `agent_name` and `display_name` of its mention, or `null` for both. An untagged item resolves when it starts.
+- A queued item whose agent is refused at its start is dropped, and `error_message` of the snapshot holds the refusal.
+- `pending_approval` carries `session_id`, the member that made the call. `workbench.session.approve` takes that `session_id`.
+
+### Opening pair
+
+- `WORKBENCH_OPENING_TEXT` is "The owner opened this conversation."
+- `workbench.session.create` calls `appendOpening` on the host file. It appends two messages and makes no model call.
+- The first message is a user message with the text `WORKBENCH_OPENING_TEXT`. The second is an assistant message with `stopReason` `stop`, zero usage and the greeting.
+- The greeting is the template `greeting.md`, rendered with `display_name` and `model`. `model` is `model_identifier` of the configuration.
+- `openingIds(entries)` answers the ids of the first two messages when the first message is that user message. Otherwise it answers an empty set.
+- The readers of `openingIds` follow:
+  - The owner view and the merged poll hide the first message and show the greeting.
+  - The relay skips both entries.
+  - `listSessions` answers `first_message` as the `name` of the session or `""`, and it counts one message less than the file holds.
+- The title rule: the first human message of the conversation writes `session_info` to the host file, unless the file holds a name. A queued first message writes it at its enqueue.
+
+### Relay
+
+- The relay is a message that the service gives to a member before its prompt. The service sends it only when it holds at least one item.
+- It starts with the text of the template `relay.md`. One blank line separates the template and each item.
+- An item is a message of another member that follows the last final assistant entry of the receiving member.
+- A human message has the form `<author> to @<display name>: <text>`. `<author>` is the name of the human, and `<display name>` is the member that the message went to.
+- A final assistant text has the form `<display name>: <text>`.
+- The relay holds human messages and final assistant texts only. It holds no tool result, no opening entry and no entry with no text.
+- The items stand in the order of their timestamps.
+- The service sends the relay as the `custom_message` `kanthord.workbench.relay` (`WORKBENCH_RELAY_ENTRY`) with `display: false`.
+- `RELAY_MAX_BYTES` is 65536. The service drops the oldest items until the whole text fits, so the newest items stay.
+
+### Merged cursor
+
+- `workbench.session.get` and `workbench.session.events` answer one merged transcript. Each entry carries `session_id` and `agent_name` of its member. `members` lists `{ session_id, agent_name, display_name }`, the host first, then the participants by `created`.
+- `after` holds one `<session_id>:<entry_id>` pair for each member, separated by commas. A member with no pair starts at its first entry.
+- A plain id names the host pair. The participant entries then start at their first entries.
+- The answer holds no cursor field. The client builds `after` from the `session_id` and the `id` of the entries that it holds.
+- The merge orders the entries by timestamp, then by member order. It keeps the file order of each member.
+- `version` is one counter for the conversation. A change in any member raises it.
+
+### List fields
+
+- Each item of `workbench.session.list` adds `host_session_id`, `display_name` and `participants`.
+- A host item answers `host_session_id: null`, its participants in `participants`, and the newest `modified` of its members as `modified`.
+- A participant item answers the id of its host in `host_session_id` and an empty `participants`. A participant is never a top-level item.
+- The filter `agent_name` selects the host agent.
+
 ## Workbench record
 
 - A Workbench record is one `custom` entry of pi with `customType` `kanthord.workbench.record` (`WORKBENCH_RECORD_ENTRY`). Its `data` is the record.
@@ -250,7 +306,7 @@ Every operation has `human` access.
 
 - `resume_command` is `pi --session <session file>`, with the home directory written as `~`. pi opens the file from any directory and takes the working directory from the session header.
 - `after` names the id of the last session entry that the client holds.
-- A poll answers the session entries after `after`, and a snapshot of the active run: `streaming_message`, `pending_tool_calls`, `pending_approval`, `run_active`, `queue`, `error_message` and `auto_mode`. Each item of `queue` is `{ id, text }`.
+- A poll answers the session entries after `after`, and a snapshot of the active run: `streaming_message`, `pending_tool_calls`, `pending_approval`, `run_active`, `queue`, `error_message` and `auto_mode`. Each item of `queue` is `{ id, text, agent_name, display_name }`.
 - Each answer carries `version`, a number that the service raises at each change of the snapshot or of the entries.
 - A poll names `version`, the version of the last answer that the client holds. A poll answers at once when entries follow `after` or when its `version` differs from the current version. A poll with no `version` answers at once.
 - Otherwise a poll answers at the next change, or when its wait window ends.
@@ -331,6 +387,7 @@ Every operation has `human` access.
 | 404        | `workbench.session.action_not_found`         | The tool call of an action report names no action offer.                            |
 | 409        | `workbench.session.action_settled`           | An action report arrives for a card that holds a `done` result.                     |
 | 409        | `workbench.session.agent_refused`            | A create names a catalog agent with no operation tool, such as `pe@1` or `guard@1`. |
+| 409        | `workbench.session.not_host`                 | A host-only call names a participant session. Use the host session.                 |
 | tool error | `workbench.action.operation_refused`         | `operation_id` of an offer is no act of `ACTION_CARD_OPERATIONS`.                   |
 | tool error | `workbench.action.target_invalid`            | `target_id` of an offer is no identity of the target kind.                          |
 | tool error | `workbench.action.offer_limit`               | The run already offered one action card.                                            |
@@ -345,4 +402,4 @@ Every operation has `human` access.
 | 409        | `workbench.session.setup_refused`            | The runtime refuses the setup of the session.                                       |
 | 403        | `workbench.authorization.refused`            | The Workbench Service refuses the credential release of the session.                |
 | local      | `workbench.lifecycle.stopped`                | A stopped service starts again.                                                     |
-| 404        | `agent.catalog.not_found`                    | The agent name of a create or a list is absent from the agent catalog.              |
+| 404        | `agent.catalog.not_found`                    | The agent name of a create, a list or a mention is absent from the catalog.         |
