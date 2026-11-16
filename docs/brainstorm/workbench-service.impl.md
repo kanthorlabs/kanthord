@@ -34,7 +34,7 @@ A mechanism here never overrides a rule there.
 - `evidenceGrants` is set on the host `OpenSession`. A grant covers every member that holds `evidence_read` (EV5).
 - A leading mention resolves through `resolveMention`. A name that no Workbench agent holds answers 404 `agent.catalog.not_found` with `{ mention }`. A disabled agent answers 400 `agent.enablement.unavailable`.
 - `leadingMention` compares lowercase and tries the longest display name first. A name ends at the end of the text, at whitespace or at a character outside `[A-Za-z0-9 _-]`. An `@` followed by whitespace or by nothing is no mention, so the message is untagged.
-- An untagged message resolves to the member whose latest final assistant entry has the newest timestamp. When no member answered, the host runs it.
+- An untagged message resolves to the member whose latest final answer has the newest timestamp. When no member answered, the host runs it. A `kanthord.workbench.plan` entry is the final answer of its member (D8). An entry of a phase session is never a final answer.
 - A queued item keeps `agent_name` and `display_name` of its mention, or `null` for both. An untagged item resolves when it starts.
 - A queued item whose agent is refused at its start is dropped, and `error_message` of the snapshot holds the refusal.
 - `pending_approval` carries `session_id`, the member that made the call. `workbench.session.approve` takes that `session_id`.
