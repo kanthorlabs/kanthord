@@ -143,6 +143,7 @@ test("a value from a history file is escaped", () => {
 test("the guard section names the verdict check and the proof file", () => {
   const html = renderEvals([[entryOf({ subject: "guard" })]]);
   assert.ok(html.includes("engine/eval/guard/proof.json"));
+  assert.ok(html.includes("guard-summary.md"));
   assert.ok(html.includes("src/agent/guard-proof.test.ts"));
   assert.ok(html.includes("A complete run that passes the gate writes"));
   assert.ok(

@@ -76,6 +76,13 @@ It describes no mechanism of another service.
 - One run exists per conversation (D14). The queue item stores its mention target, and an untagged item resolves at its start (Q2).
 - A queued row shows "to @<display name>", or "to last answer" for an untagged item.
 - `get`, `events`, `message`, `abort`, `queue.remove` and `autoMode.set` on a participant session id answer 409 `workbench.session.not_host`.
+- "/new <text>" [forks](workbench-service.vocabulary.md#fork) the conversation. One model call on the model and the credential of the source host configuration summarizes the source, with `<text>` as the instruction.
+- `guard@1` checks the [fork summary](workbench-service.vocabulary.md#fork-summary) and answers `pass` or `refuse`. There is no owner override. A refused summary creates no conversation, and the composer keeps the text.
+- The fork starts with the checked summary. `<text>` is its first human message. No conversation exists before both calls pass.
+- The fork host is the agent of the source host with its current configuration. Mention an agent to continue with it.
+- The fork carries one text, the summary. No transcript, tool result, approval, queue, card, record or evidence grant carries over. The source does not change.
+- Every fork starts with auto mode on, whatever the value of the source.
+- Only the owner forks. The operation is human only, and no tool list holds it.
 - A [workbench session implementation](workbench-service.impl.md#workbench-session) declares the workbench directory and the list.
 
 ## Home
@@ -93,7 +100,8 @@ It describes no mechanism of another service.
 - "/brief" and "/health" show only in an `ops@1` conversation. "/new" shows in every conversation.
 - A command and its natural-language form give the same answer.
 - "/new" alone opens a new chat and sends nothing. In a Workbench chat, it opens `/workbench/new` with the agent and the configuration of the current conversation. In the Home chat, it acts as "New chat".
-- Until the fork ships, "/new <text>" shows the hint "/new takes no text yet" and sends nothing.
+- "/new <text>" forks the Home conversation, and the Home chat shows the fork.
+- A fork of a case conversation is a case conversation, and the Home chat never switches to it. A case tab forks in place.
 - A click on "Ask Yumi" opens a named tab at once, before any `await`. Home creates one `ops@1` conversation, sends the case request of the card at once, and points the tab at it.
 - The Home chat gets no case message.
 - One tab and one conversation exist for each card in one page load. A later click shows the same tab and sends nothing. A reload of Home forgets the cases.
@@ -181,7 +189,7 @@ Setup cards:
 - Approve grants every evidence asset of that node to the conversation until kanthord restarts. Later reads of that node run with no card.
 - Reject or expiry grants nothing, and the next read of that node asks again.
 - The grant is per node and per conversation. The grant of one conversation never reaches another.
-- Grants live in memory and end at a restart. A closed session that opens again starts empty, and a fork, when it ships, is a new session that starts empty.
+- Grants live in memory and end at a restart. A closed session that opens again starts empty, and a fork is a new session that starts empty.
 - A call that names an asset that is not in the evidence waits on no card and fails with no content.
 - An owner-started run whose message holds a node id grants that node with no card. This applies only while auto mode is on (EV6).
 - `guard@1` never decides an evidence read. Auto mode decides only the message grant.

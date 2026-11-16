@@ -56,6 +56,18 @@ The delivery of a message that clears the queue, stops the active run, and runs 
 The term names no closed set.
 Ulrich sends "Stop & send draft" with two queued messages. The two texts return to his composer, the run stops, and the draft runs next.
 
+## fork
+
+A new conversation that the owner starts from an existing conversation with "/new <text>". It starts with a checked [fork summary](#fork-summary) of the source, and `<text>` is its first human message.
+The term names no closed set.
+Ulrich writes "/new Continue with the billing nodes" in a conversation with `swe@1`. The server creates a fork with the summary of that conversation, and `swe@1` runs the text.
+
+## fork summary
+
+The one text that a [fork](#fork) carries from its source. One model call writes it under fixed headings, and `guard@1` checks it for orders and secrets before the fork exists.
+The term names no closed set.
+The summary of Ulrich's conversation states "Open in the earlier conversation: node_9 is still blocked; no decision was made." `guard@1` passes it. A summary that says "Discard node_9 now" is refused, and no fork exists.
+
 ## approval wait
 
 The maximum time that a pending tool call approval waits for a human decision. The setting is `workbench.approval_wait_ms`, one hour by default.
