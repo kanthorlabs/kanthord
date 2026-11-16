@@ -71,7 +71,7 @@ It describes no mechanism of another service.
 - The [host session](workbench-service.vocabulary.md#host-session) owns a [conversation](workbench-service.vocabulary.md#conversation). The agent picked in New Session is the host. On Home, the host is `ops@1`.
 - A new conversation opens with a host greeting from `greeting.md`, with the display name and the model. The server writes it with no model call.
 - An untagged first message runs the host. A leading mention in the first message runs the mentioned member (H4).
-- One [participant session](workbench-service.vocabulary.md#participant-session) exists per member. Another agent joins at its first [mention](workbench-service.vocabulary.md#mention).
+- One session exists per member: the host session, and one [participant session](workbench-service.vocabulary.md#participant-session) for each other agent. Another agent joins at its first [mention](workbench-service.vocabulary.md#mention).
 - Only a leading `@<display name>` routes, case-insensitively. An untagged message goes to the member that answered last (D8). The greeting counts as the answer of the host.
 - One run exists per conversation (D14). The queue item stores its mention target, and an untagged item resolves at its start (Q2).
 - A queued row shows "to @<display name>", or "to last answer" for an untagged item.

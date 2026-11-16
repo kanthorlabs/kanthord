@@ -1014,7 +1014,7 @@ This section records the eval harness of the engine node `l2-engine`.
 
 ### The case file
 
-- A case file holds the keys `id`, `source`, `agents`, `fixtures`, `setup`, `seed`, `turns` and `checks`. `source` and `agents` are optional.
+- A case file holds the keys `id`, `source`, `agents`, `auto_mode`, `fixtures`, `setup`, `seed`, `turns` and `checks`. `source`, `agents` and `auto_mode` are optional.
 - An unknown key of a case object fails the parse, because each object schema is strict. The `input`, `body` and `expect` values accept any key.
 - `id` equals the file name without `.yaml`. `fixtures` maps a key to a JSON file under `engine/eval/<agent>/fixtures/`.
 - `agents: [<agent name>]` lists the member agents of the conversation. The sandbox enables each of them with the `.env.eval` key, as for the subject. A turn that starts with `@<display name>` runs that member.
