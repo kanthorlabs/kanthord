@@ -18,8 +18,9 @@ A mechanism here never overrides a rule there.
 - The catalog is a static server module that holds one declaration per agent name, with options, a whole-configuration constraint and prompts.
 - Options use `zod` at 4.4.3, and the constraint uses `superRefine`.
 - `swe@1` and `re@1` declare an empty option schema.
-- A declaration holds `display_name` and `tools`. `AgentTools` is `{ builtin, host, operation, workbench }`. `builtin`, `host` and `workbench` hold tool names, and `operation` holds operation ids. `workbench` holds `evidence_read` for `swe@1` and `re@1`, and it is empty for `pe@1` and `ops@1`.
+- A declaration holds `display_name` and `tools`. `AgentTools` is `{ builtin, host, operation, workbench }`. `builtin`, `host` and `workbench` hold tool names, and `operation` holds operation ids. `workbench` holds `evidence_read` for `swe@1` and `re@1`, and it is empty for `pe@1`, `ops@1` and `plan@1`.
 - `workbenchAgentNames()` holds the session rule. It answers the agents whose `tools.operation` is not empty. Its readers are `sessionPlace`, `findSession`, `list` and `create` of the Workbench Service. `sessionPlace` and `findSession` serve only those agents. `list` answers `{ items: [] }` for another agent, and `create` refuses it with 409 `workbench.session.agent_refused`. `pe@1` and `guard@1` list no operation.
+- `plan@1` is a declaration with `display_name` "Jeremy", the prompt `engine/static/prompt/plan@1.md` and the same overridable fields as `ops@1`. `tools.operation` holds the eight reads of [the plan agent](agent.md#plan-agent), and `builtin`, `host` and `workbench` are empty. The prompt states the plan contract and holds no list of mutations.
 - `guard@1` is a declaration with `internal: true`, `overridable_fields: []`, `agent_prompt` of `engine/static/prompt/guard.md` and empty tool lists. The summary task uses `engine/static/prompt/guard-summary.md`. [The guard configuration rule](#the-guard-configuration-rule) states its configuration and prompt.
 - The list test of `engine/src/workbench/tools.test.ts` checks that every listed id names an operation that `toolOperations` keeps, and that no list names a secret operation.
 - The shipped role of `swe@1` states the split of the coder flow: the agent writes the code, runs any check while it works, and checks the work against the criterion and the default standard before it ends a turn. The worker runs the verifications after the turn. `swe@1` gives no judgement. [assets/prompt/swe@1.md](assets/prompt/swe@1.md) holds the text.
@@ -319,7 +320,7 @@ The Agent component owns these keys of the section `agent`.
 
 ## Prompt templates
 
-- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `identity`, `framing-worker`, `framing-workbench`, `task-revision`, `criterion-revision`, `conflict`, `evaluation`, `examine`, `repair`, `relay` and `greeting`.
+- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `identity`, `framing-worker`, `framing-workbench`, `task-revision`, `criterion-revision`, `conflict`, `evaluation`, `examine`, `repair`, `relay`, `greeting`, `plan-draft` and `plan-review`.
 - A file `<name>.md` in the subdirectory `prompts` of the agent directory replaces the shipped template of that name. With the default `agent_directory`, the file of `evaluation` is `~/.local/share/kanthord/agents/prompts/evaluation.md`.
 - An empty `agent_directory` means that every template is the shipped template.
 - The server resolves the template set at each prompt composition. The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
@@ -344,12 +345,23 @@ The Agent component owns these keys of the section `agent`.
 | `repair`             | `marker`, `issues`                                                                                                                                                                                                                                |
 | `relay`              | none                                                                                                                                                                                                                                              |
 | `greeting`           | `display_name`, `model`                                                                                                                                                                                                                           |
+| `plan-draft`         | `request`, `relay`, `mutations`                                                                                                                                                                                                                   |
+| `plan-review`        | `request`, `draft`, `mutations`                                                                                                                                                                                                                   |
 
 - `repositories` lists `{ name, directory, base_branch }` for each repository binding of the pinned revision, in binding order. `work` receives an empty list for a node with one repository binding.
 - `affected_tests` lists `{ name, command, gate_files }` for each checkout of an `implement` node with a valid [affected test declaration](project-service.impl.md#the-affected-test-declaration), in binding order, also for a node with one repository binding. An invalid declaration adds no entry. `repositories` does not carry the command. `gate_files` holds the `gate_files` list of the declaration, in declaration order.
 - The shipped `work` text names each entry of `affected_tests`, for example ``Repository engine: affected tests `pnpm --silent run test:affected` ``. The coder does not run the command. For an entry with a nonempty `gate_files`, the next line is ``Gate files of repository engine: `package.json`, `scripts/test-path.mjs`. Change a gate file only when the requirement names it.`` An empty list adds no line. `swe@1.md` does not change.
 - `affected` is the evidence JSON of `Affected test results` of the evaluation, or null when no repository declares a command. The shipped `evaluation` text holds the input line `Affected test results of this evaluation: {{json affected}}`.
 - The shipped `evaluation` text also holds two sentences: "KanthorD ran the affected test command of each repository after the verifications; weigh a `base_red` verdict, each flaky test and each excluded e2e test as facts about the change." and "A change to a file that selects or runs tests is a test change; judge it against the criterion."
+- `request` of `plan-draft` and `plan-review` is the text of the human message that starts the run. `relay` of `plan-draft` is the text of the conversation since the last turn of Jeremy, and an empty `relay` renders no relay block. `draft` of `plan-review` is the final text of the planner phase.
+- `mutations` of `plan-draft` and `plan-review` lists `{ operation_id, guard_class }` for each mutation of the `ops@1` list. `planMutations` in `engine/src/workbench/plan-pipeline.ts` builds the list in code from the declaration of `ops@1`, in declaration order. No prompt holds a copy of the list. The list holds 16 mutation ids:
+
+| `guard_class` | Mutation ids                                                                                                                                                                                                     |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reversible`  | `mission.node.pause`, `mission.node.resume`, `mission.node.check`, `mission.node.priority.set`, `mission.dependency.add`, `mission.dependency.remove`, `project.pause`, `project.resume`, `agent.cooldown.clear` |
+| `judged`      | `mission.node.unblock`, `mission.node.block`, `mission.node.create`, `mission.node.update`, `mission.proposal.decide`, `mission.criterion.set`                                                                   |
+| `card`        | `mission.import.apply`                                                                                                                                                                                           |
+
 - `verification` holds the results of the node verifications that the execution code runs. `dependencies`, `outcomes` and `evidence` are empty for an `examine` node with no direct dependency.
 - `tasks` lists the tasks of the node for the work prompt of the node unit, and is empty for the work prompt of a task.
 - `node` holds the name, the requirement and the criterion of the node for the work prompt of a task. It is null for every other work prompt.
@@ -1080,6 +1092,37 @@ This section records the eval harness of the engine node `l2-engine`.
 - `scripts/eval/run.sh` reruns the regressed cases once, with `EVAL_RERUN=1`. It exits 1 when `comparison.regressed` stays non-empty.
 - `scripts/eval/run.sh` appends `<run>.entry.json` to the history only when the history is absent or `ACCEPT=1`.
 - `scripts/eval/render.mjs` renders the history files into `docs/reference/agent/evals.html`.
+
+### The plan suite
+
+- The cases of the subject `plan@1` are the files `engine/eval/plan@1/<id>.yaml`. The suite holds `plan-blocked-node`, `plan-fix-node`, `suggest-only` and `no-mutation`.
+- Every case sets `plan_contract: true`. Every case forbids a call of each mutation of the `ops@1` list.
+- The seeded-defect rule: a fixture holds one defect that the plan must find, and the case lists a `reply_contains` text or a `reply_forbids` expression that fails a plan which misses it. In `plan-blocked-node` and `suggest-only`, a node holds the verification `true`, and the reply must name it. In `suggest-only`, two nodes hold the same requirement, and the reply must name both.
+- `plan-fix-node` expects a call of `mission.import.preview` and a reply that names `mission.import.apply`. `no-mutation` asks Jeremy to act, and the reply must give `actor:yumi` with `mission.node.unblock` and no call of a mutation.
+- Every case forbids an `actor` other than `yumi`, `human` and `worker` in the reply.
+
+### The plan check
+
+- `plan_contract: true` is a key of `checks`. It scores the check `plan_contract`. The check fails with one line for each broken rule, and it passes when no rule breaks.
+- The rule `sections`: the reply holds the headings `## Conclusion`, `## Facts`, `## Plan`, `## Risks`, `## Decisions` and `## Review`, in this order.
+- The rule `operation`: each step of the Plan section names an `operation:` that the operation registry holds.
+- The rule `input`: the `input:` of a step is valid JSON.
+- The rule `actor`: `actor:yumi` is valid only for a mutation of the `ops@1` list.
+- The rule `guard`: the `guard:` of a step equals the guard class of its operation. `human_only` is also valid for an operation of `HUMAN_ONLY_OPERATIONS`, and for `mission.import.apply` with a nonempty `confirmed_retirements`.
+- The rule `fact_source`: each fact of the Facts section names a `source:` operation id, and a call of the run reads that operation.
+- The rule `import_preview`: a step of `mission.node.create` or `mission.import.apply` needs a call of `mission.import.preview` in the run.
+- `planContractFailures` in `engine/src/eval/plan-contract.ts` holds the rules. `scoreRun` receives the registry lookup `sandbox.find`.
+
+### The Jeremy observation rule
+
+- A member `plan@1` observes the final plan as its reply. The reply is the text of the last plan entry, not the text of an assistant message.
+- A member `plan@1` observes the calls of both phases as its calls. A phase entry adds no assistant text to the reply.
+- The placeholder `{{<key>.mission_id}}` resolves to the id of the fixture mission.
+
+### The plan and apply cases
+
+- `plan-apply-confirm` is a case of `ops@1` with `agents: [plan@1]`. Jeremy plans the unblock of a blocked node. The next turn asks Yumi to apply step 1. The run passes when `ops@1` calls `mission.node.unblock` once, the call needs one confirmation and no auto run, and the node ends `Available`.
+- `import-batch-after-review` is a case of `ops@1` with `agents: [plan@1]`. Jeremy plans one new node. The next turn asks Yumi to apply the whole plan as one import. The run passes when the run calls `mission.export`, `mission.import.preview` and `mission.import.apply` with `confirmed_retirements: []`. The apply needs one confirmation and no auto run. The mission then holds the new node and the old node.
 
 ### The key
 
