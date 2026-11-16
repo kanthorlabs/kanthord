@@ -1484,6 +1484,26 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The adapter refuses the execution with `worker.runtime.setup_refused`, whose `details.reason` is `credential_revision_mismatch`, when the `credential_id` of the handover item differs from the `credential_id` of the answer.
 - Tests cover each source, the pinned revision after a rotation, the validation against the pinned metadata, an absent pin, a revoked pin, each other refusal, the proof of the path identity, the absence of a secret and the absence of a new pin. Tests cover a pinned instruction commit after the base moves, an absent prompt pin, a failed span write and a retried read.
 
+## The seed export
+
+`worker.execution.seed.get` is a `human` read of `unary` lifetime at `GET /api/worker/execution/:execution_id/seed`, with the access policy of `scheduler.execution.get`. It declares `mutation: false` and the default 30 s timeout. It has no CLI leaf.
+
+It answers `{ claim, setup, revision, heads }` for any execution of a node that is not `Completed`, `Discarded` or retired:
+
+- `claim` from the execution row, with the stored `created_at` and `expired_at`.
+- `setup` composed as `execution.setup.get` composes it: the pinned agent selections, the prompt commits of the attempt, the templates, the stored environment of each binding and the unit records of the node.
+- `revision`: the pinned node revision, read in-process through the Mission contract.
+- `heads`: the head of each node branch that the push records of the execution confirm, else the attempt base commit.
+
+It reads no credential and answers no credential, no SSH identity and no handover key.
+
+| HTTP | Code | Condition |
+| --- | --- | --- |
+| 409 | `worker.execution.seed_unavailable` | The node is `Completed`, `Discarded` or retired; its unit records are deleted at that transition. |
+| 404 | `scheduler.execution.not_found` | No execution with that id exists. |
+
+Tests cover the composed setup equal to `execution.setup.get` for a live execution, the refusal of a closed node and the absence of any credential, SSH identity or handover key.
+
 ## Configuration
 
 - The Worker Service owns the section `worker` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
@@ -1732,6 +1752,19 @@ The progress rule:
   - The detail holds at most `STOP_DETAIL_MAX_LENGTH` (2048) characters. The fitting cuts `agent_reason` first, then `command`.
 - The `worker.task` span that the stop ends carries `kanthord.stop.reason`, `kanthord.stop.rule`, `kanthord.stop.count`, `kanthord.stop.limit` and, after a verification, `kanthord.stop.verification.passed`.
 - A work turn with `changed` false adds nothing. The verification of the unit decides.
+
+## The capture hook
+
+When the environment variable `KANTHORD_CAPTURE_TASKS=1` is set for the worker process, `runChain` calls the capture hook once after the last node of the `start` phase. The hook writes a capture directory `captures/<execution_id>/` in the state directory of the instance with mode `0700`. The hook is not a chain node, so the golden chain file does not change.
+
+The capture directory holds:
+
+- `seed.json` with `claim`, `setup`, `revision`, `heads`, `prior`, `refreshed`, `affectedTests`, `plan` and `elapsed_ms`.
+- `trees/<binding_id>.bundle`: one `git bundle` for each checkout, holding `refs/heads/<node_branch>` at the head, and `refs/heads/<b>` at `origin/<b>` for the base branch and the upstream branch.
+
+The hook writes no key that holds a path of the host or a live object: `checkouts`, `gitPaths`, `setupEntries`, `setupPending`, `setupInstruction`, `baseHead`, `memo` and `agent`. The hook writes no credential, no `ssh_identities`, no handover key, no agent session and no environment value.
+
+A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture directory with the instance data. A test of the hook rejects a seed that holds any credential, SSH identity, handover key or environment value.
 
 ## The further-work release
 
@@ -2668,3 +2701,56 @@ The `worker handover` command refuses an invalid argument locally, matching `eng
 | HTTP  | Code                                       | Condition                                                                     |
 | ----- | ------------------------------------------ | ----------------------------------------------------------------------------- |
 | local | `cli.worker.handover.invalid_execution_id` | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity. |
+
+## Standalone tasks run
+
+The `worker tasks` group holds three commands. `seed` holds the remote flags of the engine CLI. `run` and `compare` are local commands that need no configuration file of the server and open no database.
+
+```
+kanthord worker tasks run <seed-folder>
+  (--replay <turns.jsonl> | --credential-stdin)
+  [--tree <binding_id>=<path>]...
+  [--pass-env <name>]...
+  [--model <provider>/<model>] [--reasoning <level>]
+  [--system-prompt <file>] [--templates <folder>]
+  [--unit <unit_id>]... [--budget-turns <count>] [--budget-wall <duration>]
+  [--skip-release-gate]
+  [--output <folder>] [--force]
+  [--verify]
+
+kanthord worker tasks seed <execution_id> --output <folder> [--force]
+
+kanthord worker tasks compare <output-a> <output-b>
+```
+
+- `--credential-stdin` reads one JSON object from standard input before any other work, as `kanthord worker join` reads its instance configuration, so no secret reaches the command line. Exactly one of `--replay` and `--credential-stdin` is required.
+- `--output` of `run` defaults to `./tasks-run-<execution_id>`. An existing folder fails unless `--force` is set.
+- On success, `run` prints one JSON line with the output folder, the end kind and the exit code.
+- The help text and the command page state that `env.setup`, the verification commands and agent `bash` run on the host with its network.
+- `compare` prints differences in route, end, commits, unit results and `metrics.json`. It fails with `cli.worker.tasks.seed_mismatch` when the seed digests of the two runs differ.
+
+Files read by `run`: `<seed-folder>/seed.json`, each `<seed-folder>/trees/<binding_id>.bundle`, each `--tree` path, `--replay` file, `--system-prompt` file, each file of `--templates`. Files written by `run`: the output folder and its contents. Files read by `seed`: none on the local host (it fetches from the server and the git remote). Files written by `seed`: `<output>/seed.json` and each `<output>/trees/<binding_id>.bundle`. Files read by `compare`: `result.json` and `metrics.json` of each folder.
+
+| Exit code | Condition |
+| --- | --- |
+| 0 | `run`: the phase completed or exited with a budget end, and each `--verify` check passed; `seed`, `compare`: success |
+| 1 | a diagnostic: an invalid seed, option, folder or standard input, an invalid or diverged replay, or another handled failure |
+| 2 | `run`: the phase stopped |
+| 4 | `run`: the phase completed or exited, and a `--verify` check failed |
+
+Exit code 3 stays reserved for `worker.instance.superseded` of `serve worker`.
+
+| HTTP | Code | Condition |
+| --- | --- | --- |
+| local | `cli.worker.tasks.seed_invalid` | `seed.json` fails its schema, a binding has no tree source, the seed lacks a key that the phase reads, or `setup` lacks `prompt.final` or `templates` and the matching option is absent |
+| local | `cli.worker.tasks.tree_invalid` | a `--tree` path is no git repository, or a clone lacks the seed head or `origin/<base_branch>` |
+| local | `cli.worker.tasks.mode_invalid` | neither or both of `--replay` and `--credential-stdin`, or an override with `--replay` |
+| local | `cli.worker.tasks.credential_invalid` | standard input is a terminal, or it holds no valid credential of the effective provider |
+| local | `cli.worker.tasks.credential_expiring` | an `oauth` access token expires before the wall deadline plus 5 minutes |
+| local | `cli.worker.tasks.unit_unknown` | a `--unit` names no unit of the plan |
+| local | `cli.worker.tasks.output_exists` | the output folder exists and `--force` is absent |
+| local | `cli.worker.tasks.replay_invalid` | the `--replay` file has another version or an invalid line |
+| local | `cli.worker.tasks.replay_diverged` | a model request differs from the recorded request |
+| local | `cli.worker.tasks.seed_mismatch` | `compare` got two runs of different seeds |
+
+The stop code `operation_failed/cli.worker.tasks.read_not_seeded` ends the phase when a step makes a server read. It gives exit code 2.

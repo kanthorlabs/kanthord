@@ -80,6 +80,8 @@ Code facts added to `facts.md`:
 
   Reason: layers 1 to 3 each change one file group (`turn-gate.ts` and `local-git.ts`, `done-record.ts`, `execution-run.ts`) and give the cost cut that the EM asks for with no runner. Layer 4 then ports verified behavior, and the golden file keeps section 4 equal to the code.
 
+- **D31 (own idea): run the `tasks` phase as a standalone local command through `MethodClients` and `HostTools` seams.** The command uses production step code with no step of its own. No `tasks` step holds placement logic or imports a transport constructor; placement lives only in the resources. The only production behavior addition is the capture hook of section 5.7. Reason: a developer runs and replays the core of an execution on one machine with no server access and can change one variable and compare the result.
+
 ### Invariants
 
 | Invariant                                        | Status                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -226,6 +228,7 @@ type ChainNode =
   | { kind: "phase"; phase: Phase; nodes: readonly ChainNode[] };
 
 interface LoopFrame<S> {
+  reads: readonly Key[];
   init(ctx: ExecutionCtx, outer: unknown): S | null;
   body: readonly (Step<Key, Key> | LoopStep<S, Key, Key> | ChainNode)[];
   next(ctx: ExecutionCtx, scope: S): S | null;
@@ -272,6 +275,24 @@ declare function runChain(
   seed: Pick<ExecutionCtx, "claim" | "setup">,
   io: StepIo,
 ): Promise<ExecutionEnd>;
+
+declare function runPhase(
+  chain: Chain,
+  phase: Phase,
+  seed: PhaseSeed,
+  io: StepIo,
+  options: { until: Phase | null },
+): Promise<PhaseEnd>;
+
+interface PhaseSeed {
+  keys: Partial<ExecutionCtx>;
+  resources: PhaseResources;
+}
+
+type PhaseEnd =
+  | { kind: "completed"; ctx: ExecutionCtx }
+  | { kind: "exit"; exit: ChainExit; ctx: ExecutionCtx }
+  | { kind: "stop"; stop: ExecutionStop; ctx: ExecutionCtx };
 ```
 
 Rules of the runner:
@@ -314,6 +335,10 @@ Rules of the runner:
     - `cleanup`: a fresh context bounded by `expired_at`. In phases and in `onExit`, it is `budget.cleanupContext(operationContext)`. In `onStop`, it is `run.cleanupContext()`, because the stop already cancelled `operationContext`.
 
     `gate.g`, `checkout.restore`, `checkpoint.gate`, `claim.fence`, `branch.push` and the final calls are `cleanup` steps. Every other step is a `work` step.
+
+14. **`LoopFrame.reads`.** Each `LoopFrame` declares the keys that `init` and `next` read from the outer context. The seed check of `runPhase` requires each listed key.
+15. **`runPhase`.** Seeds the context with `seed.keys`, then runs the nodes of the named phase with the chain middleware and the loop rules. It shares the node walker, the middleware and the loop rules with `runChain`. After the end, the caller disposes `io.resources` and sends no server call.
+16. **`until`.** When `options.until` names a phase, the walker ends with `completed` on entering that nested phase. The `--skip-release-gate` option sets `until` to `release_gate`.
 
 Standard middleware, outermost first: `spanned`, `stopMapped`, `budgetGuarded` (only `llm` steps). `stopMapped` maps `ContextCancelled` and `DeadlineExceeded` to the chain budget end when `budget.exhausted()` holds and `operationContext` is not aborted (rule 6). It maps an abort with an `ExecutionStop` reason to that stop (rule 5a). It maps every other unknown error to `run.stopOf`.
 
@@ -390,7 +415,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: prepare. Chains: implement.
 - Problem: give each binding a coder checkout at the node branch.
-- Reads: `claim`, `setup`, `attemptEvidence`. Writes: `checkouts`, `heads`, `gitPaths`, `pushRecord`.
+- Reads: `claim`, `setup`, `attemptEvidence`. Writes: `checkouts`, `heads`, `gitPaths`, `pushRecord`, `baseHead`, `memo`.
 - Work: git and network. Shared tree service: node-key reuse with a pending push, else Agent pool tree, else clone; `fetchAndCheckout`; `git fetch --prune origin`; one `git rev-parse --git-path` per checkout for `gitPaths`; then the restore sequence of prepare (`restoreCheckout`, section 5.3) to the head that the checkout read.
 - Push record: `pushRecord` holds the push record of each binding. Rule 1: with no record and a remote node branch, the step writes `confirmed` = the remote head.
 - Hygiene, before the checkouts: give the leftover release trees of the node key back to the Command pool; `keepOnly` keeps the push record of the node branch and the checkout directories of the bindings and `.kanthord-scratch/`. After the checkouts: restore the scratch store of the node branch (one checkout: move the saved `.kanthord-scratch/` back; several checkouts: drop it when it belongs to another branch). Each new tree gets the `.kanthord-scratch/` line in `.git/info/exclude`.
@@ -1196,6 +1221,187 @@ Every span keeps today's name and attributes. The table names the owning step of
 | `agent.tool`             | Each tool call of an LLM step                                                                                                                                                                     | `gen_ai.tool.name`, `gen_ai.tool.call.id`, `kanthord.tool.outcome`, `kanthord.tool.duration_ms`, `kanthord.tool.timeout.requested_ms`, `kanthord.tool.timeout.applied_ms`, `kanthord.tool.killed`.                                                                                                                                                         |
 | Session entry records    | `agent.session`; sent at each session event and at the trace close                                                                                                                                | One record per pi session entry (`agent-telemetry.ts:259`).                                                                                                                                                                                                                                                                                                |
 
+### 5.7 Standalone tasks run
+
+`kanthord worker tasks run` runs the `tasks` phase of an `implement` execution on one machine with no server call during the phase. The command uses the production step code of `tasks` unchanged: no `tasks` step imports a transport constructor or a client constructor. All server calls flow through `MethodClients` and `HostTools` seams; placement lives only in the resources. `kanthord worker tasks compare` and `kanthord worker tasks seed` are companion commands. The only production behavior addition is the capture hook below.
+
+**Seams**
+
+`runPhase` runs the nodes of one phase with the chain middleware and the loop rules. It shares the node walker, the middleware and the loop rules with `runChain`.
+
+Before the first node, `runPhase` lists each key that a node of the phase reads before a writer inside the phase, and each key in `LoopFrame.reads` of each loop of the phase. Each listed key must be in `seed.keys`. A missing key fails with `cli.worker.tasks.seed_invalid`; the diagnostic names the missing keys.
+
+With `until` set to `release_gate`, the walker ends with `completed` on entering the `release_gate` nested phase. After the end, the caller disposes `io.resources` and sends no server call.
+
+`MethodClients` holds every server call of a step of `tasks`. The local implementation `localMethodClients(outbox, seed)` records each write in call order and answers a synthetic identity whose ULID encodes the call position. Every read answers `operation_failed/cli.worker.tasks.read_not_seeded`, because no step of `tasks` makes a server read.
+
+`HostTools` holds the host tool calls. The local implementation `localHostTools(outbox, seed)` records each call and copies each uploaded file into `uploads/` of the output folder. `evidenceUpload` answers synthetic evidence identities and the URI `s3://local/<evidence_id>/<asset_id>`.
+
+**Seed and local resolution**
+
+The seed keeps every id of production unchanged. The local run adds a resolver and does not change the phase contract. No step of `tasks` reads data from the server by id; ids are keys that steps compare, log and send back.
+
+| Input key | Production source | Local source |
+| --- | --- | --- |
+| `checkouts`, `heads`, `gitPaths` | `workspace.node` on the instance data root | `binding_id` → bundle or `--tree` → a local clone at `nodeDirectory(node_id, name)` under the output folder |
+| `baseHead`, `memo` | live objects of S06 of the instance | new objects under `state/` of the output folder |
+| `agent` | `agent.open` with the custody credential store | `agent.open` with the frozen store, or the replay provider |
+| `credentials` (by `credential_id`) | `worker.handover` | the standard-input credential, bound to the same `credential_id` |
+| `setupEntries`, `setupPending`, `setupInstruction` | steps of `prepare` and `start` | the same steps in `tasks_prepare` |
+| ids of new records (evidence, unit records) | answers of the server | synthetic ids in the valid format, from the position of the call |
+| `revision`, `plan`, `setup`, `prior`, `claim` | server reads | `seed.json`, unchanged |
+
+**Credentials**
+
+Input:
+
+- Live mode requires `--credential-stdin`. The command reads one JSON object from standard input before any other work.
+- An `api_key` credential is `{ "provider_id": "anthropic", "credential": { "type": "api_key", "key": "<key>" } }`.
+- An `oauth` credential is `{ "provider_id": "anthropic", "credential": { "type": "oauth", "refresh": "<token>", "access": "<token>", "expires": <epoch ms> } }`.
+- `credential` follows `piCredentialSchema` of `src/custody/contract.ts`: the same shapes, the same well-formed check and the same byte limit as a custody handover item.
+- `provider_id` must equal `piProviderId` of the effective provider of the agent selection, after `--model`. The command binds the credential to `credential_id` of the agent selection.
+- `cli.worker.tasks.credential_invalid`: standard input is a terminal, holds no JSON, fails the schema or names another provider. The diagnostic names the failed field path only, with no value and no schema message.
+- `cli.worker.tasks.credential_expiring`: an `oauth` access token expires before the wall deadline of the run plus 5 minutes (`PI_OAUTH_REFRESH_WINDOW_MS`).
+- No option, no environment variable and no file takes a credential.
+- Replay mode reads no standard input. Its store holds the placeholder `{ type: "api_key", key: "replay" }`, which no provider receives.
+
+Lifetime:
+
+- The command reads standard input into one `Buffer`, parses it, then fills the `Buffer` with zeros.
+- The credential lives only in process memory, in one `frozenStore` of `src/llm/refresh-watch.ts`, a `CredentialStore` of pi-ai.
+- `createModelRuntime` passes the store to `ModelRuntime.create`, so pi creates no `AuthStorage` and writes no `auth.json`.
+- The session uses `SettingsManager.inMemory` and `SessionManager.inMemory`, so no session file reaches the disk. The pi directory is `state/pi/` of the output folder.
+- The credential never enters `process.env`.
+- Dispose runs at every end, after every failure and after SIGINT, and drops every reference to the credential. A JavaScript string has no overwrite, so the value leaves the heap at garbage collection.
+
+OAuth refresh:
+
+- The store is frozen. Its `modify` answers the stored value and never calls the refresh of pi-ai.
+- The run thus rotates no refresh token, and it sends no `worker.credential.lease` and no `worker.credential` report. Custody keeps a valid refresh token.
+- An access token that reaches the refresh window during the run goes to the provider unchanged. A provider refusal stops the phase with `provider_failed`.
+- The command page tells the developer to use a credential that the developer owns.
+
+Leak paths:
+
+| Path | Rule |
+| --- | --- |
+| `turns.jsonl` | The recorder writes the model, the request context and the answer. It never writes the stream options, so it holds no `apiKey`. |
+| `spans.jsonl`, stop details | Each credential value joins the known secrets (`ExecutionRun.secrets`, `NativeAgentInput.knownSecrets`), so the session trace and `redactReason` redact it. |
+| `outbox.json` | `localMethodClients` and `localHostTools` hold no credential operation. The frozen store sends no report. |
+| `result.json`, `context.json`, `metrics.json` | They record the mode, `provider_id` and the overrides. No override takes a credential. `context.json` holds no resource key. |
+| logs, diagnostics | No log field takes a credential. A diagnostic holds no embedded value. |
+| child processes | The environment rule of "Calls outside the worker" applies. |
+| seed, capture, export | No credential, no `ssh_identities`, no handover key and no environment value. |
+| core dump | The command page tells the developer to run `ulimit -c 0` first, as `repository.impl.md` rules for a host install. |
+
+SSH:
+
+- The run needs no SSH. `base.fetch` fetches from `origin` of the prepared tree, which is the bundle or the source repository on the local disk.
+- The command takes no SSH option and reads no `SSH_AUTH_SOCK`. `isolatedGitEnvironment` removes `SSH_AUTH_SOCK` from every `git` child.
+- The relay of each `ssh.access` entry refuses each sign request, so a git operation that reaches a remote fails with `repository.connector.git_failed`.
+
+**Production behavior**
+
+The command adds no server call, no step and no log message to the production execution. Code additions with no behavior change: `runPhase`, `LoopFrame.reads` and the chain id `tasks_prepare`. The only behavior addition is the capture hook; it runs only when `KANTHORD_CAPTURE_TASKS=1` is set for the worker process. The command never writes to the workspace of a live execution.
+
+**Seed format**
+
+`seed.json` requires: `claim` (the `MethodClaim`), `setup` (the `ExecutionSetup` as `execution.setup.get` answers it), `revision` (the pinned node revision) and `heads` (the seed head of each binding). Optional: `plan`, `affectedTests`, `prior`, `refreshed`, `link_updates`, `elapsed_ms`. The seed holds no credential, no SSH identity, no handover key and no environment value.
+
+A hand-written seed omits `prompt.final` and `templates` of `setup`. The run takes them from `--system-prompt` and `--templates`. Without those options, such a seed fails with `cli.worker.tasks.seed_invalid`.
+
+Each binding gets one tree source: `trees/<binding_id>.bundle` in the seed folder, or `--tree <binding_id>=<path>`.
+
+**Defaults and preparation (`tasks_prepare`)**
+
+The command runs a preparation chain `tasks_prepare` before `tasks` with `runPhase`. The chain builder builds it as `[PAR] affected.declaration, setup.entries, agent.open`, then `[PAR] env.setup(live), units.plan`. A step whose key the seed holds is not in the chain. `env.setup(live)` always runs, because its effect lives in the tree.
+
+| Key | Source |
+| --- | --- |
+| `claim.created_at` | start of the run, minus `elapsed_ms` (default 0) |
+| `claim.expired_at` | new `created_at`, plus `expired_at` minus `created_at` of the seed |
+| `checkouts`, `heads`, `gitPaths` | prepared trees |
+| `baseHead` | a `BaseHead` with no tree pool under `state/base/` of the output folder; clones from local checkouts |
+| `memo` | a new `VerificationMemo` |
+| `setupEntries` | `setup.entries`, always |
+| `setupPending`, `setupInstruction` | `env.setup(live)` on the trees, always |
+| `agent` | `agent.open` with local resources, always |
+| `affectedTests` | `affected.declaration`, when the seed lacks the key |
+| `plan` | `units.plan`, when the seed lacks the key; reads `prior` (default: empty) and `refreshed` (default: no refresh) |
+
+**Capture hook**
+
+When `KANTHORD_CAPTURE_TASKS=1` is set, `runChain` calls the capture hook once, after the last node of `start`. The hook writes `captures/<execution_id>/` in the state directory of the instance with mode `0700`:
+
+- `seed.json` with `claim`, `setup`, `revision`, `heads`, `prior`, `refreshed`, `affectedTests`, `plan` and `elapsed_ms`.
+- `trees/<binding_id>.bundle`: one `git bundle` for each checkout, holding `refs/heads/<node_branch>` at the head, and `refs/heads/<b>` at `origin/<b>` for the base branch and the upstream branch.
+
+The hook writes no credential, no `ssh_identities`, no handover key and no environment value. A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture with the instance data.
+
+**Seed export**
+
+`worker.execution.seed.get` is a `human` read of `unary` lifetime at `GET /api/worker/execution/:execution_id/seed`, with the access policy of `scheduler.execution.get`. It answers `{ claim, setup, revision, heads }` for any execution of a node that is not closed. An export of a closed node answers 409 `worker.execution.seed_unavailable`. The route answers no credential, no SSH identity and no handover key. `worker-service.impl.md` holds the full route spec.
+
+**Calls outside the worker**
+
+The phase reaches no kanthord server and no git remote: `base.fetch` reads the local `origin`. In live mode, the agent calls the LLM provider. `env.setup`, the verification commands and agent `bash` run on the host with its network, and the help text states it.
+
+Each child process receives `PATH`, `HOME`, `LANG` and `TMPDIR` of the command, and each variable that `--pass-env <name>` names. No other variable of the shell reaches it. Each `--pass-env` value joins the known secrets of the run.
+
+SIGINT cancels the stop context with `worker_stopped`. The command then disposes the resources.
+
+**Overrides**
+
+Overrides edit the seed before `tasks_prepare`. Replay mode refuses each override with `cli.worker.tasks.mode_invalid`.
+
+| Option | Effect |
+| --- | --- |
+| `--model <provider>/<model>` | replaces the provider and the model of the agent selection |
+| `--reasoning <level>` | replaces the reasoning effort |
+| `--system-prompt <file>` | replaces `prompt.final` of the agent selection |
+| `--templates <folder>` | reads templates with `resolveTemplateSet`; an absent file keeps the shipped template |
+| `--unit <unit_id>` | keeps only these units in `plan`; repeatable |
+| `--budget-turns <count>` | replaces the turn budget |
+| `--budget-wall <duration>` | replaces the wall-time budget |
+| `--skip-release-gate` | sets `until` to `release_gate`; the phase ends after the units of round 1 with `completed` and no route |
+
+**Output**
+
+The command writes one output folder with mode `0700`. `result.json` records the `PhaseEnd` kind, the exit or stop, the step, the mode, `provider_id`, the overrides, the seed digest and the check results. `context.json` holds the context at phase end with no resource key. `progress.json` holds the last `ProgressCtx` and the last `UnitCtx` of each unit. `metrics.json` holds unit metrics, step run times and phase totals. `outbox.json` holds each server call and host tool call with its operation, body, step and time. `turns.jsonl` holds each model request and answer in replay format with a version header. `spans.jsonl` holds the spans. `uploads/` holds the files of `evidence-upload`. `state/` holds the trees, the base tree, the release trees and the pi directory.
+
+With `--verify`, the command runs these checks and records each result in `result.json`:
+
+1. Each pass of a task unit, or of the node unit of a node with no task, that leaves a gate commit of the pass as a checkout head has one `worker.execution.unit_record.put` after it. Its `content_digest` equals the digest of the unit content, and its `commits` name each such head (section 5.1).
+2. Each pass of a unit with non-empty final text has one coder report after it, with the subject `Coder report of unit <unit id>` (D29). The verdict unit uses the node id.
+3. Each head in `context.json` equals `git rev-parse HEAD` of its tree.
+4. Each commit of `git rev-list <seed head>..HEAD` of each tree is a commit of the run: `spans.jsonl` holds it as `kanthord.git.commit` of a `worker.gate` span, or of a `worker.git` span with the git step mark `merge_base`.
+5. With the end `completed`, each tree has a clean status: no index change, no untracked file and no operation path.
+6. With the end `completed`, the route is `passed`. With `--skip-release-gate`, the route is absent.
+7. A stop code is in the `stops` list of the step that `result.json` names, or it is a code of the work kind of that step (section 3).
+8. In replay mode, the outbox and the commits equal those of the recorded run in the folder of the `--replay` file. The comparison replaces each commit id with its tree id and its message.
+
+**Commands**
+
+`worker-service.impl.md` holds the full option list, the exit codes and the diagnostic codes. `worker tasks seed` is a remote command. `worker tasks run` and `worker tasks compare` are local commands that call no route, open no database and need no configuration file of the server.
+
+**Tests**
+
+1. Golden chain test prints `tasks_prepare`. Both chains use the production chain builder.
+2. Module test asserts that no step file of `tasks` imports a transport or a client constructor.
+3. Each server step of `tasks` runs once with `localMethodClients` and once with a fake transport behind `MethodClients`. Both runs make the same operation and body.
+4. Live run with scripted provider; captured seed replayed; both compared by check 8 (`--verify`).
+5. Replay of `turns.jsonl` from test 4; a changed tool set stops it with `replay_diverged`.
+6. Capture hook rejects a seed with any credential, SSH identity, handover key or environment value.
+7. `runPhase` requires each phase read and each `LoopFrame.reads` key; `until` ends the phase.
+8. Minimal seed fills every `tasks_prepare` default.
+9. `--tree` leaves the source repository unchanged.
+10. `compare` shows each section of difference and refuses two seeds with different digests.
+11. Canary test: a live run with a canary credential and scripted provider searches every output file and both standard streams for each canary value and expects no match.
+12. Credential test proves each refusal, the empty `auth.json` path under the pi directory and the frozen store.
+13. Replay mode reads no standard input and calls no provider.
+14. Route test of `worker.execution.seed.get`.
+15. Hand-written seed with `--system-prompt` and `--templates`.
+
 ## 6. Before and after
 
 | Observed cost                                                                                      | Change                                                                                                                                | Expected effect                                                                                                                                                                                                      |
@@ -1237,8 +1443,10 @@ Every span keeps today's name and attributes. The table names the owning step of
 
 - `worker-service.md`: the done record paragraphs (lines 437-446) and the sequence diagrams (lines 517, 891).
 - `worker-service.vocabulary.md`: `done record` becomes `unit record`.
-- `worker-service.impl.md`: the done record, gate G, the restore sequence, the claim check, the no-progress counter scope, the affected declaration position, the agent open position, the telemetry phases, the `agent.turn` parent rule under `worker.step` (Traces), the final call order (Traces), and the cleanup deadlines (Stop and budget).
+- `worker-service.impl.md`: the done record, gate G, the restore sequence, the claim check, the no-progress counter scope, the affected declaration position, the agent open position, the telemetry phases, the `agent.turn` parent rule under `worker.step` (Traces), the final call order (Traces), the cleanup deadlines (Stop and budget), and section 5.7: the capture hook, `KANTHORD_CAPTURE_TASKS`, `worker.execution.seed.get` and the three `kanthord worker tasks` commands.
+- `custody.impl.md`: section 5.7: the frozen store of a local run and `--credential-stdin`.
+- `architecture.impl.md`: the `kanthord worker tasks` group.
 - `scheduler-service.impl.md` or the owner of `scheduler.claim.get`: the watch interval, the watch end points and the fence.
 - `docs/reference/erd/`: `worker_unit_record`, after the column review.
-- `engine/docs/cli/` worker page: the new operation and its error codes.
-- `HANDOFF.md`: one item per open question above, under the Worker Service.
+- `engine/docs/cli/` worker page: the new operation and its error codes, and section 5.7: command rows, files, exit and diagnostic codes.
+- `HANDOFF.md`: one item per open question above, and two items for section 5.7, under the Worker Service.

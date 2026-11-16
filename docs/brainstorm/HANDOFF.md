@@ -155,6 +155,8 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
   - Compare the candidate with the current prompt on the measures above before it becomes the default.
   - Ranked lower until the data shows the need: a deterministic check that each base-side added line stays in the merged file, and a `re@1` review turn after the conflict commit.
 - [ ] Added 2026-11-14 from the review of the worker call stack. State the skip of a failed-checks verdict after a base merge in [the verdict unit](worker-service.impl.md#the-verdict-unit). `nodeInstructionOf` of `engine/src/worker/unit/steps-implement.ts` skips the verdict unit when the verdict source is `failed_checks` and the base merge at the claim answers `merged`. The merge counts as new work. A verdict of the source `rework` is never skipped for this reason.
+- [ ] Added 2026-11-16 from section 5.7 of the worker execution refactor design (D31). Update `engine/docs/cli/worker.md` with the command rows, the files, the exit codes and the diagnostic codes of `kanthord worker tasks run`, `kanthord worker tasks seed` and `kanthord worker tasks compare`. Add `--credential-stdin` of `worker tasks run` to the standard-input readers alongside `kanthord worker join` and `kanthord worker machine join`.
+- [ ] Added 2026-11-16 (D31). Build the standalone tasks run command and its companion commands, as specified in [design.md §5.7](worker-execution-refactor/design.md#57-standalone-tasks-run) and [worker-service.impl.md § Standalone tasks run](worker-service.impl.md#standalone-tasks-run).
 
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
 

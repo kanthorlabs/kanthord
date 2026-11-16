@@ -204,6 +204,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The view refuses `delete()`.
 - At every placement, the view reads the decrypted handover. The worker unit reads no custody record directly. At the `worker` placement, the worker unit opens the sealed item of the handover with the private key of the item `holder`. That holder is its instance or its machine.
 - Custody drops the view at execution end.
+- A local run (`kanthord worker tasks run`, [design.md §5.7](worker-execution-refactor/design.md#57-standalone-tasks-run)) holds a frozen store from `src/llm/refresh-watch.ts` in place of the execution view. Its `modify` answers the stored value and never calls the pi-ai refresh, so the run sends no `worker.credential.lease` and no `worker.credential` report. The frozen store holds no revision and pins no row. The credential enters through `--credential-stdin`, which reads one JSON object from standard input before any other work, following `piCredentialSchema` of `src/custody/contract.ts`. Replay mode uses a placeholder `{ type: "api_key", key: "replay" }` and reads no standard input.
 - A workbench view reads the newest live revision and pins no revision.
 
 ## The credential handover
