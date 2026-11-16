@@ -20,8 +20,8 @@ The action catalog holds exactly three actions: `pull_request` and `merge_push` 
 
 - `pull_request` opens a pull request from the node branch into the base branch. It requires the platform action capability. Its expected end state is the merge of that pull request.
 - `merge_push` merges the node branch into the base branch and pushes. It requires the network git write capability. Its expected end state is the push to the base branch.
-- `reply` posts one reply to an external link of a conversation binding. Its expected end state is `posted`. It follows the passing assessment of the node.
-- Each action implies its expected end state. Only `pull_request` takes a parameter: the optional `landing`, `human` or `kanthord`, default `human`. With `kanthord`, the action performer requests the merge as a separate outbound write after the request evidence of the attempt exists. With `human`, a human merges. The frozen action copies `landing` with `base_branch`.
+- `reply` drafts one reply to an external link of a conversation binding. The Mission Service drafts it when the node completes. The reply posts only after a human approves the draft. A node never requires the `reply` action to complete.
+- Each repository action implies its expected end state. Only `pull_request` takes a parameter: the optional `landing`, `human` or `kanthord`, default `human`. With `kanthord`, the action performer requests the merge as a separate outbound write after the request evidence of the attempt exists. With `human`, a human merges. The frozen action copies `landing` with `base_branch`.
 - A change set that changes a gate file of the base declaration lands with `human` for that attempt, whatever `landing` the binding declares. The current assessment of the attempt records the changed gate files under [the affected test run](worker-service.impl.md#the-affected-test-run). The Mission Service refuses a `merge_push` action of that binding for that attempt with `gate_file_changed`.
 - A repository strategy holds at most one action, because a policy configures one external action.
 - The key of a configured action is `<binding name>.<action name>`, for example `kanthord-repo.pull_request` or `acme-issues.reply`. It matches `^[a-z][a-z0-9-]{0,62}\.(pull_request|merge_push|reply)$` and holds at most 76 bytes: 63, the separator and the longest catalog name. A new catalog action extends the alternation. The key is stable for the life of the binding, because a change of the binding name is a replacement binding under [project-service.md](project-service.md#resource-and-binding-model).
@@ -51,6 +51,8 @@ The constraints are below.
 - The Project Service keeps a removed binding and every revision for the life of the project, and no sweep deletes them. Only a human edit adds a row, so the tables grow with human edits alone.
 - The primary key of `project_binding` is `id`, an identity of the convention that [architecture.impl.md](architecture.impl.md) rules, so the identity of a revision is unique across the server.
 - A binding is the group of the rows that share `project_id` and `resource_identity`. A unique index over `project_id`, `resource_identity` and `revision` orders the revisions of a group, and the latest revision states the binding.
+- The index `project_binding_resource_identity` over `project_binding (resource_identity)` serves the reads of [the commit identity](#the-commit-identity) across projects.
+- A live binding is the latest revision of its group when that revision is no tombstone. A disabled binding is live.
 - The write refuses a binding name that another current binding of the project holds. A partial index cannot select the latest revision of a group, so the write checks this rule. A removed binding releases its name.
 - `project_binding.resource_identity` names the resource that the binding allocates, and every kind holds a value. The section below gives its form. The first part of `resource_identity` is the binding kind, so no column holds the kind.
 - A credential reference sits inside `config` and names a credential by its name, never a revision. The write validates it through custody. SQLite enforces no foreign key inside JSON.
@@ -149,7 +151,7 @@ The binding set has one read route and one write route, and both serve the whole
 - The read answers the current binding set as `BindingSet`. It holds no secret material.
 - The write takes `BindingSet` as its body, and `version` names the version that the client read. A stale `version` answers 409 `project.binding_set.version_conflict` with the current version in `error.details`.
 - The write answers the committed binding set as `BindingSet` at its new version.
-- The answer of the write also holds `stale_pins`, under [Stale pins](#stale-pins).
+- The answer of the write also holds `stale_pins`, under [Stale pins](#stale-pins), and `commit_identity_cascade`, under [the commit identity](#the-commit-identity).
 - No route writes one field or one binding. An effective instance count of 0 disables a worker binding, and `available: false` disables a repository binding or a storage binding.
 
 The invocation chain records the answer of the edit in memory after the commit, which [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) rules, and a repeat of the edit after a restart runs the handler again against the same submitted set.
@@ -171,6 +173,29 @@ The answer of a binding-set write holds `stale_pins`. The list shows the nodes t
 - `project.binding.environment.set` writes the binding set, so its answer holds the same list.
 - The CLI prints the list as a field of the answer of `project binding apply`.
 - Tests list a pending node that pins an older revision. Tests list no terminal node, no retired node, no unchanged binding, no removed binding and no node on the new revision. Tests list no pin before a removal and no name with a new resource identity.
+
+## The commit identity
+
+- `repositoryConfigSchema` of `engine/src/project/contract.ts` holds `commit_identity`, a `z.strictObject` of `name` and `email`. The key is optional in the schema, so a stored revision without it parses.
+- `name` is not blank and holds no `<`, `>` or newline. `email` has the form `local@domain`: a nonblank local part, one `@` and a nonblank domain, with no `<`, `>` or newline.
+- A violation refuses the write with 400 `project.bindings.repository.commit_identity_invalid` and `details: { binding, field }`. `field` is `name` or `email`.
+- The repository of a binding is its `resource_identity`. The peers of a repository binding are the live bindings of other groups with the same `resource_identity`. A project holds one group for each repository, so every peer belongs to another project.
+- The write transaction reads the peers through the index `project_binding_resource_identity`. The rule guarantees that every peer holds the same value.
+- The write decides the value of each repository binding that it inserts, in this order:
+  1. A submission without `commit_identity` takes the value of the live revision of its own group, else the value of its peers.
+  2. Without either value, the write refuses with 400 `project.bindings.repository.commit_identity_required` and `details: { binding }`.
+  3. A new group, or a group after its tombstone, with a submitted value that differs from a value that its peers hold refuses with 409 `project.commit_identity.pinned` and `details: { binding, resource_identity, commit_identity }`. `commit_identity` holds the value of the peers.
+  4. A live group with a submitted value that differs from its current value changes the commit identity of the repository.
+  5. A submitted value for a repository whose live bindings hold none is the first value of the repository. It fills every peer group that holds no value.
+- A change or a first value of the commit identity inserts the next revision of every peer group in the same transaction. Each such revision copies the latest configuration of its group and replaces `commit_identity`. It raises the binding-set version of its project.
+- A cascaded revision changes only `commit_identity`, so it gets no network git read and no instruction file read.
+- The answer of `project.binding_set.write` holds `commit_identity_cascade`: one item `{ project_id, binding_name, binding_id, revision }` for each cascaded revision, in the order of `project_id`, then `binding_name`. A write with no change of a commit identity answers `[]`. The answer of `project.binding.environment.set` holds the same list.
+- `stale_pins` lists no pin of another project. A node keeps the commit identity of the revision that it pins, and [the rebind](mission-service.impl.md#the-rebind) moves it.
+- The value goes away with the last live binding of the repository. The next binding of the repository is a first binding again.
+- No table other than `project_binding` holds the commit identity.
+- A resolution of a repository binding revision without `commit_identity` fails [coverage](project-service.vocabulary.md#coverage). It refuses the operation with `project.bindings.repository.commit_identity_required`.
+- `project.commit_identity.list` at `GET /api/project/commit-identity` is a `human` read of `unary` lifetime. The static segment `commit-identity` matches before `:project_id`.
+- It answers `{ items }` with one item `{ resource_identity, name, email }` for each repository whose live bindings hold a commit identity, in the order of `resource_identity`. A caller reuses a value of the list in a binding write.
 
 ## Revision, disablement and rotation
 
@@ -288,7 +313,7 @@ The configuration holds these fields:
 | `inbox`        | optional, `{ actor_id, handle }` | refused until I3, then `{ actor_id }`            | refused until I4, then `{ actor_id }` |
 
 - `credential` is a credential name, never a revision. The binding sends `{ credential, platform }` to [custody suitability](custody.impl.md#suitability), with the platform of the binding.
-- `reply_policy` is `{ follows: { type: "assessment_passed" } }`. An absent value configures no reply action. Its catalog action is `reply`.
+- `reply_policy` is `{ follows: { type: "node_completed" } }`. It turns on a reply draft when the node completes. `FollowsType.NodeCompleted` of `src/project/contract.ts` serves only `replyPolicySchema`, and the repository action keeps `assessment_passed`. A stored revision with `{ follows: { type: "assessment_passed" } }` reads as `node_completed`. A write with that old value refuses as a validation failure. An absent value turns on no reply draft. Its catalog action is `reply`.
 - `link_trust` is `{ actor_ids }`: at most 32 distinct immutable account ids of the platform of the binding. An absent key or an empty list trusts no actor. A bot or an app is never trusted.
 - A repository binding also takes `link_trust`, for the reviewers of a pull request change request. Its `actor_ids` hold GitHub user ids.
 - A violation of `link_trust` refuses the write with 400 `project.bindings.link_trust_invalid` and `details: { binding, field, reason, actor_id }`. `field` is `actor_ids`. `reason` is `type_invalid`, `too_many`, `duplicate`, `id_invalid` or `platform_unsupported`. A key outside `actor_ids` refuses the write as a validation failure.
@@ -910,6 +935,11 @@ The `kanthord` bin of `package.json` releases it.
 - Tests assert `validateEntry` inside the write transaction and refusal when an agent lacks enabled enablement.
 - Tests assert that `entriesOfAgent` includes every dependent binding, including bindings without explicit entries.
 - A test asserts one SSH read per repository address, its failure code and the resource healthcheck deadline.
+- Tests cover `commit_identity`: a blank name, a name with `<`, `>` or a newline, and an email without the `local@domain` form refuse with `commit_identity_invalid`. A first binding without the key refuses with `commit_identity_required`.
+- Tests cover a second binding of the repository in another project: an absent key copies the value, an equal value passes and a different value refuses with `project.commit_identity.pinned`.
+- Tests cover an edit that changes the value. They assert the next revision of every peer binding in the same transaction, `commit_identity_cascade` in the answer and no network read for a cascaded revision.
+- Tests cover a first value for a repository whose peers hold none. They assert the next revision of each such peer with that value and the peers in `commit_identity_cascade`.
+- Tests cover a resolution of a revision without `commit_identity` that fails coverage, and `project.commit_identity.list` over live, removed and disabled bindings.
 - A test covers four address hosts: `ssh.github.com`, a host outside the GitHub SSH host set, `gitlab.com` for platform `gitlab`, and a host that starts with `-`. The `ssh.github.com` address and the `github.com` address of one repository derive the same identity.
 - A test covers a binding write with a pinned host, and an unpinned host that refuses with 409. A host outside the host set answers `address_invalid` on the check.
 - A test asserts that the repository check names the `ssh` record of the binding in its attribution and no other credential store record.

@@ -61,7 +61,7 @@ A [policy](project-service.vocabulary.md#policy) on a binding configures an exte
 A policy states what its action follows: the passing assessment of the node, or the expected end state of another configured action of the same node.
 The repository strategy is the policy of the repository binding.
 A repository binding holds its connection, which is the address, the platform, the SSH credential reference and the credential reference, and its repository policy, which is the repository strategy, the Repository prompt and the Binding prompts.
-A node requires the action of a policy when the node is an `implement` node and names the binding that holds the policy.
+A node requires the action of a repository strategy when the node is an `implement` node and names the binding that holds the strategy.
 An external action states its expected end state on its platform.
 The repository [capabilities](project-service.vocabulary.md#capability) distinguish authenticated operations from local work.
 A repository address is an SSH address.
@@ -72,6 +72,12 @@ Every repository binding holds one SSH credential reference. That record holds t
 A platform action requires an API key of the platform.
 A repository binding holds at most one credential reference. That reference serves every platform action of the binding, including the check of an external object for the Mission Service.
 A binding without a credential reference permits no platform action.
+A repository binding holds the [commit identity](project-service.vocabulary.md#commit-identity) of its repository: the author and committer name and email of each commit that an execution creates.
+The commit identity is a property of the repository, so every live binding of one repository holds the same value.
+The first value of a repository fills every live binding of that repository that holds no value.
+The first live binding of a repository requires a commit identity. The caller sets a new one or reuses one that a live repository binding holds.
+A later binding of the same repository takes the commit identity of the repository. A different value refuses the write.
+A change of the commit identity creates the next revision of every live binding of that repository, in every project.
 At the write of a repository binding, the Project Service performs the network git reads of the connection and of the instruction file through the [Repository component](repository.md#repository-connector).
 A failed read refuses the write.
 A repository binding holds the field `prompts` with three optional keys of the [prompt composer](agent.md#prompt-composer).
@@ -86,7 +92,8 @@ The Binding prompts of the agents are separate texts. A rule that the reviewer j
 ## Conversation configuration and link trust
 
 A conversation binding is no delivery source. It holds the credential of its platform, the reply policy, the link trust and the inbox opt-in of one resource.
-The reply policy states that the reply of a node follows the passing assessment of the node. An absent reply policy configures no reply action.
+The reply policy turns on reply drafts. The move of a node to `Completed` creates a reply draft for each external link of the node on the resource.
+A reply posts only after a human approves its draft, under the [outbound requests](intake-service.md#outbound-requests) of the Intake Service. An absent reply policy turns on no reply draft.
 The [link trust](project-service.vocabulary.md#link-trust) lists the immutable account ids that the binding trusts as authors of link updates. An absent list trusts no actor. A bot or an app is never trusted.
 A repository binding also holds link trust, for the reviewers of a pull request change request.
 The optional key `inbox` names the account of the developer on the platform. It makes the Mission Service record the threads of the resource in the Inbox of the developer.
@@ -199,7 +206,7 @@ It authorizes one operation on one object for a bounded time.
 It reaches a kanthord component and never the context of an agent.
 
 The Project Service reads the claim state of an execution from the Scheduler Service.
-[Coverage](project-service.vocabulary.md#coverage) requires a credential reference for each repository capability that needs one.
+[Coverage](project-service.vocabulary.md#coverage) requires a credential reference for each repository capability that needs one, and a commit identity in each repository binding.
 The Project Service consumes custody's suitability result after coverage passes.
 The operation record names the execution identity or the service identity of its requester.
 [Custody](custody.md#secret-use-and-handover) governs secret use and handover.

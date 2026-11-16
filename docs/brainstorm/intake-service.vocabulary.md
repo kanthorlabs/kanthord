@@ -82,13 +82,14 @@ A request key is the identity that a caller derives from the durable intent of a
 The action performer derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.pull_request` for attempt 2.
 It derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.merge_push/d4e5f6` for the merge of snapshot commit `d4e5f6`.
 It derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/3/kanthord-repo.pull_request/42/e7f8a9` when attempt 3 reuses pull request 42 with snapshot commit `e7f8a9`.
-It derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV:2:{"kind":"github_issue","number":117,"resource_identity":"conversation:github:acme/app"}` for the reply of attempt 2 to issue 117.
+The Mission Service derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV:2:{"kind":"github_issue","number":117,"resource_identity":"conversation:github:acme/app"}` for the reply of attempt 2 to issue 117.
 
 ## outbound request state
 
 An outbound request state records the outcome of an outbound write.
-The closed set holds `pending`, `succeeded`, `failed` and `discarded`.
+The closed set holds `awaiting_approval`, `pending`, `succeeded`, `failed` and `discarded`.
 A 2xx answer or a CLI exit code 0 sets `succeeded`, and every other result sets `failed`.
+The reply of attempt 2 to issue 117 waits as `awaiting_approval` until a human approves it, which sets `pending`, or rejects it, which sets `discarded`.
 GitHub creates pull request 42 and its answer times out, so the request stays `failed` until a read-back finds pull request 42.
 
 ## read-back

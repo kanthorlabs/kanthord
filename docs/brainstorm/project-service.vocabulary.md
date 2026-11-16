@@ -228,6 +228,15 @@ The binding `acme-issues` lists the GitHub user id `"583231"`, so a comment of t
 A comment of any other account is not.
 An absent list or an empty list trusts no actor, and a bot or an app is never trusted.
 
+## commit identity
+
+The name and the email that every commit of an execution in one repository carries as its author and its committer.
+The repository binding configuration holds it as `commit_identity: { name, email }`, and every live binding of the repository holds the same value.
+Project `atlas` binds `kanthorlabs/kanthord` first with `{ name: "Atlas Bot", email: "bot@atlas.example" }`.
+Project `beacon` binds the same repository with no `commit_identity`, so the write copies that value.
+A `beacon` write with another value is refused with `project.commit_identity.pinned`.
+An `atlas` edit to another value creates the next revision of the `beacon` binding too.
+
 ## binding set
 
 The bindings that one project holds.
@@ -264,11 +273,12 @@ The binding of `beacon` keeps `credential_A` until its own edit.
 
 ## coverage
 
-One of the two checks that validate a credential reference.
+One of the two checks that validate a credential reference. Coverage also requires the commit identity of a repository binding.
 
 - The repository binding of `git@github.com:kanthorlabs/kanthord.git` requires one API key of GitHub for every platform action.
 - Git uses the SSH identity of the `ssh` record `kanthorlabs-github`.
 - The submission names the action `pull_request` and no credential reference, so coverage fails.
+- A stored repository binding holds no `commit_identity`, so coverage fails at its next resolution.
 
 ## system authorization
 
@@ -329,7 +339,7 @@ The term names no closed set.
 The repository strategy of `kanthorlabs/kanthord` requires a pull request for every change.
 Its configured repository action opens a pull request that follows the passing assessment of "Add password reset".
 "Add password reset" names the binding of `kanthorlabs/kanthord`, so it requires that action.
-The reply policy of the conversation binding `acme-issues` posts a reply to each linked issue after the node passes its assessment.
+The reply policy of the conversation binding `acme-issues` drafts a reply to each linked issue when the node completes, and a human approves each draft before it posts.
 
 ## base branch
 

@@ -222,6 +222,7 @@ The continuation reaches a later work pull, never a pushed assignment.
 A waiting node holds no instance while it waits.
 
 A loss declaration or a release with a `stop` that counts a failure holds the job of the node.
+A release with the stop `conflict_unresolved` counts no failure, and the [Mission Service](mission-service.md#state-transitions) moves the node to `Blocked`.
 The claim selects no held job.
 The hold ends `scheduler.stop_backoff` seconds after the first consecutive failure, and the wait doubles with each further consecutive failure.
 A claim that settles the loss of a node therefore does not claim that node in the same transaction.
