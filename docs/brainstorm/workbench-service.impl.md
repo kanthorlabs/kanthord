@@ -180,7 +180,7 @@ The constants are in `engine/src/workbench/contract.ts`:
   - `listSessions` answers `first_message` as the `name` of the session or `""`. It counts two messages less than the file holds.
 - `forkedFrom(entries)` answers the id of the source from the first message of the file, or `null`.
 - The title rule applies to `text`. The first human message of the fork writes `session_info`, so the fork has a name after its first run starts.
-- The `fork` record holds `source_title`: the name of the source host, or its first human message, cut at `FORK_SOURCE_TITLE_MAX_CHARS`. It is `""` when the source holds neither.
+- The `fork` record holds `source_title`: the name of the source host, cut at `FORK_SOURCE_TITLE_MAX_CHARS`. When the source has no name, it is the first user message of the file, cut the same way, unless that message is an opening or a fork opening. Otherwise it is `""`.
 - A fork starts with no evidence grant, and it starts with auto mode on. The fork file holds no `auto_mode` record, so `load()` reads on.
 
 ### Log line
