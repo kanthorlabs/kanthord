@@ -313,7 +313,7 @@ The Agent component owns these keys of the section `agent`.
 
 ## Prompt templates
 
-- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `identity`, `framing-worker`, `framing-workbench`, `task-revision`, `criterion-revision`, `conflict`, `evaluation`, `examine` and `repair`.
+- The binary ships one Handlebars template per agent-facing text under `static/prompt/template/`: `work`, `identity`, `framing-worker`, `framing-workbench`, `task-revision`, `criterion-revision`, `conflict`, `evaluation`, `examine`, `repair`, `relay` and `greeting`.
 - A file `<name>.md` in the subdirectory `prompts` of the agent directory replaces the shipped template of that name. With the default `agent_directory`, the file of `evaluation` is `~/.local/share/kanthord/agents/prompts/evaluation.md`.
 - An empty `agent_directory` means that every template is the shipped template.
 - The server resolves the template set at each prompt composition. The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
@@ -336,6 +336,8 @@ The Agent component owns these keys of the section `agent`.
 | `evaluation`         | `tasks`, `tested_input`, `evidence`, `dependencies`, `affected`, `marker`, `round`, `prior_findings`, `full_change`                                                                                                                               |
 | `examine`            | `repositories`, `verification`, `dependencies`, `outcomes`, `evidence`                                                                                                                                                                            |
 | `repair`             | `marker`, `issues`                                                                                                                                                                                                                                |
+| `relay`              | none                                                                                                                                                                                                                                              |
+| `greeting`           | `display_name`, `model`                                                                                                                                                                                                                           |
 
 - `repositories` lists `{ name, directory, base_branch }` for each repository binding of the pinned revision, in binding order. `work` receives an empty list for a node with one repository binding.
 - `affected_tests` lists `{ name, command, gate_files }` for each checkout of an `implement` node with a valid [affected test declaration](project-service.impl.md#the-affected-test-declaration), in binding order, also for a node with one repository binding. An invalid declaration adds no entry. `repositories` does not carry the command. `gate_files` holds the `gate_files` list of the declaration, in declaration order.
@@ -1012,9 +1014,10 @@ This section records the eval harness of the engine node `l2-engine`.
 
 ### The case file
 
-- A case file holds the keys `id`, `source`, `fixtures`, `setup`, `seed`, `turns` and `checks`. `source` is optional.
+- A case file holds the keys `id`, `source`, `agents`, `fixtures`, `setup`, `seed`, `turns` and `checks`. `source` and `agents` are optional.
 - An unknown key of a case object fails the parse, because each object schema is strict. The `input`, `body` and `expect` values accept any key.
 - `id` equals the file name without `.yaml`. `fixtures` maps a key to a JSON file under `engine/eval/<agent>/fixtures/`.
+- `agents: [<agent name>]` lists the member agents of the conversation. The sandbox enables each of them with the `.env.eval` key, as for the subject. A turn that starts with `@<display name>` runs that member.
 - `setup` lists operation calls. `turns` lists a `human` text and `approvals`, a map of operation id to `approve` or `reject`.
 - A placeholder resolves to a real id after the fixture import. It has five forms:
   - `{{<key>.project_id}}`
@@ -1039,6 +1042,8 @@ This section records the eval harness of the engine node `l2-engine`.
 - `forbid_calls` lists the calls that the run must not make, in the same form.
 - `final_state` reads an operation after the last turn and compares the answer with `expect`.
 - `reply_contains` lists texts that the reply must hold. `reply_forbids` lists regular expressions that the reply must not match.
+- An item of `reply_contains` and `reply_forbids` is a string or `{ value, agent_name }`. An item of `expect_calls` and `forbid_calls` takes the optional field `agent_name`.
+- `agent_name` names the member that the check reads. With no `agent_name`, a check reads the subject member. A check that names a member that the run lacks fails.
 - `max_tool_calls`, `max_confirmations` and `max_offers` bound the count of tool calls, confirmations and action offers.
 - `expect_offer` names one offer that must appear. `forbid_offer` lists filters that no offer may match.
 - `guard` lists the calls that the guard must decide. The `block` form is `{ operation_id, expect: "block", reason, or_absent_input? }`. `reason` is `workbench.guard.human_only` or `workbench.guard.import_format`.
