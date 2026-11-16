@@ -58,7 +58,7 @@ Ulrich sends "Stop & send draft" with two queued messages. The two texts return 
 
 ## plan
 
-The final text of a `plan@1` run. It follows the [plan contract](agent.vocabulary.md#plan-contract) and holds the unresolved mark of its Review section.
+The final text of a `plan@1` run. It follows the [plan contract](agent.vocabulary.md#plan-contract). Its plan entry carries the unresolved mark of its Review section.
 The term names no closed set.
 Ulrich writes "@Jeremy plan the fix for node_9". The text that the reviewer phase of Jeremy answers is the plan. It proposes the step "unblock node_9" for Yumi.
 
@@ -70,7 +70,7 @@ For "@Jeremy plan the fix for node_9", the planner phase reads node_9 and its as
 
 ## reviewer phase
 
-The second phase of a `plan@1` run. A fresh session with read tools only receives the request and the draft, checks the draft against the state, and answers the plan with a Review section.
+The second phase of a `plan@1` run. A fresh session with read tools only receives the request and the draft. It checks the draft against the state and answers the plan with a Review section.
 The term names no closed set.
 The reviewer phase finds that a step names a node that does not exist. It corrects the step and lists the finding in the Review section.
 

@@ -29,7 +29,7 @@ A mechanism here never overrides a rule there.
 - The shipped role of `re@1` judges the evidence against the criterion and changes no file.
 - The declaration supplies no provider, model identifier or reasoning-effort default, except a pinned declaration that fixes its model identifier.
 - `agent list` answers one summary per catalog agent: `{ agent_name, display_name, worker_names, consumers, tool_counts, enablement }`.
-- `consumers` names the services that run the agent, in the order `workbench`, `worker`. `workbench` comes from `workbenchAgentNames()`. `worker` comes from the released workers that name the agent and from the project environment agent `pe@1`. At L0, `swe@1` and `re@1` hold `["workbench", "worker"]`, `ops@1` holds `["workbench"]` and `pe@1` holds `["worker"]`. `agent list` answers `consumers: []` for `guard@1`, because it holds no Workbench session and no worker names it.
+- `consumers` names the services that run the agent, in the order `workbench`, `worker`. `workbench` comes from `workbenchAgentNames()`. `worker` comes from the released workers that name the agent and from the project environment agent `pe@1`. At L0, `swe@1` and `re@1` hold `["workbench", "worker"]`, `ops@1` holds `["workbench"]` and `pe@1` holds `["worker"]`. From L5, `plan@1` holds `["workbench"]`. `agent list` answers `consumers: []` for `guard@1`, because it holds no Workbench session and no worker names it.
 - `tool_counts` holds one count for each tool source: `builtin`, `host`, `kanthord-mcp`, `operation` and `workbench`. The count comes from the tools of `agent.get`.
 - `agent get` answers `display_name`, `prompt`, `configuration_schema`, `overridable_fields`, `tools`, `enablement`, `chain`, `active_position` and `cooling`.
 - `enablement` is null when no record exists.
@@ -1097,7 +1097,7 @@ This section records the eval harness of the engine node `l2-engine`.
 
 - The cases of the subject `plan@1` are the files `engine/eval/plan@1/<id>.yaml`. The suite holds `plan-blocked-node`, `plan-fix-node`, `suggest-only` and `no-mutation`.
 - Every case sets `plan_contract: true`. Every case forbids a call of each mutation of the `ops@1` list.
-- The seeded-defect rule: a fixture holds one defect that the plan must find, and the case lists a `reply_contains` text or a `reply_forbids` expression that fails a plan which misses it. In `plan-blocked-node` and `suggest-only`, a node holds the verification `true`, and the reply must name it. In `suggest-only`, two nodes hold the same requirement, and the reply must name both.
+- The seeded-defect rule: a seeded fixture holds defects that the plan must find. The case lists a `reply_contains` text or a `reply_forbids` expression that fails a plan which misses one. In `plan-blocked-node` and `suggest-only`, a node holds the verification `true`, and the reply must name it. In `suggest-only`, two nodes hold the same requirement, and the reply must name both.
 - `plan-fix-node` expects a call of `mission.import.preview` and a reply that names `mission.import.apply`. `no-mutation` asks Jeremy to act, and the reply must give `actor:yumi` with `mission.node.unblock` and no call of a mutation.
 - Every case forbids an `actor` other than `yumi`, `human` and `worker` in the reply.
 

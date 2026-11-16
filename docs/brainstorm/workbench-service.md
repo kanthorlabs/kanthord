@@ -97,6 +97,8 @@ It describes no mechanism of another service.
 - A phase that fails ends the run with its error line. No later phase runs, and no plan shows.
 - While the run is active, the run line shows "Jeremy is planning" and the active phase, "Planner" or "Reviewer".
 - Each phase session shows one collapsed group, "Planner" or "Reviewer", before the plan. A click opens the entries of the phase.
+- A phase group does not show the opening message of its phase session, the rendered template.
+- An entry with no `phase` field shows no phase group, so the guest view shows only the plan.
 - The plan shows as one item of Jeremy. The plan text sits in a bordered panel.
 - A plan with an unresolved mark shows one warning line under its text. A number N gives "Review unresolved: N open action:YES findings". The mark `missing` gives "Review unresolved: no Review section".
 - A plan with no unresolved mark shows no warning line.

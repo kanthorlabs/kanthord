@@ -116,8 +116,8 @@ A mechanism here never overrides a rule there.
 
 - One `Run` spans both phases. `Run.phase` holds the active phase, and `Run.phases` holds the phase sessions of the run.
 - The `agent_end` event of a phase does not end the run.
-- `Run.ended` turns true at the settle of the reviewer phase, or at the end of the pipeline on a stop or a failed phase. The run settles once.
-- Stop and replace set `Run.stopped`, abort the phase agent and abort the participant. `runPhase` starts no phase of a stopped run. The pipeline appends no plan entry.
+- `Run.ended` turns true when `runPlanPipeline` ends: after the plan entry, on a stop or on a failed phase. The run settles once.
+- Stop and replace set `Run.stopped` and abort the active phase agent. `runPhase` starts no phase of a stopped run. The pipeline appends no plan entry.
 - A stop of the service aborts and closes the phase agent, and clears the cache of finished phase entries.
 
 ### Snapshot field
