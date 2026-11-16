@@ -91,7 +91,7 @@ A mechanism here never overrides a rule there.
 - Step 1, load: the service opens the source session. An unknown id answers 404 `workbench.session.not_found`. A participant session id answers 409 `workbench.session.not_host`.
 - Step 2, validate the mention: `resolveMention` checks a leading mention of `text` with the errors of a message. The service then resolves the configuration of the source host as a complete entry.
 - Step 3, read the material: `forkMaterial` builds the text of the source. It reads the entries of the completed runs and adds the in-progress line.
-- Step 4, summarize: `summarize` makes one model call on the model and the credential of the source host configuration. A failed call, a timeout, a stop reason other than `stop`, a blank text and a text above `FORK_SUMMARY_MAX_BYTES` answer 502 `workbench.fork.summary_failed`.
+- Step 4, summarize: `summarize` makes one model call on the model and the credential of the source host configuration. A failed call, a timeout, a stop reason other than `stop`, a blank text and a text above `FORK_SUMMARY_MAX_BYTES` answer 502 `workbench.fork.summary_failed`. The OpenAPI file `engine/static/openapi/workbench/session.fork.yaml` of `workbench.session.fork` states this 502.
 - Step 5, check: `checkSummary` makes one `guard@1` call on the summary. The call returns a decision, never an error.
 - Step 6, the cancel point: a request that the client cancelled ends here with its reason. Nothing is written. Then a `refuse` decision logs `workbench.fork.summary_refused` and answers 409 `workbench.fork.summary_refused`.
 - Step 7, write: `writeFork` creates the session file of the fork. It appends the entries in the order of [Fork host file](#fork-host-file).
@@ -132,6 +132,7 @@ The constants are in `engine/src/workbench/contract.ts`:
 - `forkMaterial` of `engine/src/workbench/conversation.ts` answers the material. Each item has the form of a relay item. The items follow the timestamps of their entries, and a blank line separates two items.
 - An item is a human message, a final assistant text or the text of an action result. A card with no result gives the item "Open action card: <operation_id> on <target_id>. The owner has not run it."
 - The material holds no tool result and no opening entry.
+- The line of the owner reads "<name> (owner) to @<agent>: <text>".
 - A source that is a fork holds one pinned item: "Summary of an earlier conversation:", a line end and its summary. The first human message of the source is the other pinned item.
 - Pinned items stay when the size rule drops items.
 - The size rule drops the oldest items that are not pinned until the content fits `FORK_SOURCE_MAX_BYTES`. The line "N earlier messages are not shown." follows the pinned items when items are dropped. A final cut at the byte limit never leaves a split character.

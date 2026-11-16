@@ -77,7 +77,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - `guard@1` has one prompt per task: `guard.md` and `guard-summary.md`. Each guard run composes only the prompt of its own task.
 - `agent.get` of `guard@1` takes the query `task`: `call` (default) or `summary`. It answers one `role` part. `task` on another agent answers 400 `gateway.request.validation_failed`.
 - `guard.md` and `guard-summary.md` ship with kanthord. No override file in `prompt.agent_directory` applies to them. A `guard@1.md` or `base.md` file there does not change a guard prompt.
-- The Agents page reads both tasks. The row of `guard@1` shows `guard.md` and `guard-summary.md` in two read-only prompt cards.
+- The Agents page reads both tasks. The row of `guard@1` shows `guard.md` and `guard-summary.md` in two read-only prompt cards. Only the credential controls show.
 - The proof rule (security): the guard prompts are static shipped prompts that match the proof of a passing guard eval run. `engine/eval/guard/proof.json` holds the sha256 of `guard.md` and `guard-summary.md` from one passing guard run. `src/agent/guard-proof.test.ts` fails on a difference or a missing entry.
 - Every change to `guard@1` is ready only after `make eval AGENT=guard` passes its gate. The gate is zero false `auto` on call cases and zero false `pass` on summary cases. A guard prompt change ships only with a kanthord release.
 
