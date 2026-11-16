@@ -34,7 +34,7 @@ A mechanism here never overrides a rule there.
 - `evidenceGrants` is set on the host `OpenSession`. A grant covers every member that holds `evidence_read` (EV5).
 - A leading mention resolves through `resolveMention`. A name that no Workbench agent holds answers 404 `agent.catalog.not_found` with `{ mention }`. A disabled agent answers 400 `agent.enablement.unavailable`.
 - `leadingMention` compares lowercase and tries the longest display name first. A name ends at the end of the text, at whitespace or at a character outside `[A-Za-z0-9 _-]`. An `@` followed by whitespace or by nothing is no mention, so the message is untagged.
-- An untagged message resolves to the member whose latest final assistant entry has the newest timestamp. When no member answered, the host runs it.
+- An untagged message resolves to the member whose latest final answer has the newest timestamp. When no member answered, the host runs it. A `kanthord.workbench.plan` entry is the final answer of its member (D8). An entry of a phase session is never a final answer.
 - A queued item keeps `agent_name` and `display_name` of its mention, or `null` for both. An untagged item resolves when it starts.
 - A queued item whose agent is refused at its start is dropped, and `error_message` of the snapshot holds the refusal.
 - `pending_approval` carries `session_id`, the member that made the call. `workbench.session.approve` takes that `session_id`.
@@ -62,6 +62,7 @@ A mechanism here never overrides a rule there.
 - The relay holds human messages and final assistant texts only. It holds no tool result, no opening entry and no entry with no text.
 - The items stand in the order of their timestamps.
 - The service sends the relay as the `custom_message` `kanthord.workbench.relay` (`WORKBENCH_RELAY_ENTRY`) with `display: false`.
+- A plan entry is a final assistant text of Jeremy. `planOf` reads it, and its item has the form `<display name>: <plan text>`. An empty plan text gives no item. The relay never carries an entry of a phase session.
 - `RELAY_MAX_BYTES` is 65536. The service drops the oldest items until the whole text fits, so the newest items stay.
 
 ### Merged cursor
@@ -70,6 +71,7 @@ A mechanism here never overrides a rule there.
 - `after` holds one `<session_id>:<entry_id>` pair for each member, separated by commas. A member with no pair starts at its first entry.
 - A plain id names the host pair. The participant entries then start at their first entries.
 - The answer holds no cursor field. The client builds `after` from the `session_id` and the `id` of the entries that it holds.
+- The merged cursor also holds one pair for each [phase session](#plan-pipeline) that the merge reads.
 - The merge orders the entries by timestamp, then by member order. It keeps the file order of each member.
 - `version` is one counter for the conversation. A change in any member raises it.
 
@@ -79,6 +81,66 @@ A mechanism here never overrides a rule there.
 - A host item answers `host_session_id: null`, its participants in `participants`, and the newest `modified` of its members as `modified`.
 - A participant item answers the id of its host in `host_session_id` and an empty `participants`. A participant is never a top-level item.
 - The filter `agent_name` selects the host agent.
+
+## Plan pipeline
+
+### Mechanics
+
+- A message that resolves to `plan@1` starts `launchPlan` of `engine/src/workbench/service.ts`. The Jeremy participant session opens no agent. It holds the request as a user message and the plan entry.
+- `runPlanPipeline` of `engine/src/workbench/plan-pipeline.ts` appends the request to the participant session, then runs the planner phase, then the reviewer phase.
+- The planner phase renders the template `plan-draft` with `request`, `relay` and `mutations`. `relay` is the relay text of the run, or an empty text.
+- The reviewer phase renders the template `plan-review` with `request`, `draft` and `mutations`. `draft` is the answer of the planner phase.
+- The answer of a phase is the text blocks of its last assistant message.
+- The reviewer answer is the plan. The pipeline appends it to the participant session as the [plan entry](#the-plan-entry), with the unresolved mark that `unresolvedOf` computes.
+- The mark: `unresolvedOf` answers `missing` when the text holds no `## Review` heading. It uses the last such heading. Otherwise it counts the bullet lines below it that hold `status:OPEN` and `action:YES`. It answers that count, or `null` for a count of 0.
+
+### Phase open path
+
+- `runPhase` builds one `OpenSession` for each phase. It holds the phase, the id of the phase session, the agent name `plan@1`, the configuration and the requester of the Jeremy participant.
+- The runtime comes from `buildRuntime` of the participant, and `openAgent` opens the agent on the service lifetime. The configuration and the `plan@1` tools are those of the participant: the 8 reads of [the plan agent](agent.md#plan-agent).
+- Each phase keeps the `guardDecision` hook and reads under the run requester.
+- A phase gets no `offer_action` tool. `withoutOfferAction` removes the `offer_action` lines from the Workbench prompt part.
+- The phase agent prompts with the rendered template and `expandPromptTemplates: false`.
+- A phase that stops with `stopReason` `error` sets `error_message` of the run to its `errorMessage`, or to "The plan phase ended with an error." A phase that stops with `aborted` sets none.
+- An error that the pipeline throws sets `error_message` of the run.
+
+### Phase storage
+
+- A phase session is a pi session file in the `phases/` subdirectory of the session directory of `plan@1`. Its identity is `workbench_session_<ulid>`.
+- The file holds no `parentSession`. No membership reader, no `list` of `workbench.session.list` and no open of a host reads the `phases/` subdirectory.
+- `SessionManager.list` does not recurse, so the list of `plan@1` holds no phase session.
+- The open path of a phase is `openPhaseSession`. It calls `SessionManager.findById` with the `phases/` directory and the id, then `SessionManager.open`. It answers `null` for an id with no file.
+- The service caches the entries of a finished phase session in `finishedPhaseEntries`. It clears the cache at the stop of the service.
+
+### End rule of the run
+
+- One `Run` spans both phases. `Run.phase` holds the active phase, and `Run.phases` holds the phase sessions of the run.
+- The `agent_end` event of a phase does not end the run.
+- `Run.ended` turns true when `runPlanPipeline` ends: after the plan entry, on a stop or on a failed phase. The run settles once.
+- Stop and replace set `Run.stopped` and abort the active phase agent. `runPhase` starts no phase of a stopped run. The pipeline appends no plan entry.
+- A stop of the service aborts and closes the phase agent, and clears the cache of finished phase entries.
+
+### Snapshot field
+
+- The snapshot adds `phase`: `planner`, `reviewer` or `null`. `phase` is `null` when no run is active, and for a run of another agent.
+- `run_active` stays true across both phases.
+
+### The plan entry
+
+- The plan entry is a `custom_message` with `customType` `kanthord.workbench.plan` (`WORKBENCH_PLAN_ENTRY`), `display: true` and the plan text as `content`.
+- Its `details` is the strict object `{ phases, unresolved }`. `phases` lists `{ phase, session_id }` for the planner and the reviewer, in this order. `unresolved` is a positive integer, `missing` or `null`.
+- `planOf` reads an entry and validates `details`. An entry with an invalid `details` is no plan.
+- The readers of `details`:
+  - `phases`: the merged poll and `workbench.session.get` open the phase sessions that it names.
+  - `unresolved`: the chat shows the warning line.
+  - The eval reads the plan through `planOf`, and it observes the plan text as the reply.
+
+### Phase entries
+
+- The owner merged poll and `workbench.session.get` add the entries of each phase session. Each entry carries `session_id`, `agent_name` `plan@1` and `phase`.
+- The phases come from the `phases` of each plan entry and from the phase sessions of the active run.
+- A run that stops or fails leaves no plan entry. Its phase entries show only while its run is active.
+- `workbench.session.list` shows no phase session.
 
 ## Fork
 
@@ -136,6 +198,7 @@ The constants are in `engine/src/workbench/contract.ts`:
 - A source that is a fork holds one pinned item: "Summary of an earlier conversation:", a line end and its summary. The first human message of the source is the other pinned item.
 - Pinned items stay when the size rule drops items.
 - The size rule drops the oldest items that are not pinned until the content fits `FORK_SOURCE_MAX_BYTES`. The line "N earlier messages are not shown." follows the pinned items when items are dropped. A final cut at the byte limit never leaves a split character.
+- The plan line of the material is the plan item of the relay form, `<display name>: <plan text>`. The material holds no entry of a phase session.
 - The entries of the active run are not in the material. When a run is active, the last line is "In progress in the earlier conversation: <run message>."
 
 ### Guard summary check
@@ -418,7 +481,7 @@ Every operation has `human` access.
 
 - `resume_command` is `pi --session <session file>`, with the home directory written as `~`. pi opens the file from any directory and takes the working directory from the session header.
 - `after` is the [merged cursor](#merged-cursor).
-- A poll answers the session entries after `after`, and a snapshot of the active run: `streaming_message`, `pending_tool_calls`, `pending_approval`, `run_active`, `queue`, `error_message` and `auto_mode`. Each item of `queue` is `{ id, text, agent_name, display_name }`.
+- A poll answers the session entries after `after`, and a snapshot of the active run: `streaming_message`, `pending_tool_calls`, `pending_approval`, `run_active`, `phase`, `queue`, `error_message` and `auto_mode`. Each item of `queue` is `{ id, text, agent_name, display_name }`.
 - Each answer carries `version`, a number that the service raises at each change of the snapshot or of the entries.
 - A poll names `version`, the version of the last answer that the client holds. A poll answers at once when entries follow `after` or when its `version` differs from the current version. A poll with no `version` answers at once.
 - Otherwise a poll answers at the next change, or when its wait window ends.

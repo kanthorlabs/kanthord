@@ -28,6 +28,7 @@
           <li><a href="#swe-1">SWE (swe@1)</a></li>
           <li><a href="#re-1">RE (re@1)</a></li>
           <li><a href="#ops-1">Yumi (ops@1)</a></li>
+          <li><a href="#plan-1">Jeremy (plan@1)</a></li>
           <li><a href="#offer-action">Workbench tool <code>offer_action</code></a></li>
           <li><a href="#evidence-read">Workbench tool <code>evidence_read</code></a></li>
         </ul>
@@ -62,6 +63,11 @@
 <td><a href="#ops-1">Yumi (ops@1)</a></td>
 <td>36</td>
 <td>16</td>
+</tr>
+<tr>
+<td><a href="#plan-1">Jeremy (plan@1)</a></td>
+<td>8</td>
+<td>0</td>
 </tr>
 </tbody></table>
 </div>
@@ -389,6 +395,67 @@
 <td><code>GET /api/worker/instance</code></td>
 <td>No</td>
 <td>Page worker instances in ascending name order with their connection, binding count and holder mismatch.</td>
+</tr>
+</tbody></table>
+</div>
+<h2 id="plan-1">Jeremy (plan@1)</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Route</th>
+<th>Approval</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mission--assessment--list</code></td>
+<td><code>GET /api/mission/node/:node_id/assessment</code></td>
+<td>No</td>
+<td>List assessments with read-time currency.</td>
+</tr>
+<tr>
+<td><code>mission--export</code></td>
+<td><code>GET /api/mission/:mission_id/export</code></td>
+<td>No</td>
+<td>Export the current mission plan.</td>
+</tr>
+<tr>
+<td><code>mission--get</code></td>
+<td><code>GET /api/mission/project/:project_id</code></td>
+<td>No</td>
+<td>Get the mission of a project.</td>
+</tr>
+<tr>
+<td><code>mission--import--preview</code></td>
+<td><code>POST /api/mission/:mission_id/import/preview</code></td>
+<td>No</td>
+<td>Preview a whole-mission import without writing changes.</td>
+</tr>
+<tr>
+<td><code>mission--node--get</code></td>
+<td><code>GET /api/mission/node/:node_id</code></td>
+<td>No</td>
+<td>Get a mission node.</td>
+</tr>
+<tr>
+<td><code>mission--node--list</code></td>
+<td><code>GET /api/mission/:mission_id/node</code></td>
+<td>No</td>
+<td>List mission nodes.</td>
+</tr>
+<tr>
+<td><code>mission--proposal--list</code></td>
+<td><code>GET /api/mission/node/:node_id/proposal</code></td>
+<td>No</td>
+<td>List the fix-node proposals of an examine proposer.</td>
+</tr>
+<tr>
+<td><code>project--list</code></td>
+<td><code>GET /api/project</code></td>
+<td>No</td>
+<td>List projects in descending identity order.</td>
 </tr>
 </tbody></table>
 </div>

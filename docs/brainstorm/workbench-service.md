@@ -85,6 +85,25 @@ It describes no mechanism of another service.
 - Only the owner forks. The operation is human only, and no tool list holds it.
 - A [workbench session implementation](workbench-service.impl.md#workbench-session) declares the workbench directory and the list.
 
+## Plan pipeline
+
+- A run of `plan@1` ("Jeremy") is a [plan](workbench-service.vocabulary.md#plan) pipeline. It runs a [planner phase](workbench-service.vocabulary.md#planner-phase), then a [reviewer phase](workbench-service.vocabulary.md#reviewer-phase).
+- Each phase is a fresh session with read tools only. The reviewer holds no history of the planner. It receives the request and the draft as text.
+- Jeremy never executes a step. Yumi applies a step when the owner asks.
+- The final text of the reviewer phase is the plan. It follows the [plan contract](agent.vocabulary.md#plan-contract).
+- The server enforces only the Review rule. It sets the [unresolved mark](agent.vocabulary.md#unresolved-mark) of the plan. No further round runs, so an open finding stays in the plan.
+- The conversation reads the plan as the final answer of Jeremy. An untagged message after a plan goes to Jeremy (D8).
+- Q3, the stop of a pipeline: Stop and replace stop the active phase. No later phase starts, and no plan shows.
+- A phase that fails ends the run with its error line. No later phase runs, and no plan shows.
+- While the run is active, the run line shows "Jeremy is planning" and the active phase, "Planner" or "Reviewer".
+- Each phase session shows one collapsed group, "Planner" or "Reviewer", before the plan. A click opens the entries of the phase.
+- A phase group does not show the opening message of its phase session, the rendered template.
+- An entry with no `phase` field shows no phase group, so the guest view shows only the plan.
+- The plan shows as one item of Jeremy. The plan text sits in a bordered panel.
+- A plan with an unresolved mark shows one warning line under its text. A number N gives "Review unresolved: N open action:YES findings". The mark `missing` gives "Review unresolved: no Review section".
+- A plan with no unresolved mark shows no warning line.
+- A [workbench session implementation](workbench-service.impl.md#plan-pipeline) declares the phase mechanics.
+
 ## Home
 
 [The Home page](architecture.impl.md#the-home-page) owns every other Home rule. This section holds the Yumi chat, "Ask Yumi" and the slash commands.

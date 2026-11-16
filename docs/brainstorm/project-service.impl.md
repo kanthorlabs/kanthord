@@ -210,7 +210,7 @@ The write refuses a submission that changes the worker of an existing worker bin
 - An effective instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
 - The repository and storage kinds keep `available`.
 - The `config` of a repository binding holds `prompts`, an optional `z.strictObject` with three optional keys: `instruction_file`, `repository` and `agents`. `bindingPromptsSchema` of `engine/src/project/contract.ts` defines it.
-- `agents` is an optional `z.strictObject` with one optional string key for each agent name of `AGENT_DECLARATIONS` except an internal agent: `swe@1`, `re@1`, `pe@1` and `ops@1`. The catalog is the only list, and no new enum exists.
+- `agents` is an optional `z.strictObject` with one optional string key for each agent name of `AGENT_DECLARATIONS` except an internal agent: `swe@1`, `re@1`, `pe@1`, `ops@1` and `plan@1`. The catalog is the only list, and no new enum exists.
 - A key outside the three keys, or an agent key outside the catalog, refuses the write with 400 `gateway.request.validation_failed`.
 - The write validates `repository` and each text of `agents` with the text validation of a prompt file: at most 32768 UTF-8 bytes and no control character other than a tab and a newline.
 - `instruction_file` is a relative repository path that uses `/`. It holds no `.` segment, no `..` segment, no empty segment, no backslash and no control character, and it holds at most 255 bytes. `instructionFilePathReason` of `engine/src/project/instruction-file.ts` checks it. It takes no `@<commit>` form, because the attempt pin records the commit.

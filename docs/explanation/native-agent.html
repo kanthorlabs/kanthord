@@ -99,11 +99,12 @@
           <h2 id="in-short">In short</h2>
           <ul>
             <li>
-              Four agents exist: <code>swe@1</code> writes code,
+              Five agents exist: <code>swe@1</code> writes code,
               <code>re@1</code> reviews code with read-only tools,
               <code>pe@1</code> repairs the environment of a repository binding,
-              and <code>ops@1</code> (Yumi) reports and changes the state of
-              projects and missions through operation tools.
+              <code>ops@1</code> (Yumi) reports and changes the state of
+              projects and missions through operation tools, and
+              <code>plan@1</code> (Jeremy) reads that state and writes a plan.
             </li>
             <li>
               A human picks the provider, the model and the reasoning effort of
@@ -131,9 +132,10 @@
           </ul>
           <h2 id="the-agents">The agents</h2>
           <p>
-            The agent catalog is static and holds four declarations. An agent
+            The agent catalog is static and holds five declarations. An agent
             name names a role, not a worker. Each declaration also holds a
-            display name that a human uses in a mention: SWE, RE, PE and Yumi.
+            display name that a human uses in a mention: SWE, RE, PE, Yumi and
+            Jeremy.
           </p>
           <div class="table-wrap">
             <table>
@@ -188,6 +190,14 @@
                   <td>none</td>
                   <td>none</td>
                   <td>36 tools</td>
+                  <td>The Workbench</td>
+                </tr>
+                <tr>
+                  <td><code>plan@1</code> (Jeremy)</td>
+                  <td>Planner</td>
+                  <td>none</td>
+                  <td>none</td>
+                  <td>8 reads, no mutation</td>
                   <td>The Workbench</td>
                 </tr>
               </tbody>
@@ -713,7 +723,8 @@ Binding prompt of repository app:
             </li>
             <li>
               <code>&lt;agent_name&gt;.md</code> is the Role, for example
-              <code>swe@1.md</code>.
+              <code>swe@1.md</code>. The file <code>plan@1.md</code> is the Role
+              of Jeremy.
             </li>
             <li>
               <code>workbench.md</code> is the Workbench behavior. Only a
@@ -1339,8 +1350,13 @@ Binding prompt of repository app:
             <code>mission.evidence.list</code> and
             <code>mission.evidence.get</code>. They read evidence text with
             <code>evidence_read</code>. <code>pe@1</code> lists no operation, so
-            it has no Workbench session. <code>ops@1</code> holds 36 tools by
-            damage class:
+            it has no Workbench session. <code>plan@1</code> holds 8 reads and
+            no mutation: <code>mission.get</code>,
+            <code>mission.node.get</code>, <code>mission.node.list</code>,
+            <code>mission.assessment.list</code>,
+            <code>mission.proposal.list</code>, <code>mission.export</code>,
+            <code>mission.import.preview</code> and <code>project.list</code>.
+            <code>ops@1</code> holds 36 tools by damage class:
           </p>
           <div class="table-wrap">
             <table>

@@ -20,7 +20,7 @@ The phrase states that the catalog holds an agent declaration; it is no state va
 ## display name
 
 The unique name that a human uses to address an agent in a mention.
-The catalog holds `swe@1` as "SWE", `re@1` as "RE", `pe@1` as "PE" and `ops@1` as "Yumi".
+The catalog holds `swe@1` as "SWE", `re@1` as "RE", `pe@1` as "PE", `ops@1` as "Yumi" and `plan@1` as "Jeremy".
 The mention `@yumi` matches "Yumi", and the mention `@YUMI` matches it too.
 
 ## operation tool
@@ -28,6 +28,19 @@ The mention `@yumi` matches "Yumi", and the mention `@YUMI` matches it too.
 A KanthorD operation that an agent calls as a tool in a Workbench session.
 The operation list of the agent declaration names it.
 `ops@1` holds `mission.node.pause` as an operation tool, and `pe@1` holds none.
+
+## plan contract
+
+The Markdown sections of a Jeremy plan, in this order: Conclusion, Facts, Plan, Risks, Decisions and Review.
+The Plan section holds the steps, and the Review section holds the findings of the reviewer phase.
+The text of a plan that holds the six sections in order meets the section rule of the contract.
+
+## unresolved mark
+
+The count of the open `action:YES` findings of the Review section of a plan, or `missing` when the plan holds no Review section.
+A Review section with the findings `B1 - status:OPEN - action:YES` and `S1 - status:FIXED - action:YES` gives the mark 1.
+A plan with no Review section gives the mark `missing`.
+A Review section with no open `action:YES` finding gives no mark.
 
 ## agent enablement
 
