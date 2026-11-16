@@ -84,10 +84,15 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 ### Plan agent
 
 - `plan@1` ("Jeremy") is the planner of a human owner. It reads the state of the projects and missions and writes a [plan](agent.vocabulary.md#plan-contract). It executes no step.
+- Jeremy reads each node that the plan names with `mission.node.get`. Each fact cites a call of the plan run.
 - `plan@1` lists 8 read operation tools and no mutation: `project.list`, `mission.get`, `mission.node.list`, `mission.node.get`, `mission.export`, `mission.import.preview`, `mission.assessment.list` and `mission.proposal.list`.
 - `plan@1` lists no built-in tool, no host tool and no Workbench tool.
 - The declaration enforces the read-only rule, not the prompt. A mutation is no tool of `plan@1`.
 - Yumi applies a step of a plan. The actor `yumi` is valid only for a mutation of the `ops@1` list.
+
+### Operations assistant
+
+- Yumi calls `mission.export` before the first import preview of a plan.
 
 ### Damage scale
 
