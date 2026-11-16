@@ -595,7 +595,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | `worker.instance.token`      | `POST /api/worker/instance/token`                   | `public`, read                            | `{ instance_id }`                                               | 200 `{ server_version, sealed }`                                                                                                                                     |
 | `worker.instance.connect`    | `POST /api/worker/instance/connect`                 | `worker`, mutation                        | `{ connection_id?, connection_name }`                           | 200 `{ connection_id, binding_version, sealed }`                                                                                                                     |
 | `worker.instance.heartbeat`  | `POST /api/worker/instance/heartbeat`               | `worker`, mutation                        | `{ connection_id, connection_name }`                            | 200 `{ server_version, binding_version, credential_version, work_version, machine }`                                                                                 |
-| `worker.instance.work`       | `POST /api/worker/instance/work`                    | `worker`, read                            | `{ connection_id }`                                             | 200 `{ work_version, login_sessions, session_reads, footprint_orders }`                                                                                              |
+| `worker.instance.work`       | `POST /api/worker/instance/work`                    | `worker`, read                            | `{ connection_id }`                                             | 200 `{ work_version, login_sessions, session_reads, footprint_orders, stop_orders }`                                                                                 |
 | `worker.session_read.report` | `POST /api/worker/session-read/:read_id/report`     | `worker`, mutation                        | `SessionReadResult`                                             | 204                                                                                                                                                                  |
 | `worker.ssh.sign`            | `POST /api/worker/ssh/sign`                         | `client`, secret mutation, live execution | `{ execution_id, nonce, ciphertext }`                           | 200 `{ nonce, ciphertext }`                                                                                                                                          |
 
@@ -641,7 +641,7 @@ The table `worker_instance` holds one row for each revision of an instance, afte
 | 400  | `worker.ssh.sign_invalid`               | The sealed sign request does not open, or its plaintext does not match the schema.                                                                                                                   |
 | 403  | `worker.ssh.placement_refused`          | The instance of the execution is not at the `worker` placement. `details.placement` names its placement.                                                                                             |
 
-The `serve worker` diagnostics of an instance are `worker.start.instance_config_absent`, `worker.start.instance_config_conflict`, `worker.instance.config_invalid`, `worker.start.endpoint_insecure`, `worker.version.mismatch`, `worker.instance.superseded`, `worker.instance.secret_changed` and `worker.handover.credential_open_failed`. The `serve worker` diagnostics of a machine are `worker.machine.config_absent`, `worker.machine.config_conflict` and `worker.machine.config_invalid`, under [The machine configuration](#the-machine-configuration).
+The `serve worker` diagnostics of an instance are `worker.start.instance_config_absent`, `worker.start.instance_config_conflict`, `worker.instance.config_invalid`, `worker.start.endpoint_insecure`, `worker.version.mismatch`, `worker.instance.superseded`, `worker.instance.secret_changed` and `worker.handover.sealed_unopened`. The `serve worker` diagnostics of a machine are `worker.machine.config_absent`, `worker.machine.config_conflict` and `worker.machine.config_invalid`, under [The machine configuration](#the-machine-configuration).
 
 ## Worker machines
 
@@ -1273,16 +1273,17 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 - The slot channel is the stdin and the stdout of the runtime client. Each line holds one UTF-8 JSON object. `JSON.stringify` writes no raw newline.
 - The frames are below.
 
-| Direction         | Frame                                           | Rule                      |
-| ----------------- | ----------------------------------------------- | ------------------------- |
-| server → instance | `{"kind":"init","entries":[…]}`                 | first frame, exactly once |
-| server → instance | `{"kind":"bindings","entries":[…]}`             | the new full entry list   |
-| server → instance | `{"kind":"port","client_id":"…","message":{…}}` | one port answer           |
-| server → instance | `{"kind":"control","control":"drain"\|"stop"}`  | the drain or stop control |
-| server → instance | `{"kind":"ping"}`                               | every 5 s                 |
-| instance → server | `{"kind":"port","client_id":"…","message":{…}}` | one port call or cancel   |
+| Direction         | Frame                                           | Rule                            |
+| ----------------- | ----------------------------------------------- | ------------------------------- |
+| server → instance | `{"kind":"init","entries":[…]}`                 | first frame, exactly once       |
+| server → instance | `{"kind":"bindings","entries":[…]}`             | the new full entry list         |
+| server → instance | `{"kind":"port","client_id":"…","message":{…}}` | one port answer                 |
+| server → instance | `{"kind":"control","control":"drain"\|"stop"}`  | the drain or stop control       |
+| server → instance | `{"kind":"stop_orders","orders":[…]}`           | the stop orders of the instance |
+| server → instance | `{"kind":"ping"}`                               | every 5 s                       |
+| instance → server | `{"kind":"port","client_id":"…","message":{…}}` | one port call or cancel         |
 
-- An entry of `init` and `bindings` is `{ client_id, client_secret, state }`. `client_id` of a `port` frame names the binding entry of the message.
+- An entry of `init` and `bindings` is `{ client_id, client_secret, state }`. An order of `stop_orders` is `{ execution_id, reason }`. `client_id` of a `port` frame names the binding entry of the message.
 - `src/apps/worker/frames.ts` holds the strict zod schemas of the frames and `bridgePort(port, readable, writable, options)`. The bridge keeps one port for each binding entry.
 - The bridge checks only the frame envelope. `servePort` and `portCaller` check the message, as over a thread port.
 - The `body` of a port answer is a structured value. The server side of the bridge writes it with `JSON.stringify`, as the HTTP transport writes the same answer. A failed `JSON.stringify` answers 500 `gateway.invocation.invalid_response` for that `call_id`, and the instance stays.
@@ -1435,7 +1436,7 @@ The driver spawns the runtime client with `detached: true`, so a terminal signal
 
 - It declares `mutation: false`, no body and the default 30 s timeout. It has no CLI leaf.
 - The invocation chain proves the path identity, and the server derives the setup from the proven claim.
-- The answer is `{ execution_id, worker_name, agents, templates, resource_budget, intent, repositories, unit_records }`.
+- The answer is `{ execution_id, worker_name, agents, templates, resource_budget, intent, repositories, node_branch, unit_records }`.
 - Each entry of `agents` is `{ agent_name, effective_configuration, position, level, credential_id, metadata, prompt }`. The entry of each native agent of the worker is present, in the order of the declaration.
 - `worker_name` comes from the worker binding revision that the claim pins, and each `agent_name` comes from the declaration of that worker.
 - `effective_configuration` is the pinned selection of `agent_name` in `agent_selections` of the execution. It is never the head of the chain.
@@ -1552,9 +1553,9 @@ It proves that a reviewer execution takes no file of the workspace.
 - Tests cover a null pin at the attempt open, the write when null, the read back after a lost write, two concurrent first handovers, a later execution that reads no head, a new attempt and a slow remote with a refresh in flight.
 - It decrypts the envelope with the handover key that it derives from its own `client_secret`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
 - The payload also carries `ssh_identities`, the SSH key of each repository binding of the execution, under [custody.impl.md](custody.impl.md#the-credential-handover). The worker takes the handover before the execution setup.
-- A handover item is `{ credential_id, provider_id, credential }` for a server-held credential, at the `server` and the `container` placements only. It is `{ credential_id, provider_id, holder, sealed }` for a copy of an instance or a machine. `holder` names the holder of the row.
+- A handover item is `{ credential_id, provider_id, credential }` for a server-held credential, at the `server` and the `container` placements only. It is `{ credential_id, provider_id, name, platform, holder, sealed }` for a copy of an instance or a machine. `holder` names the holder of the row.
 - At the `worker` placement, custody carries only the copy of the [copy holder](custody.vocabulary.md#copy-holder) of the instance. It refuses each server-held item and each stale copy with 403 `custody.handover.holder_refused`. `ssh_identities` is `[]`. [custody.impl.md](custody.impl.md#the-credential-handover) rules the refusal.
-- The worker unit opens a sealed item through the `sealed_credentials` function pair of its wrapper. Only the `worker` wrapper passes it. It opens the item with the key of the item `holder`: the instance key, or the key of the [machine configuration](#the-machine-configuration). An item that does not open ends the execution with `worker.handover.credential_open_failed`.
+- The worker unit opens a sealed item through the `sealed_credentials` function pair of its wrapper. Only the `worker` wrapper passes it. It opens the item with the key of the item `holder`: the instance key, or the key of the [machine configuration](#the-machine-configuration). An item that does not open ends the execution with `worker.handover.sealed_unopened`.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. Its body is `{ execution_id, nonce, ciphertext }`, where `nonce` and `ciphertext` carry the sealed refresh report, and it answers 204.
 - The plaintext of the report is `{ credential_id, digest, credential }` for a server-held credential. It is `{ credential_id, digest, sealed }` for a copy of an instance or a machine. For such a copy, the worker unit seals the refreshed credential to the key of the item `holder` through `sealed_credentials`. `digest` is then the digest of the stored sealed object. The application calls it after each refresh that pi-ai performs and once at the release.
 - The credential report request body permits at most 65,536 bytes; [Custody's serialized-credential budget](custody.impl.md#serialized-credential-budget) ensures the compact report fits. The application reports once at release even when the credential is unchanged.
@@ -1571,6 +1572,7 @@ It proves that a reviewer execution takes no file of the workspace.
 - The handler then waits until the refresh ends and runs the handover again. The wait ends 5 s before the 30 s route timeout of `worker.handover`, so the handler answers before the route timer.
 - When the refresh does not end in the wait, the handler answers 503 `worker.handover.refresh_in_flight`. The refusal is retryable, and nothing commits after the answer.
 - The worker application retries a `worker.handover.refresh_in_flight` answer with a new key, with the backoff of an indeterminate result, until the claim expires. It does not retry another 503 or a 504.
+- At the `worker` placement, a worker-held copy has no server-side check refresh, so its handover never waits for a refresh.
 
 ### The refresh lease
 
@@ -1646,7 +1648,7 @@ The helper then submits again, and the server grants the next binding.
 A file above the size limit answers `worker.evidence_upload.transfer_failed`, and its message holds no URL and no header.
 It follows [the object evidence contract](mission-service.impl.md#object-evidence) for all placements and co-locations.
 It returns the evidence identity, the asset identity and the `s3://` URI to the agent.
-At the `worker` placement the agent calls the helper through the host tool `evidence-upload`, whose one argument is the workspace-relative `path`; the subject of the evidence is that path, and the media type is `application/octet-stream`.
+At every placement the agent calls the helper through the host tool `evidence-upload`, whose one argument is the workspace-relative `path`; the subject of the evidence is that path, and the media type is `application/octet-stream`.
 A failed upload answers a tool error with the code and the message alone.
 A reader's component obtains a presigned GET through the content read operation.
 No storage credential enters the credential handover.
@@ -1666,7 +1668,7 @@ The first source is the pi built-in tools: `swe@1` enables read, edit, write, gr
 The second source is kanthord's own tools, which the server serves through its MCP server.
 An external harness reaches the same MCP server, and pi reaches it as a tool source.
 The third source is the other tools that a project adds, including other MCP servers.
-The fourth source is the host-supplied tools that the `worker` application serves in its own process.
+The fourth source is the host-supplied tools that the worker unit at every placement serves in its own process.
 An agent declaration names its host tools: `swe@1` holds `evidence-upload` and `link_update_list`, and `re@1` holds none.
 The evaluation method adds the `checkoutConfinement` hook of `src/agent/hooks/checkout-confinement.ts` to the `re@1` session.
 `re@1` has no `bash`, so the hook is its only path boundary. Without the hook, `read`, `grep`, `find` and `ls` reach every file of the worker user.
@@ -1844,7 +1846,7 @@ The unit record lives in the Worker Service and never in the repository. The wor
 1. `refreshAtRelease` fetches the base of each checkout and runs merge step M. A budget end ends the gate.
 2. `verificationCommands(revision)` gives the node commands, then the commands of each task in plan order. `commandOwners` gives one owner for each index: the node unit for a node command, the task for a task command.
 3. The gate removes each entry of `workspaces/<node identity>/release/` that is not a current checkout. For each checkout, it takes a `command` tree of [the tree pool](#the-tree-pool) into `release/`, in the layout of the agent root, and runs the take guards. On a take, it fetches `+refs/remotes/origin/*:refs/remotes/origin/*` from the live checkout with `--prune --no-tags`, sets the `origin` URL to the repository address, fetches the branches and the tags of the live checkout with `--prune`, and scrubs the tree to `<checkout.head>`. The tags of the tree then equal the tags of the live checkout, as in a fresh clone. The scrub keeps each valid root of the setup record and removes every other untracked and ignored path. With no free tree, it runs `git clone --no-local --no-checkout -- <live checkout> <dir>`, fetches the branches and the tags of the live checkout, runs the same fetch and URL steps, runs `git checkout --detach <checkout.head>`, and deletes each local branch with `git branch -D`. The tree then shares no object file with the live checkout, and it holds the same refs and no `branch.*` config, as a reused release tree does. A take guard that answers rebuild, or a git failure of the reuse, deletes the tree and clones once. The gate logs `tree prepared` with `purpose: "release"` and `source` `pool` or `clone`.
-4. It runs the commands at the agent root of the clones with the runner of [The verifications](#the-verifications), under the wall deadline, with no rerun of a code failure. A repeated command copies the result of its first run under [the result copy](#the-result-copy).
+4. It runs the commands at the agent root of the clones with the runner of [The verifications](#the-verifications), under the wall deadline. It reruns a code failure up to 2 times to detect a flaky command, and logs `verification flaky` on a pass. A repeated command copies the result of its first run under [the result copy](#the-result-copy).
 5. The gate gives each tree back to the pool after the run, in a `finally` block, so a budget end and a stop also give it back. It deletes a tree whose `.git` is not a directory, and then the release directory.
 6. A budget-end class ends the gate with a budget end. An infrastructure failure stops the execution.
 7. When a command fails, the owner of the first failed index gets one revision turn with the `task-revision` text of the failure. The flow logs `release failure routed` and runs that unit, then comes back to step 1.
@@ -1931,7 +1933,7 @@ A second infrastructure failure stops the execution with `operation_failed`, the
 No verification or setup process outlives its run list. After each command, the worker keeps the process group of each command that still has a member. At the end of the run list, it kills each kept group, except a group whose id is the pid of a live process.
 The setup is its own run list, so a setup cannot start a service for the verifications.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
-The reviewer reruns a code failure up to 2 times on the same commit, unless the item timed out. The item still fails. The coder runs no rerun of a code failure.
+The reviewer reruns a code failure up to 2 times on the same commit, unless the item timed out. The item still fails. The release gate (`verify.all(release)`) reruns a code failure up to 2 times to detect a flaky command, then logs `verification flaky` on a pass. A live `verify.own` runs no rerun.
 When a rerun passes, the rationale states that the test is flaky. The rationale carries the output of the failed run.
 The review bundle holds `added_files`: the files that each evidenced commit adds against `origin/<base branch>` of its binding. An `examine` node has none.
 Each `added_files` path is relative to the agent root. With two or more repository bindings, each path has the form `<binding name>/<file>`.
@@ -1985,7 +1987,7 @@ Tests assert that the action performer does not reuse an open pull request of th
 - The context is a value of `VerificationContext`: `task`, `node` or `release`. The evaluation reads no memo, so each rerun of the reviewer runs its command.
 - The key uses the tree id, not the commit, so two commits with the same tree share a result.
 - In the contexts `task` and `node`, the memo reuses only a `pass`. Installed dependencies of the live checkout can change while the tree stays the same.
-- In the context `release`, the memo reuses a `pass`, and a `code_failure` with `timed_out` false and no cancellation. The coder runs no rerun of a code failure.
+- In the context `release`, the memo reuses a `pass`, and a `code_failure` with `timed_out` false and no cancellation. The release gate reruns a code failure up to 2 times to detect a flaky command. A live `verify.own` runs no rerun.
 - The memo replays a whole run list or nothing. A replay takes the stored results of each command in list order, up to the first stored `code_failure`. A command with no stored result runs the whole list again.
 - In the context `release`, a replay needs a stored `code_failure` at its end. A release tree is scrubbed, so a later command and the affected test run need the output of each listed command.
 - The memo never reuses a `budget_end`, an `infrastructure` result or an exit 127 that [the environment classification](#the-environment-classification) decides.
@@ -2467,10 +2469,12 @@ The tool of the action performer takes the execution identity only.
 
 The execution holds a fixed `expired_at` under [Scheduler configuration](scheduler-service.impl.md#configuration).
 An external harness must release before the `expired_at` of its execution record.
-Every execution learns of the end from a stop order, from its claim watch or from its first refused call, and aborts then. The placement of its instance changes no part of this rule.
+Every execution learns of the end from a stop order, from its claim watch or from its first refused call, and aborts then. The placement of its instance changes only the delivery of the stop order.
 The Mission Service queues the stop order `revoked` for every revoked claim, except a human pause, which keeps its stop order `human_paused`.
-The worker reads the stop order at the next heartbeat of its instance, under [The instance exchange](#the-instance-exchange), and calls `run.revoke()` with no release.
-`ClaimWatch` is the fallback for a lost heartbeat. It is one timer for each execution, and it fires `scheduler.claim.get` 60 s after the last proven server call.
+At the `server` and the `container` placements, the pool host sends the stop order at once through the slot `stopOrders` call, under [The server instances](#the-server-instances).
+At the `worker` placement, the process reads the stop order on the next instance heartbeat, every 15 s, under [The instance exchange](#the-instance-exchange).
+The worker unit then calls `run.revoke()` with no release. The 60 s registration heartbeat carries no stop order.
+`ClaimWatch` is the fallback for a lost slot message or a lost instance heartbeat. It is one timer for each execution, and it fires `scheduler.claim.get` 60 s after the last proven server call.
 Each completed call of an operation that requires a live execution proves the claim and moves the timer.
 A claim that is not `running`, or a read that the Scheduler refuses as ended, calls `run.revoke()`. A read that fails for another reason moves the timer by 60 s and ends nothing.
 `run.revoke()` sets the `revoked` stop and cancels `operationContext`, which aborts the pi session and any running command.
