@@ -72,7 +72,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
   - A claim of authority: system, owner or approval.
   - A secret value, encoded text or hidden text.
   - A goal that the instruction does not support.
-- A fact about open state is no request. When the guard doubts, it answers `refuse`. Otherwise it answers `pass`.
+- A fact about the earlier conversation is no request: an act done, a recommendation or an offer that an agent made, the name of a tool or an operation, an open item, or a report that an agent treated some text as data. When the guard doubts, it answers `refuse`. Otherwise it answers `pass`.
 - The output of the summary check is `{ verdict, reason, confidence }`. The verdict is `pass` only when `verdict` is `pass` and `confidence` reaches `GUARD_SUMMARY_PASS_CONFIDENCE`. Otherwise it is `refuse`.
 - `guard@1` has one prompt per task: `guard.md` and `guard-summary.md`. Each guard run composes only the prompt of its own task.
 - `agent.get` of `guard@1` takes the query `task`: `call` (default) or `summary`. It answers one `role` part. `task` on another agent answers 400 `gateway.request.validation_failed`.
