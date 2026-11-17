@@ -10,6 +10,8 @@ Worker V2 is the worker execution refactor of [design.md](../worker-execution-re
 - `kanthord` holds `feature/worker-v2` from `7cf6ea8e`. `engine` holds `feature/worker-v2` from `ea454eab`.
 - Start each worktree under `.dev/` from `origin/feature/worker-v2`.
 - An `engine` pull request merges first. A `kanthord` pull request then points the submodule to the new `engine` commit.
+- The pre-commit hook of `kanthord` accepts only a pointer on `engine` `origin/main`. Before a pointer commit, confirm that the `engine` commit is on `origin/feature/worker-v2`. Then commit with `KANTHORD_SKIP_SUBMODULE_PUSH=1`.
+- The merge of `engine` `feature/worker-v2` into `main` makes a new commit. Point `kanthord` to that commit before `kanthord` `feature/worker-v2` merges into `main`.
 - `feature/worker-v2` merges into `main` after phase C. Remove this folder in that merge.
 
 ## Build order
@@ -69,7 +71,7 @@ Each step of phase C replays the full eval set. A difference appears only where 
 
 | Role                   | Who                                                                                                  |
 | ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| Owner                  | Ulrich. Rules each open item. Gives the word for each commit, push and merge.                        |
+| Owner                  | Ulrich. Rules each open item.                                                                        |
 | Orchestrator           | Aelita (Opus 5.5). Writes each step brief, runs the gates, sorts review findings, updates the pages. |
 | Implementer, Fable 5.2 | A1, A4, A6.                                                                                          |
 | Implementer, Opus 5.5  | A2, A3, A5, A7, A8, and phase C.                                                                     |
@@ -89,7 +91,7 @@ At most 5 sub-agents run at one time.
 4. The orchestrator lists each finding in the format `B1/S1 - status - action - name - description - fix - why`.
 5. The implementer fixes each finding with `action:YES`.
 6. The orchestrator runs the gate of the step.
-7. When the gate passes, Ulrich gives the word. The orchestrator then opens the pull request to `feature/worker-v2` and merges it.
+7. When the gate passes, the orchestrator opens the pull request to `feature/worker-v2` and merges it. One pull request is open at a time. The next step starts after the merge.
 8. The orchestrator marks the step done in [HANDOFF.md](HANDOFF.md) and records each ruling in its owning page.
 
 ## Gates
