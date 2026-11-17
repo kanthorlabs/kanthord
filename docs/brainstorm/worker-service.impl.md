@@ -1497,10 +1497,10 @@ It answers `{ claim, setup, revision, heads }` for any execution of a node that 
 
 It reads no credential and answers no credential, no SSH identity and no handover key. The route removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. It holds no value of `containerEnv`, `remoteEnv` or the process environment.
 
-| HTTP | Code | Condition |
-| --- | --- | --- |
-| 409 | `worker.execution.seed_unavailable` | The node is `Completed`, `Discarded` or retired; its unit records are deleted at that transition. |
-| 404 | `scheduler.execution.not_found` | No execution with that id exists. |
+| HTTP | Code                                | Condition                                                                                         |
+| ---- | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 409  | `worker.execution.seed_unavailable` | The node is `Completed`, `Discarded` or retired; its unit records are deleted at that transition. |
+| 404  | `scheduler.execution.not_found`     | No execution with that id exists.                                                                 |
 
 Tests cover the composed setup equal to `execution.setup.get` for a live execution, the refusal of a closed node and the absence of any credential, SSH identity or handover key.
 
@@ -1808,20 +1808,20 @@ Gate G is the worker step after every agent turn. `src/worker/unit/turn-gate.ts`
 
 The steps for each checkout:
 
-| #   | Mode       | Check or act                                                                                                                                                                                                        |
-| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #   | Mode       | Check or act                                                                                                                                                                                                                                                                                                                                                                   |
+| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | G0  | checkpoint | On `onExit`: when `openMerge` has `resolved: true` and `MERGE_HEAD` holds the commit of `openMerge`, run the conflict-mode rows and commit the merge as `<commit_type>: merge <base_branch>`. Else, when `MERGE_HEAD` exists, run `git merge --abort`. On `onStop`: when `MERGE_HEAD` exists, run `git merge --abort`. An `openMerge` with no `MERGE_HEAD` counts as no merge. |
-| G1  | all        | `git symbolic-ref -q HEAD` is `refs/heads/<node branch>`. Else `worker.turn.branch_changed`.                                                                                                                        |
-| G2  | all        | `before` is an ancestor of `HEAD`. Else `worker.turn.history_rewritten`.                                                                                                                                            |
-| G2a | all        | When `HEAD` is not `before`: `git rev-list --merges --parents <before>..HEAD` lists no merge with a parent that is not `before` and not the commit of `openMerge`. Else `worker.turn.foreign_merge`.                |
-| G3  | conflict   | `MERGE_HEAD` is the commit that step M merged. Else `worker.turn.merge_missing`.                                                                                                                                    |
-| G3  | all        | No `rebase-merge`, `rebase-apply`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, and no `MERGE_HEAD` outside conflict mode. Else `worker.turn.git_in_progress`.                                                              |
-| G4  | all        | When `HEAD` is not `before`, run `git reset --soft <before>`.                                                                                                                                                       |
-| G5  | all        | Stage with `git add --all`. A path whose only change is a line-ending conversion is unstaged. `changed` is true when the stage differs from `HEAD`, and always true in conflict mode.                               |
-| G6  | conflict   | The marker check of [The base merge](#the-base-merge) found no marker in the unmerged paths of step M. Gate G in conflict mode runs only after that check.                                                          |
-| G7  | all        | Commit when `changed` is true, with the message of the unit. In conflict mode, commit to conclude the merge. Make no empty commit outside conflict mode.                                                            |
-| G8  | all        | Read `HEAD` into `checkout.head`. Assert invariant I.                                                                                                                                                               |
-| G9  | all        | With two or more checkouts, remove each entry of the agent root that is not a checkout or `.kanthord-scratch`. Log `root entries removed` with the names.                                                           |
+| G1  | all        | `git symbolic-ref -q HEAD` is `refs/heads/<node branch>`. Else `worker.turn.branch_changed`.                                                                                                                                                                                                                                                                                   |
+| G2  | all        | `before` is an ancestor of `HEAD`. Else `worker.turn.history_rewritten`.                                                                                                                                                                                                                                                                                                       |
+| G2a | all        | When `HEAD` is not `before`: `git rev-list --merges --parents <before>..HEAD` lists no merge with a parent that is not `before` and not the commit of `openMerge`. Else `worker.turn.foreign_merge`.                                                                                                                                                                           |
+| G3  | conflict   | `MERGE_HEAD` is the commit that step M merged. Else `worker.turn.merge_missing`.                                                                                                                                                                                                                                                                                               |
+| G3  | all        | No `rebase-merge`, `rebase-apply`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, and no `MERGE_HEAD` outside conflict mode. Else `worker.turn.git_in_progress`.                                                                                                                                                                                                                         |
+| G4  | all        | When `HEAD` is not `before`, run `git reset --soft <before>`.                                                                                                                                                                                                                                                                                                                  |
+| G5  | all        | Stage with `git add --all`. A path whose only change is a line-ending conversion is unstaged. `changed` is true when the stage differs from `HEAD`, and always true in conflict mode.                                                                                                                                                                                          |
+| G6  | conflict   | The marker check of [The base merge](#the-base-merge) found no marker in the unmerged paths of step M. Gate G in conflict mode runs only after that check.                                                                                                                                                                                                                     |
+| G7  | all        | Commit when `changed` is true, with the message of the unit. In conflict mode, commit to conclude the merge. Make no empty commit outside conflict mode.                                                                                                                                                                                                                       |
+| G8  | all        | Read `HEAD` into `checkout.head`. Assert invariant I.                                                                                                                                                                                                                                                                                                                          |
+| G9  | all        | With two or more checkouts, remove each entry of the agent root that is not a checkout or `.kanthord-scratch`. Log `root entries removed` with the names.                                                                                                                                                                                                                      |
 
 - Invariant I: the checkout is on `refs/heads/<node branch>`, `HEAD` equals `checkout.head`, the index matches `HEAD`, no untracked file exists apart from ignored files, and no git operation is in progress.
 - Status reads: one `git status --porcelain=v2 --branch --no-ahead-behind` before G3 and one after G8 (invariant I). Operation path existence uses the cached `gitPaths` paths from `workspace.node`; no `git rev-parse --git-path` runs during the gate.
@@ -2737,26 +2737,26 @@ kanthord worker tasks compare <output-a> <output-b>
 
 Files read by `run`: `<seed-folder>/seed.json`, each `--tree` path, `--replay` file, `--system-prompt` file, each file of `--templates`, and with `--verify` the `outbox.json` and `spans.jsonl` of the recorded folder. Files written by `run`: the output folder and its contents. Files read by `seed`: none. Files written by `seed`: `<output>/seed.json`. Files read by `compare`: `result.json` and `metrics.json` of each folder.
 
-| Exit code | Condition |
-| --- | --- |
-| 0 | `run`: the phase completed or exited with a budget end, and each `--verify` check passed; `seed`, `compare`: success |
-| 1 | a diagnostic: an invalid seed, option, folder or standard input, an invalid or diverged replay, or another handled failure |
-| 2 | `run`: the phase stopped |
-| 4 | `run`: the phase completed or exited, and a `--verify` check failed |
+| Exit code | Condition                                                                                                                  |
+| --------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 0         | `run`: the phase completed or exited with a budget end, and each `--verify` check passed; `seed`, `compare`: success       |
+| 1         | a diagnostic: an invalid seed, option, folder or standard input, an invalid or diverged replay, or another handled failure |
+| 2         | `run`: the phase stopped                                                                                                   |
+| 4         | `run`: the phase completed or exited, and a `--verify` check failed                                                        |
 
 Exit code 3 stays reserved for `worker.instance.superseded` of `serve worker`.
 
-| HTTP | Code | Condition |
-| --- | --- | --- |
-| local | `cli.worker.tasks.seed_invalid` | `seed.json` fails its schema, a binding has no tree source, the seed lacks a key that the phase reads, or `setup` lacks `prompt.final` or `templates` and the matching option is absent |
-| local | `cli.worker.tasks.tree_invalid` | a `--tree` path is no git repository, or a clone lacks the seed head or `origin/<base_branch>` |
-| local | `cli.worker.tasks.mode_invalid` | neither or both of `--replay` and `--credential-stdin`, or an override with `--replay` |
-| local | `cli.worker.tasks.credential_invalid` | standard input is a terminal, or it holds no valid credential of the effective provider |
-| local | `cli.worker.tasks.credential_expiring` | an `oauth` access token expires before the wall deadline plus 5 minutes |
-| local | `cli.worker.tasks.unit_unknown` | a `--unit` names no unit of the plan |
-| local | `cli.worker.tasks.output_exists` | the output folder exists and `--force` is absent |
-| local | `cli.worker.tasks.replay_invalid` | the `--replay` file has another version or an invalid line |
-| local | `cli.worker.tasks.replay_diverged` | a model request differs from the recorded request |
-| local | `cli.worker.tasks.seed_mismatch` | `compare` got two runs of different seeds |
+| HTTP  | Code                                   | Condition                                                                                                                                                                               |
+| ----- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| local | `cli.worker.tasks.seed_invalid`        | `seed.json` fails its schema, a binding has no tree source, the seed lacks a key that the phase reads, or `setup` lacks `prompt.final` or `templates` and the matching option is absent |
+| local | `cli.worker.tasks.tree_invalid`        | a `--tree` path is no git repository, or a clone lacks the seed head or `origin/<base_branch>`                                                                                          |
+| local | `cli.worker.tasks.mode_invalid`        | neither or both of `--replay` and `--credential-stdin`, or an override with `--replay`                                                                                                  |
+| local | `cli.worker.tasks.credential_invalid`  | standard input is a terminal, or it holds no valid credential of the effective provider                                                                                                 |
+| local | `cli.worker.tasks.credential_expiring` | an `oauth` access token expires before the wall deadline plus 5 minutes                                                                                                                 |
+| local | `cli.worker.tasks.unit_unknown`        | a `--unit` names no unit of the plan                                                                                                                                                    |
+| local | `cli.worker.tasks.output_exists`       | the output folder exists and `--force` is absent                                                                                                                                        |
+| local | `cli.worker.tasks.replay_invalid`      | the `--replay` file has another version or an invalid line                                                                                                                              |
+| local | `cli.worker.tasks.replay_diverged`     | a model request differs from the recorded request                                                                                                                                       |
+| local | `cli.worker.tasks.seed_mismatch`       | `compare` got two runs of different seeds                                                                                                                                               |
 
 The stop code `operation_failed/cli.worker.tasks.read_not_seeded` ends the phase when a step makes a server read. It gives exit code 2.
