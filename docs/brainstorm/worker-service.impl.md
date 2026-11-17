@@ -1696,6 +1696,7 @@ The evaluation method adds the `checkoutConfinement` hook of `src/agent/hooks/ch
 The hook resolves each `path` with the path function of pi (`resolveToCwd`: `@` prefix, `~`, `file://`, Unicode spaces), then follows symbolic links. The hook accepts the path when the result is inside one root. The hook refuses a path that it cannot resolve. A call with no `path` takes the agent root. With two checkouts the agent root is `review/checkouts`; the roots are the agent root and the `evidence` directory. A workspace with no checkout holds the placed evidence itself, so it is the root.
 The agent catalog `src/agent/catalog.ts` owns `EVIDENCE_UPLOAD_PARAMETERS`, the parameter schema of `evidence-upload`.
 `agent.get` lists a host tool with the source `host`.
+Each `host_tools` entry of an agent declaration is an agent tool of [the Foundry](#the-foundry), and a capability of the Foundry host registers it.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the four sources.
 No worker agent process outlives its bash call. At the end of the call, the worker kills the process group of the call. A process that calls `setsid` escapes that kill.
@@ -2708,6 +2709,55 @@ The `worker handover` command refuses an invalid argument locally, matching `eng
 | ----- | ------------------------------------------ | ----------------------------------------------------------------------------- |
 | local | `cli.worker.handover.invalid_execution_id` | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity. |
 
+## The Foundry
+
+The Foundry is the core of a node execution (D32 of the [chain design](worker-execution-refactor/design.md)). It is a custom framework on `@earendil-works/pi-coding-agent`.
+The Foundry is one function per chain: `foundryImplement`, `foundryEvaluation` and `foundryExamine`. One call runs the whole `tasks` phase.
+The Foundry depends only on its input and on the host tools that the Foundry host injects.
+It constructs no client, no transport and no resource, and it does not know its Foundry host.
+The Foundry makes a side effect only through a host tool.
+Section 2 of the chain design holds the types and the rules of the Foundry. Sections 5.4, 5.5 and 5.7 hold the credential rules, the agent tooling and the CLI host.
+
+Each term has one meaning.
+
+| Term          | Meaning                                                                                                                                 |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Foundry       | The `tasks` function of a chain and the steps that it runs.                                                                             |
+| Foundry host  | The code that calls a `tasks` function. The set is closed: the worker host (`runChain`) and the CLI host (`kanthord worker tasks run`). |
+| host tool     | An agent tool or a Foundry port.                                                                                                        |
+| agent tool    | A pi tool that the model calls in a turn. `evidence-upload` and `link_update_list` are agent tools. The Foundry never calls one.        |
+| Foundry port  | A typed function of the Foundry host that step code calls outside a model turn.                                                         |
+| capability    | One pi extension factory (`InlineExtension`) of the Foundry host that registers agent tools or MCP servers.                             |
+| guard         | A pi extension factory that the shared session open `agentPort` adds to each session that it opens.                                     |
+| host resource | A long-running object of the Foundry host that runs beside `tasks`: the claim watch, the credential store and the SSH access.           |
+
+The Foundry ports are `EvidencePort`, `UnitRecordPort`, `RepositoryPort`, `ReleaseTreePort`, `AgentPort`, `SecretPort` and `LogPort`, plus the `SpanRecorder` for the step spans.
+`EvidencePort`, `UnitRecordPort`, `RepositoryPort`, `AgentPort` and `ReleaseTreePort.take` answer `PortResult`. `releaseTrees.give`, `secrets.redact`, `log` and the `SpanRecorder` do not.
+A chain gets only the ports that its steps call.
+The worker host implements each port over the worker transport, the git remote and the tree pool. The CLI host implements each port over the output folder and the local mirror.
+The Foundry host owns the retry, the idempotency key, the execution proof and the `expired_at` bound of each port call.
+A `tasks` step returns its stop as a value, and the worker host stores it with `ExecutionRun.halt`.
+The walker of a `tasks` function catches an unknown error and returns the end kind `failed` with the result. The worker host maps the error with `run.stopOf`.
+
+The agent tools build on the pi extension design. The design adds no registry, no plugin format and no tool interface where pi has one.
+A later capability is one more pi extension factory in the capability list of each Foundry host. Search, a browser and an MCP server are such capabilities.
+The `tools` option of `createAgentSession` is the first tool guard: pi registers no tool that the agent declaration does not name.
+The guards are the tool allowlist, the checkout confinement and the sensitive-text redaction.
+The tool allowlist blocks each call of a tool that `tools` and `host_tools` of the agent declaration do not name.
+The checkout confinement is a guard of a confined session. It checks each input field that the catalog entry of a tool declares in `locations`, and it blocks a tool with no catalog entry.
+`agentPort` ends a session through `AgentSessionRuntime.dispose()` of pi, so that pi emits `session_shutdown` and each capability stops its resources. The close runs under the cleanup deadline.
+
+Build order. Each layer passes the full suite of the `engine` repository and the golden chain test before the next layer starts. The base is the chain runner.
+
+1. The implement ports in the worker host.
+2. The evaluation ports and the examine ports.
+3. Stops as values.
+4. The boundary of the Foundry: the three `tasks` functions, the `ports` declaration of each step, the `build()` rules and the module test.
+5. The capabilities and the guards.
+6. The CLI host.
+
+[HANDOFF.md](HANDOFF.md) holds the check of each layer and the open items.
+
 ## Standalone tasks run
 
 The `worker tasks` group holds three commands. `seed` holds the remote flags of the engine CLI. `run` and `compare` are local commands that need no configuration file of the server and open no database.
@@ -2741,8 +2791,9 @@ Files read by `run`: `<seed-folder>/seed.json`, each `--tree` path, `--replay` f
 | --------- | -------------------------------------------------------------------------------------------------------------------------- |
 | 0         | `run`: the phase completed or exited with a budget end, and each `--verify` check passed; `seed`, `compare`: success       |
 | 1         | a diagnostic: an invalid seed, option, folder or standard input, an invalid or diverged replay, or another handled failure |
-| 2         | `run`: the phase stopped                                                                                                   |
+| 2         | `run`: the phase stopped, or SIGINT cancelled it with the stop `worker_stopped`                                            |
 | 4         | `run`: the phase completed or exited, and a `--verify` check failed                                                        |
+| 5         | `run`: the `tasks` function ended with `failed`, an unknown error                                                          |
 
 Exit code 3 stays reserved for `worker.instance.superseded` of `serve worker`.
 
@@ -2758,5 +2809,6 @@ Exit code 3 stays reserved for `worker.instance.superseded` of `serve worker`.
 | local | `cli.worker.tasks.replay_invalid`      | the `--replay` file has another version or an invalid line                                                                                                                              |
 | local | `cli.worker.tasks.replay_diverged`     | a model request differs from the recorded request                                                                                                                                       |
 | local | `cli.worker.tasks.seed_mismatch`       | `compare` got two runs of different seeds                                                                                                                                               |
+| local | `cli.worker.tasks.internal_error`      | the `tasks` function ended with `failed`; the diagnostic holds no error text of a tool or of git                                                                                        |
 
-The stop code `operation_failed/cli.worker.tasks.read_not_seeded` ends the phase when a step makes a server read. It gives exit code 2.
+The command is the CLI host of [the Foundry](#the-foundry). No Foundry port reads the server, so the command has no stop code for a server read.

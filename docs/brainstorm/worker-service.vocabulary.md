@@ -446,6 +446,65 @@ The report of "Add password reset" holds `selection: "related"` and one failed t
 A test id is `{ file, name }`: the test file and the full name of the test, with the names of its suites and its own name joined with a space, `>` and a space.
 `{ "file": "src/auth/reset.test.ts", "name": "reset > rejects an expired token" }` is a test id.
 
+## Foundry
+
+The Foundry is the component of the Worker Service that runs the `tasks` phase of a node execution.
+It takes a prepared input and makes local material. A Foundry host injects its tools: the worker host or the CLI host.
+Display name: Worker Foundry.
+The set of functions is closed and it holds three values: `foundryImplement`, `foundryEvaluation` and `foundryExamine`.
+Execution 1 of "Add password reset" calls `foundryImplement` once, and that call runs the three tasks and the release gate.
+[The Foundry](worker-service.impl.md#the-foundry) defines the contract.
+
+## Foundry host
+
+A Foundry host is the code that calls a `tasks` function of the Foundry.
+The term differs from [host](#host), which names the system that runs the instances of a worker.
+The set is closed and it holds two values.
+
+- **worker host**, which calls the Foundry from `runChain` inside an execution
+- **CLI host**, which calls the Foundry from `kanthord worker tasks run` on one machine
+
+Both Foundry hosts run the same code. The Foundry does not know which one calls it.
+
+## host tool
+
+A host tool is a tool that a Foundry host injects into the Foundry. The Foundry makes a side effect only through a host tool.
+The set of kinds is closed and it holds two values.
+
+- **agent tool**
+- **Foundry port**
+
+## agent tool
+
+An agent tool is a pi tool that the model calls in a turn. The Foundry never calls it.
+`swe@1` of Execution 1 calls the agent tool `evidence-upload` to upload a screenshot of the reset form.
+In the worker host, the call uploads the file to the server. In the CLI host, the call copies the file to `uploads/` of the output folder.
+
+## Foundry port
+
+A Foundry port is a typed function of the Foundry host that step code calls outside a model turn.
+After task "Add reset token expiry" passes, the step `unit_record.put` calls the Foundry port `unitRecords.put`.
+The worker host sends `worker.execution.unit_record.put`. The CLI host appends the record to `outbox.json`.
+
+## capability
+
+A capability is one pi extension factory of a Foundry host that registers agent tools or MCP servers.
+The capability `executionEvidence` registers the agent tool `evidence-upload`.
+A browser capability is one more factory in the capability list, and no step of the Foundry changes for it.
+
+## guard
+
+A guard is a pi extension factory that the shared session open `agentPort` adds to each session that it opens.
+The set is closed and it holds three values: the tool allowlist, the checkout confinement and the sensitive-text redaction.
+The checkout confinement joins a confined session only, which is each `re@1` session.
+The tool allowlist blocks a call of a browser tool in a `re@1` session, because the declaration of `re@1` does not name it.
+
+## host resource
+
+A host resource is a long-running object of a Foundry host that runs beside the Foundry.
+The claim watch, the credential store and the SSH access of Execution 1 are host resources.
+The Foundry holds none of them. It sees only the cancellation of its input.
+
 ## resource budget
 
 The resource budget bounds the agent work of one execution by wall time and, when declared, turn count.
