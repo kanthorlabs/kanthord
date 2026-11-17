@@ -396,20 +396,25 @@ interface UnitRecordPort {
   ): Promise<PortResult<null>>;
 }
 
+interface PortCall {
+  context: Context;
+  deadline: number;
+}
+
 interface RepositoryPort {
-  fetchBase(
-    checkout: CheckoutRef,
-    context: CancellationContext,
-    deadline: number,
-  ): Promise<PortResult<null>>;
+  fetchBase(checkout: CheckoutRef, call: PortCall): Promise<PortResult<null>>;
 }
 
 interface ReleaseTreePort {
   take(
     checkout: CheckoutRef,
     head: Commit,
-    context: CancellationContext,
-    deadline: number,
+    call: PortCall,
+  ): Promise<PortResult<CommandTree>>;
+  takeBase(
+    checkout: CheckoutRef,
+    commit: Commit,
+    call: PortCall,
   ): Promise<PortResult<CommandTree>>;
   give(tree: CommandTree): Promise<void>;
 }
@@ -569,7 +574,7 @@ declare function foundryExamine(
 ): Promise<FoundryEnd<ExamineResult>>;
 ```
 
-`EvidenceDraft` is the body of `mission.evidence.submit` with no execution identity and no idempotency key. `UnitRecordDraft` is `{ unit_id, content_digest, commits }` (section 5.1). `NativeAgent` implements `AgentSession`. `env` is the environment of each child process, which the Foundry host already filtered.
+`EvidenceDraft` is `Omit<EvidenceSubmit, keyof ExecutionContext>` of `src/mission/contract.ts`: `subject`, `assets` and an optional `verification`. The worker port fills `node_id` from the claim and gives the idempotency key as a client option. `PortCall` holds the context and the deadline of a git or tree call. `takeBase` serves the base tree of `BaseHead`, which the `tasks` phase takes for the baseline of a command-absent exit, the affected run on the base and the node-failure fallback of the release setup. `UnitRecordDraft` is `{ unit_id, content_digest, commits }` (section 5.1). `NativeAgent` implements `AgentSession`. `env` is the environment of each child process, which the Foundry host already filtered.
 
 The interfaces `EvidencePort`, `UnitRecordPort`, `RepositoryPort` and `AgentPort` answer `PortResult`. `ReleaseTreePort.take` answers `PortResult` too. Four port functions do not: `releaseTrees.give` answers nothing, `secrets.redact` answers the text or `null`, `telemetry` is a `SpanRecorder`, and `log` answers nothing.
 
@@ -613,17 +618,18 @@ Rules of the Foundry:
 
 Port implementations:
 
-| Port                   | Worker host                                                                                                                                               | CLI host                                                                                                                                   |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `evidence.submit`      | `mission.evidence.submit` through `run.call` with the D28 retry. With `halt: false`, it uses the no-halt call of section 5.1.                             | Appends the draft to `outbox.json` and copies each asset to `uploads/`. Answers a synthetic identity whose ULID encodes the call position. |
-| `unitRecords.put`      | `worker.execution.unit_record.put` through the no-halt call of section 5.1. An execution-end answer calls `run.revoke()`; the port then answers `failed`. | Appends the record to `outbox.json`. Answers `ok`.                                                                                         |
-| `repository.fetchBase` | `transport.fetchBase` with the signer of `ssh.access` for the binding, inside `worker.git` with the git step mark `fetch_base`.                           | `git fetch --prune origin` from the mirror `state/origin/<binding_id>.git`. It holds no signer.                                            |
-| `releaseTrees.take`    | Command pool take, else `clonePacked` from the live checkout.                                                                                             | `clonePacked` to `state/release/<binding_id>/`, with no pool.                                                                              |
-| `releaseTrees.give`    | Gives the tree back to the Command pool and removes the release directory.                                                                                | Removes the directory.                                                                                                                     |
-| `agent.open`           | `agentPort` of section 5.5 over the custody model runtime and the telemetry trace. It registers the close on the dispose stack of the host.               | `agentPort` over the frozen store or the replay provider, and the `spans.jsonl` trace.                                                     |
-| `telemetry`            | `SpanRecorder` over the telemetry sink of the execution.                                                                                                  | `SpanRecorder` over a sink that writes `spans.jsonl`.                                                                                      |
-| `secrets.redact`       | `run.reasonOf` with the secret list of the execution (D14).                                                                                               | Redaction over the standard-input credential and each `--pass-env` value.                                                                  |
-| `log`                  | `run.log` of the execution.                                                                                                                               | The log of the command.                                                                                                                    |
+| Port                    | Worker host                                                                                                                                               | CLI host                                                                                                                                   |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `evidence.submit`       | `mission.evidence.submit` through `run.call` with the D28 retry. With `halt: false`, it uses the no-halt call of section 5.1.                             | Appends the draft to `outbox.json` and copies each asset to `uploads/`. Answers a synthetic identity whose ULID encodes the call position. |
+| `unitRecords.put`       | `worker.execution.unit_record.put` through the no-halt call of section 5.1. An execution-end answer calls `run.revoke()`; the port then answers `failed`. | Appends the record to `outbox.json`. Answers `ok`.                                                                                         |
+| `repository.fetchBase`  | `transport.fetchBase` with the signer of `ssh.access` for the binding, inside `worker.git` with the git step mark `fetch_base`.                           | `git fetch --prune origin` from the mirror `state/origin/<binding_id>.git`. It holds no signer.                                            |
+| `releaseTrees.take`     | Command pool take, else `clonePacked` from the live checkout.                                                                                             | `clonePacked` to `state/release/<binding_id>/`, with no pool.                                                                              |
+| `releaseTrees.takeBase` | Base tree pool take of `BaseHead`, for the baseline, the affected run on the base and the setup fallback.                                                 | `clonePacked` of the base commit under `state/base/`, with no pool.                                                                        |
+| `releaseTrees.give`     | Gives the tree back to the Command pool and removes the release directory.                                                                                | Removes the directory.                                                                                                                     |
+| `agent.open`            | `agentPort` of section 5.5 over the custody model runtime and the telemetry trace. It registers the close on the dispose stack of the host.               | `agentPort` over the frozen store or the replay provider, and the `spans.jsonl` trace.                                                     |
+| `telemetry`             | `SpanRecorder` over the telemetry sink of the execution.                                                                                                  | `SpanRecorder` over a sink that writes `spans.jsonl`.                                                                                      |
+| `secrets.redact`        | `run.reasonOf` with the secret list of the execution (D14).                                                                                               | Redaction over the standard-input credential and each `--pass-env` value.                                                                  |
+| `log`                   | `run.log` of the execution.                                                                                                                               | The log of the command.                                                                                                                    |
 
 The LLM provider call, the credential lease and the turn telemetry need no port. pi owns them behind `AgentSession`: `session.prompt()`, the `ModelRuntime` of the host and `session.subscribe()`.
 
