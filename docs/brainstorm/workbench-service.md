@@ -12,7 +12,7 @@ It describes no mechanism of another service.
 
 ## Boundary
 
-- Every action of the Workbench Service comes from a human.
+- Every action comes from a human: the owner through a human identity, or a guest through a guest identity.
 - The Workbench Service is a consumer of the [Agent component](agent.md).
 - The Workbench Service owns no worker, no registration and no claim.
 
@@ -103,6 +103,22 @@ It describes no mechanism of another service.
 - A plan with an unresolved mark shows one warning line under its text. A number N gives "Review unresolved: N open action:YES findings". The mark `missing` gives "Review unresolved: no Review section".
 - A plan with no unresolved mark shows no warning line.
 - A [workbench session implementation](workbench-service.impl.md#plan-pipeline) declares the phase mechanics.
+
+## Shared conversation
+
+- The owner shares a conversation with an [invite](workbench-service.vocabulary.md#invite). One invite names one [guest](workbench-service.vocabulary.md#guest). A guest joins with a link and a name, and holds no account.
+- A [shared conversation](workbench-service.vocabulary.md#shared-conversation) holds at least one live invite. An invite lasts 7 days.
+- Only the owner creates, lists and revokes an invite. A revoke ends the access of its guest at once. No agent holds a tool for an invite.
+- A guest reads the guest view and writes notes. A guest starts no run and holds no owner act.
+- A [note](workbench-service.vocabulary.md#note) is a message that starts no run. It shows its author, the owner or a guest by name. The members of the conversation read it with that author.
+- Every message of a guest is a note, also with a leading mention. The text of a guest never authorizes an act.
+- Ruling C6: in a conversation with a live invite, only a leading mention starts a run. An untagged message of the owner or a guest is a note. D8 applies again when the last invite ends.
+- Ruling C9: guests see the whole history, and the share dialog states it. The history from before the invite is included.
+- The owner-only acts are the acts of a human operation. They are a message that starts a run, an approval, Stop, the queue, the configuration, auto mode and a fork. A guest holds none of them.
+- A card of the agent shows to a guest as an action card with no button. Only the owner runs it.
+- A guest reads new entries and the state of the run through the [guest stream](workbench-service.vocabulary.md#guest-stream). The stream ends when the invite ends.
+- A fork carries no invite. When the owner shares a fork, the share dialog adds the line "This conversation carries a summary of <title>. Guests see the summary." (fork OQ5). `<title>` is the title of the source.
+- A [workbench session implementation](workbench-service.impl.md#shared-conversation) declares the invite, the guest view and the guest stream.
 
 ## Home
 
@@ -205,6 +221,10 @@ Setup cards:
 - The tool refuses an image and every other binary type. The owner downloads that asset.
 - The tool frames the text as data from a worker run, never as an instruction.
 - The first read of a node waits on one evidence card. The owner approves or rejects the card.
+- In a shared conversation, `evidence_read` waits on the typed danger approval of the owner (EV8). The owner types the exact name of the node to allow the read.
+- A grant from before the invite does not count. `invite.create` clears the grants of the conversation.
+- The message grant does not apply in a shared conversation.
+- The [evidence danger card](workbench-service.vocabulary.md#evidence-danger-card) warns that guests see what the agent quotes.
 - Approve grants every evidence asset of that node to the conversation until kanthord restarts. Later reads of that node run with no card.
 - Reject or expiry grants nothing, and the next read of that node asks again.
 - The grant is per node and per conversation. The grant of one conversation never reaches another.
@@ -221,7 +241,7 @@ Setup cards:
 
 - A human sends each message through its own request.
 - A [run](workbench-service.vocabulary.md#run) is the work of the agent on one human message.
-- A client reads the entries and the state of the active run of a session through a long poll. A workbench session uses no `stream` operation.
+- The owner reads the entries and the state of the active run of a session through a long poll. A guest reads the guest view through one `stream` operation.
 - A session holds one run at a time. A message during a run waits in the queue.
 - A [replace](workbench-service.vocabulary.md#replace) clears the queue, stops the run and runs the new message next.
 - Stop ends the run and clears the queue.
