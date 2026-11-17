@@ -84,16 +84,16 @@ Code facts:
 
   Reason: layers 1 to 3 each change one file group (`turn-gate.ts` and `local-git.ts`, `done-record.ts`, `execution-run.ts`) and give the cost cut that the EM asks for with no runner. Layer 4 then ports verified behavior, and the golden file keeps section 4 equal to the code.
 
-- **D31 (own idea): run the `tasks` phase as a standalone local command through the engine ports and the agent tools of D32.** The command uses production step code with no step of its own. No `tasks` step holds placement logic or imports a transport constructor; placement lives only in the tasks host. The command adds one production behavior: the capture hook of section 5.7. Reason: a developer runs and replays the core of an execution on one machine with no server access and can change one variable and compare the result.
+- **D31 (own idea): run the `tasks` phase as a standalone local command through the Foundry ports and the agent tools of D32.** The command uses production step code with no step of its own. No `tasks` step holds placement logic or imports a transport constructor; placement lives only in the Foundry host. The command adds one production behavior: the capture hook of section 5.7. Reason: a developer runs and replays the core of an execution on one machine with no server access and can change one variable and compare the result.
 
-- **D32 (EM ruling 2026-11-17): the tasks engine is the core of a node execution. It is a custom framework on pi-coding-agent.** D32 extends D31 to all three chains.
-  - A tasks host calls one function of the tasks engine per chain: `tasksImplement`, `tasksEvaluation` or `tasksExamine`. The tasks engine does not know its tasks host.
-  - The tasks host has two forms: the KanthorD worker and the standalone CLI. Both forms run the same code of the tasks engine.
+- **D32 (EM ruling 2026-11-17): the Foundry is the core of a node execution. It is a custom framework on pi-coding-agent.** D32 extends D31 to all three chains.
+  - A Foundry host calls one function of the Foundry per chain: `foundryImplement`, `foundryEvaluation` or `foundryExamine`. The Foundry does not know its Foundry host.
+  - The Foundry host has two forms: the KanthorD worker and the standalone CLI. Both forms run the same code of the Foundry.
   - A human, a harness or the long-running worker process prepares the input. The same consumer takes the local materials after the phase and acts on them.
-  - The tasks engine depends only on its input and on the host tools that the tasks host injects. It constructs no client, no transport and no resource.
-  - The tasks engine makes a side effect only through a host tool. A host tool is an agent tool or an engine port.
-  - Typed engine ports take the place of the operation-shaped `MethodClients` for `tasks`. A chain gets only the ports that its steps call.
-  - `ExecutionRun`, the credentials, the SSH signer and the tree service stay outside the tasks engine. A `tasks` step returns its stop as a value.
+  - The Foundry depends only on its input and on the host tools that the Foundry host injects. It constructs no client, no transport and no resource.
+  - The Foundry makes a side effect only through a host tool. A host tool is an agent tool or a Foundry port.
+  - Typed Foundry ports take the place of the operation-shaped `MethodClients` for `tasks`. A chain gets only the ports that its steps call.
+  - `ExecutionRun`, the credentials, the SSH signer and the tree service stay outside the Foundry. A `tasks` step returns its stop as a value.
   - No context key holds a credential, so no step of any phase can read one. Only `credential.store` holds the handover result, as host code.
   - The agent tools build on the pi extension design. A capability is one pi extension factory. The design adds no registry, no plugin format and no tool interface where pi has one.
   - A later capability (search, browser, MCP) is one more pi extension factory in the capability list. No `tasks` step changes for it.
@@ -102,7 +102,7 @@ Code facts:
     - the credential input, the capture hook and the seed export;
     - the output folder, the `--verify` checks, `compare` and `until`.
 
-  Sections 2, 5.4, 5.5 and 5.7 hold the rules. Reason: one boundary lets a human, a harness and the worker drive the same core. No code of the tasks engine can reach a server, a remote or a credential.
+  Sections 2, 5.4, 5.5 and 5.7 hold the rules. Reason: one boundary lets a human, a harness and the worker drive the same core. No code of the Foundry can reach a server, a remote or a credential.
 
 ### Invariants
 
@@ -217,14 +217,14 @@ interface Step<S, R extends Key, W extends Key> {
   ): Promise<StepResult<S, W>>;
 }
 
-interface TasksIo<P extends CommonPorts> {
+interface FoundryIo<P extends CommonPorts> {
   budget: ExecutionBudget;
   context: CancellationContext;
   deadline: number;
   ports: P;
 }
 
-type TasksStepResult<S, W extends Key> =
+type FoundryStepResult<S, W extends Key> =
   | StepResult<S, W>
   | {
       kind: "stop";
@@ -233,7 +233,7 @@ type TasksStepResult<S, W extends Key> =
       scope: S;
     };
 
-interface TasksStep<S, R extends Key, W extends Key, P extends CommonPorts> {
+interface FoundryStep<S, R extends Key, W extends Key, P extends CommonPorts> {
   id: StepId;
   deadline: DeadlineKind;
   reads: readonly R[];
@@ -243,14 +243,15 @@ interface TasksStep<S, R extends Key, W extends Key, P extends CommonPorts> {
   run(
     ctx: Readonly<Pick<ExecutionCtx, R>>,
     scope: S,
-    io: TasksIo<P>,
-  ): Promise<TasksStepResult<S, W>>;
+    io: FoundryIo<P>,
+  ): Promise<FoundryStepResult<S, W>>;
 }
 
 type ChainNode =
   | {
       kind: "step";
-      step: Step<unknown, Key, Key> | TasksStep<unknown, Key, Key, CommonPorts>;
+      step:
+        Step<unknown, Key, Key> | FoundryStep<unknown, Key, Key, CommonPorts>;
     }
   | {
       kind: "parallel";
@@ -263,7 +264,7 @@ interface LoopFrame<S> {
   reads: readonly Key[];
   init(ctx: ExecutionCtx, outer: unknown): S | null;
   body: readonly (
-    Step<S, Key, Key> | TasksStep<S, Key, Key, CommonPorts> | ChainNode
+    Step<S, Key, Key> | FoundryStep<S, Key, Key, CommonPorts> | ChainNode
   )[];
   next(ctx: ExecutionCtx, scope: S): S | null;
   span?(ctx: ExecutionCtx, scope: S): SpanContext;
@@ -286,7 +287,7 @@ interface Chain {
 interface ChainBuilder {
   phase(phase: Phase): ChainBuilder;
   step(
-    step: Step<unknown, Key, Key> | TasksStep<unknown, Key, Key, CommonPorts>,
+    step: Step<unknown, Key, Key> | FoundryStep<unknown, Key, Key, CommonPorts>,
   ): ChainBuilder;
   parallel(
     id: string,
@@ -330,24 +331,24 @@ type PhaseEnd =
 
 Rules of the runner:
 
-1. **Context.** The host runs `credentials.handover` then `setup.read` before `runChain`; it creates the dispose stack and defers the credential entry first. The seed holds `claim`, `setup` and `sshAccess`. The handover result is no context key: `hostExecution` gives it only to `credential.store` (D32). The runner seeds `currentUnit = null`, `openMerge = null`, `completedUnits = 0` and `progress` before the first phase. A `tasks` function seeds `memo` (a new `VerificationMemo`) for its call. Only `verify.own` and `verify.all(release)` read `memo`. The build check counts the seed as a writer. A step gets a shallow-frozen slice of its `reads`. A resource key (`agent`, `baseHead`, `memo`) holds a live object. The runner merges the patch into the context. A step never mutates a context object other than a resource. `heads` replaces the in-place `checkout.head` writes of today. The host builds the input of a `tasks` function from the context. It merges the result of each `TasksEnd` kind into the context.
-2. **Build check.** `build()` walks every path of the chain. It rejects a read with no earlier writer on that path, two parallel branches that write one key, and an `onExit` or `onStop` node that reads a key that the end of `prepare` can lack. Each `LoopFrame` declares the keys that `init` and `next` read from the outer context. The seed check requires a `LoopFrame.reads` key only when no node of the phase writes it before the first read of the frame. A scope field is no key and needs no seed. `build()` rejects a `TasksStep` whose `ports` are not in the port set of its phase. In a `tasks` phase, the port set is the port type of the `tasks` function of the chain. In a host phase, the port set is the port set of the tasks host, which holds every engine port. `runChain` takes it from the worker host. `runPhase` takes it from `PhaseResources.ports` of the tasks host that calls it. `build()` rejects a `TasksStep` that declares `sshAccess` in `reads`. It rejects a `Step` in a `tasks` phase. No step can declare a credential, because no context key holds one.
+1. **Context.** The host runs `credentials.handover` then `setup.read` before `runChain`; it creates the dispose stack and defers the credential entry first. The seed holds `claim`, `setup` and `sshAccess`. The handover result is no context key: `hostExecution` gives it only to `credential.store` (D32). The runner seeds `currentUnit = null`, `openMerge = null`, `completedUnits = 0` and `progress` before the first phase. A `tasks` function seeds `memo` (a new `VerificationMemo`) for its call. Only `verify.own` and `verify.all(release)` read `memo`. The build check counts the seed as a writer. A step gets a shallow-frozen slice of its `reads`. A resource key (`agent`, `baseHead`, `memo`) holds a live object. The runner merges the patch into the context. A step never mutates a context object other than a resource. `heads` replaces the in-place `checkout.head` writes of today. The host builds the input of a `tasks` function from the context. It merges the result of each `FoundryEnd` kind into the context.
+2. **Build check.** `build()` walks every path of the chain. It rejects a read with no earlier writer on that path, two parallel branches that write one key, and an `onExit` or `onStop` node that reads a key that the end of `prepare` can lack. Each `LoopFrame` declares the keys that `init` and `next` read from the outer context. The seed check requires a `LoopFrame.reads` key only when no node of the phase writes it before the first read of the frame. A scope field is no key and needs no seed. `build()` rejects a `FoundryStep` whose `ports` are not in the port set of its phase. In a `tasks` phase, the port set is the port type of the `tasks` function of the chain. In a host phase, the port set is the port set of the Foundry host, which holds every Foundry port. `runChain` takes it from the worker host. `runPhase` takes it from `PhaseResources.ports` of the Foundry host that calls it. `build()` rejects a `FoundryStep` that declares `sshAccess` in `reads`. It rejects a `Step` in a `tasks` phase. No step can declare a credential, because no context key holds one.
 3. **Loop scope.** A `LoopFrame` gets the scope of its outer loop in `init`. `UnitCtx` lives in the `units` scope. `refreshed` and `openMerge` are context keys: `base.merge` and `markers.check` write them. A step returns its scope and a patch of its declared keys. The `revisions` frame `next` keeps `instruction` and `template` when the template is `CriterionRevision`.
-4. **Stop.** A `Step` calls `io.run.stop(reason, code, detail)`, and the throw ends the phase. A `TasksStep` returns the result kind `stop`. The walker then ends the `tasks` function with `TasksEnd` kind `stop`, and the host stores that stop with `ExecutionRun.halt`. The first stop wins, as in `ExecutionRun.halt` today: a stored stop wins over a returned stop. For a stop that is not `revoked`, the runner first aborts the agent. When the chain reached the end of `prepare`, it runs the `onStop` nodes. It then always runs `execution.release(stop)` (`releaseStop`). An `onStop` failure logs `checkpoint failed` and does not replace the stop. For `revoked`, the runner runs no `onStop` node and ends the execution. `ClaimWatch` calls `run.revoke()`. This sets the stop and cancels `operationContext`. The running step sees an aborted `io.context`. A `tasks` function returns `cancelled` on an abort of `input.cancel`. The runner reads the stored stop and ends with `revoked`.
-   4a. **Requested stop.** A stop order (`human_paused`, `instance_archived`) and a unit stop (`worker_stopped`) cancel the joined `stop` context with an `ExecutionStop`. The runner adopts that abort reason through `run.stopOf` as the stop. It wins over the code of the step that it aborted, because `ExecutionRun.halt` reads the requested stop first. The `ClaimWatch` ends, `onStop` runs as in rule 4, and `execution.release(stop)` carries the ordered reason. The Scheduler accepts it, because the stop order exists. One test per reason proves the release reason. A stop order with reason `revoked` (D4) is not a requested stop: it calls `run.revoke()`, and rule 4 applies. Inside `tasks`, the tasks engine sees only the abort of `input.cancel` and returns `cancelled`; the host applies this rule.
+4. **Stop.** A `Step` calls `io.run.stop(reason, code, detail)`, and the throw ends the phase. A `FoundryStep` returns the result kind `stop`. The walker then ends the `tasks` function with `FoundryEnd` kind `stop`, and the host stores that stop with `ExecutionRun.halt`. The first stop wins, as in `ExecutionRun.halt` today: a stored stop wins over a returned stop. For a stop that is not `revoked`, the runner first aborts the agent. When the chain reached the end of `prepare`, it runs the `onStop` nodes. It then always runs `execution.release(stop)` (`releaseStop`). An `onStop` failure logs `checkpoint failed` and does not replace the stop. For `revoked`, the runner runs no `onStop` node and ends the execution. `ClaimWatch` calls `run.revoke()`. This sets the stop and cancels `operationContext`. The running step sees an aborted `io.context`. A `tasks` function returns `cancelled` on an abort of `input.cancel`. The runner reads the stored stop and ends with `revoked`.
+   4a. **Requested stop.** A stop order (`human_paused`, `instance_archived`) and a unit stop (`worker_stopped`) cancel the joined `stop` context with an `ExecutionStop`. The runner adopts that abort reason through `run.stopOf` as the stop. It wins over the code of the step that it aborted, because `ExecutionRun.halt` reads the requested stop first. The `ClaimWatch` ends, `onStop` runs as in rule 4, and `execution.release(stop)` carries the ordered reason. The Scheduler accepts it, because the stop order exists. One test per reason proves the release reason. A stop order with reason `revoked` (D4) is not a requested stop: it calls `run.revoke()`, and rule 4 applies. Inside `tasks`, the Foundry sees only the abort of `input.cancel` and returns `cancelled`; the host applies this rule.
 5. **Budget end.** A step returns `budget_end`, or the `NativeAgent` turn call returns the budget end before the send when `budget.exhausted()` holds; each LLM step maps it. `conflict.turn` maps it to `next` (S14). A step can throw `ContextCancelled` or `DeadlineExceeded` while `budget.exhausted()` holds and `operationContext` is not aborted. `stopMapped` maps that throw to the budget end, as `endedByBudget` and `endedByBudgetExhaustion` do today. `stopMapped` wraps every step of every chain. Kept: the mapping in `affected.run(evaluation)`, `judgement`, and in `env.setup(examine)`, `inputs.read(dependencies)`, `agent.open`, `verify.node` and `examine.turn` of examine. New: the mapping in `inputs.read(revision)` and `workspace.review(base)` of examine, and in every other step of implement and evaluation. The `onExit` nodes are the `nodes` of `Chain.budgetEnd` with `kind: exit`. `Chain.budgetEnd` decides the result:
    - `implement`: before the end of `prepare`, the stop `budget_end/wall_time`. From the end of `prepare`, the exit runs the `onExit` nodes.
    - `examine`: before the end of `prepare`, the stop `budget_end/wall_time`. From the end of `prepare`, the exit nodes release with `further_work: true` and the stop `budget_end/<limit>`.
    - `evaluation`: the stop `assessment_absent`, as `endedByBudget` does today.
 
-   A `tasks` function returns `TasksEnd` kind `budget_end` with its result. The host applies `Chain.budgetEnd` to it. Inside `tasks`, the walker maps a thrown `ContextCancelled` or `DeadlineExceeded` to `budget_end` when `input.budget.exhausted()` holds and `input.cancel` is not aborted.
+   A `tasks` function returns `FoundryEnd` kind `budget_end` with its result. The host applies `Chain.budgetEnd` to it. Inside `tasks`, the walker maps a thrown `ContextCancelled` or `DeadlineExceeded` to `budget_end` when `input.budget.exhausted()` holds and `input.cancel` is not aborted.
 
    For `kind: exit`, a budget end before the end of `prepare` is the stop `budget_end/wall_time` in every chain. A step that returns `budget_end` from the wall deadline calls `budget.wallDeadlineReached()` first, so `budget.limit()` holds at the release.
 
 6. **Parallel group.** The runner gives each branch a child `CancellationContext` and awaits all branches with `Promise.allSettled`. When one branch stops, the runner aborts its siblings. The first stop in time wins: `run.stop` stores it, and the walker of a `tasks` function keeps the first returned stop. A step that must name one code for several branches collects the branch results first, then raises one stop. Gate G does this for its violations. When one branch returns `budget_end`, the runner aborts its siblings, awaits all branches, merges the patch of each branch that ended with `next`, and then takes the exit. A stop of a sibling before the abort wins over the exit.
-7. **Telemetry.** `runStep` opens `worker.step` with `kanthord.step.id` and `kanthord.step.outcome`: `next`, `budget_end` or `stop`. The span holds no error text and no stop detail. The runner opens a phase span for each phase. A loop frame with a `span` hook opens its span at frame start; its `end` hook returns the attributes and runs the frame release at frame end. `worker.task`, `worker.release_gate` and `worker.evaluation` use the loop frame hooks. The `end` hook of the `evaluation` loop takes `kanthord.evaluation.*` from `judgement`; the outcome `stop` or `budget_end` ends the span with `Error`. The spans of `assessment.submit` and `execution.release` end before the server call (S37, S41). These `worker.step` spans end with the outcome `next`, or `stop` in `onStop`; the answer of the call changes no span. Every current span and attribute stays with the owning step of section 5.6. `worker.step` nests under the enclosing `worker.task` or `worker.phase` span. An `agent.turn` span becomes a child of the `worker.step` span of its LLM step. The runner gives each branch of a parallel group, and each per-checkout task inside a step, its own span scope. The parent of that scope is the span that is open when the group starts. A span of one branch never becomes the parent of a span of another branch. The runner opens one `worker.phase` span with `kanthord.phase` `on_exit` or `on_stop` around the nodes of `onExit` and `onStop`. A `TasksStep` writes its spans through the port `telemetry`. The host gives that port the open `worker.phase` span as the parent scope.
-8. **Resources.** A `Step` that takes a tree, a base head or an agent session calls `io.resources.defer(...)`. A loop frame with an `end` hook registers a release that runs at the frame end. The host disposes the stack once at every end: after `runChain` returns, and after each end before `runChain` (section 5.4). The stack runs in reverse order of registration. This replaces the `finally` blocks of `runStepsImplement` and `runEvaluation`. A `TasksStep` registers no resource. A port that makes a resource registers the release on the dispose stack of the host.
-9. **Composition.** A chain file lists phases and steps with the builder. A step file holds one step. A test runs one `Step` with a fake `StepIo`, or one `TasksStep` with fake ports, and a context slice. A golden test prints each built chain in the notation of section 4. The golden test also asserts the set of log messages of section 3 (`Logs:` of each step). The golden file prints `port:` for each `TasksStep` that calls a port.
+7. **Telemetry.** `runStep` opens `worker.step` with `kanthord.step.id` and `kanthord.step.outcome`: `next`, `budget_end` or `stop`. The span holds no error text and no stop detail. The runner opens a phase span for each phase. A loop frame with a `span` hook opens its span at frame start; its `end` hook returns the attributes and runs the frame release at frame end. `worker.task`, `worker.release_gate` and `worker.evaluation` use the loop frame hooks. The `end` hook of the `evaluation` loop takes `kanthord.evaluation.*` from `judgement`; the outcome `stop` or `budget_end` ends the span with `Error`. The spans of `assessment.submit` and `execution.release` end before the server call (S37, S41). These `worker.step` spans end with the outcome `next`, or `stop` in `onStop`; the answer of the call changes no span. Every current span and attribute stays with the owning step of section 5.6. `worker.step` nests under the enclosing `worker.task` or `worker.phase` span. An `agent.turn` span becomes a child of the `worker.step` span of its LLM step. The runner gives each branch of a parallel group, and each per-checkout task inside a step, its own span scope. The parent of that scope is the span that is open when the group starts. A span of one branch never becomes the parent of a span of another branch. The runner opens one `worker.phase` span with `kanthord.phase` `on_exit` or `on_stop` around the nodes of `onExit` and `onStop`. A `FoundryStep` writes its spans through the port `telemetry`. The host gives that port the open `worker.phase` span as the parent scope.
+8. **Resources.** A `Step` that takes a tree, a base head or an agent session calls `io.resources.defer(...)`. A loop frame with an `end` hook registers a release that runs at the frame end. The host disposes the stack once at every end: after `runChain` returns, and after each end before `runChain` (section 5.4). The stack runs in reverse order of registration. This replaces the `finally` blocks of `runStepsImplement` and `runEvaluation`. A `FoundryStep` registers no resource. A port that makes a resource registers the release on the dispose stack of the host.
+9. **Composition.** A chain file lists phases and steps with the builder. A step file holds one step. A test runs one `Step` with a fake `StepIo`, or one `FoundryStep` with fake ports, and a context slice. A golden test prints each built chain in the notation of section 4. The golden test also asserts the set of log messages of section 3 (`Logs:` of each step). The golden file prints `port:` for each `FoundryStep` that calls a port.
 10. **Deadline.** The runner builds `io.context` and `io.deadline` from `Step.deadline`:
     - `work`: `io.context` is `operationContext`, bounded by `expired_at`. `io.deadline` is `budget.wallDeadline()`. Shell and git runners read `io.deadline`. An LLM step takes its deadline from the agent context of the budget.
     - `cleanup`: a fresh context bounded by `expired_at`. In phases and in `onExit`, it is `budget.cleanupContext(operationContext)`. In `onStop`, it is `run.cleanupContext()`, because the stop already cancelled `operationContext`.
@@ -357,23 +358,23 @@ Rules of the runner:
 
 11. **`runPhase`.** `runPhase` runs the chain `tasks_prepare`. It seeds the context with `seed.keys`, then runs the nodes of the named phase with the loop rules. It shares the node walker and the loop rules with `runChain` and with the `tasks` functions. `runPhase` applies the runner defaults of rule 1 for a key that the seed lacks. It starts no `claim.watch`. On a stop it aborts the agent. It runs no `onExit` node, no `onStop` node and no final step, so it makes no checkpoint commit and no push. After the end, the caller disposes `io.resources` and sends no server call. When `input.until` of a `tasks` function names a loop id, the walker ends with `completed` on entering that loop. The `--skip-release-gate` option sets `until` to `release_gate`. The worker gives `until: null`.
 
-The node walker runs each step through `runStep`: opens `worker.step`, runs the step, and applies the `stopMapped` mapping. `stopMapped` maps `ContextCancelled` and `DeadlineExceeded` to the chain budget end when `budget.exhausted()` holds and `operationContext` is not aborted (rule 5). It maps an abort with an `ExecutionStop` reason to that stop (rule 4a). It maps every other unknown error to `run.stopOf`. `stopMapped` runs on the host side. The walker of a `tasks` function catches a throw and returns `TasksEnd` kind `failed` with the error and the result. The host merges the result, then maps the error: the worker with `run.stopOf`, the CLI with the mapping of section 5.7.
+The node walker runs each step through `runStep`: opens `worker.step`, runs the step, and applies the `stopMapped` mapping. `stopMapped` maps `ContextCancelled` and `DeadlineExceeded` to the chain budget end when `budget.exhausted()` holds and `operationContext` is not aborted (rule 5). It maps an abort with an `ExecutionStop` reason to that stop (rule 4a). It maps every other unknown error to `run.stopOf`. `stopMapped` runs on the host side. The walker of a `tasks` function catches a throw and returns `FoundryEnd` kind `failed` with the error and the result. The host merges the result, then maps the error: the worker with `run.stopOf`, the CLI with the mapping of section 5.7.
 
-### The tasks engine (D32)
+### The Foundry (D32)
 
-The tasks engine is one function per chain. One call runs the whole `tasks` phase of section 4, with the rework rounds inside. No step of `tasks` moves to another phase. Each side effect of a step is a call of a host tool, at the same place in the step.
+The Foundry is one function per chain. One call runs the whole `tasks` phase of section 4, with the rework rounds inside. No step of `tasks` moves to another phase. Each side effect of a step is a call of a host tool, at the same place in the step.
 
-| Term          | Meaning                                                                                                             |
-| ------------- | ------------------------------------------------------------------------------------------------------------------- |
-| tasks engine  | The `tasks` function of a chain and the steps that it runs.                                                         |
-| tasks host    | The code that calls a `tasks` function: the worker host (`runChain`) or the CLI host (`kanthord worker tasks run`). |
-| host tool     | An agent tool or an engine port. The tasks engine makes a side effect only through a host tool.                     |
-| agent tool    | A pi tool that the model calls in a turn (`evidence-upload`, `link_update_list`). The tasks engine never calls it.  |
-| engine port   | A typed function of the tasks host that step code calls outside a model turn.                                       |
-| capability    | One pi extension factory (`InlineExtension`) of the tasks host that registers agent tools or MCP servers.           |
-| guard         | A pi extension factory that `agentPort` adds to each session that it opens.                                         |
-| host resource | A long-running object of the tasks host that runs beside `tasks`: `claim.watch`, `credential.store`, `ssh.access`.  |
-| side effect   | A call to a kanthord server, a git remote, a tree pool, the credential custody or an LLM provider.                  |
+| Term          | Meaning                                                                                                              |
+| ------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Foundry       | The `tasks` function of a chain and the steps that it runs.                                                          |
+| Foundry host  | The code that calls a `tasks` function: the worker host (`runChain`) or the CLI host (`kanthord worker tasks run`).  |
+| host tool     | An agent tool or a Foundry port. The Foundry makes a side effect only through a host tool.                           |
+| agent tool    | A pi tool that the model calls in a turn (`evidence-upload`, `link_update_list`). The Foundry never calls it.        |
+| Foundry port  | A typed function of the Foundry host that step code calls outside a model turn.                                      |
+| capability    | One pi extension factory (`InlineExtension`) of the Foundry host that registers agent tools or MCP servers.          |
+| guard         | A pi extension factory that `agentPort` adds to each session that it opens.                                          |
+| host resource | A long-running object of the Foundry host that runs beside `tasks`: `claim.watch`, `credential.store`, `ssh.access`. |
+| side effect   | A call to a kanthord server, a git remote, a tree pool, the credential custody or an LLM provider.                   |
 
 ```ts
 type PortResult<T> =
@@ -447,7 +448,7 @@ interface CommonPorts {
   log: LogPort;
 }
 
-interface TasksHost<P extends CommonPorts> {
+interface FoundryHost<P extends CommonPorts> {
   capabilities: readonly InlineExtension[];
   ports: P;
 }
@@ -469,14 +470,14 @@ interface ExaminePorts extends CommonPorts {
   agent: AgentPort;
 }
 
-interface TasksControl {
+interface FoundryControl {
   cancel: CancellationContext;
   budget: ExecutionBudget;
   until: string | null;
   env: Readonly<Record<string, string>>;
 }
 
-interface ImplementInput extends TasksControl {
+interface ImplementInput extends FoundryControl {
   claim: MethodClaim;
   setup: ExecutionSetup;
   revision: Revision;
@@ -493,7 +494,7 @@ interface ImplementInput extends TasksControl {
   agent: AgentSession;
 }
 
-interface EvaluationInput extends TasksControl {
+interface EvaluationInput extends FoundryControl {
   claim: MethodClaim;
   setup: ExecutionSetup;
   revision: Revision;
@@ -508,7 +509,7 @@ interface EvaluationInput extends TasksControl {
   dependencies: DependencyRead;
 }
 
-interface ExamineInput extends TasksControl {
+interface ExamineInput extends FoundryControl {
   claim: MethodClaim;
   setup: ExecutionSetup;
   revision: Revision;
@@ -537,7 +538,7 @@ interface ExamineResult {
   verification: VerificationRun | null;
 }
 
-type TasksEnd<R> =
+type FoundryEnd<R> =
   | { kind: "completed"; result: R; verificationTimedOut: boolean }
   | { kind: "budget_end"; result: R; verificationTimedOut: boolean }
   | {
@@ -554,21 +555,21 @@ type TasksEnd<R> =
       verificationTimedOut: boolean;
     };
 
-declare function tasksImplement(
+declare function foundryImplement(
   input: ImplementInput,
-  host: TasksHost<ImplementPorts>,
-): Promise<TasksEnd<ImplementResult>>;
-declare function tasksEvaluation(
+  host: FoundryHost<ImplementPorts>,
+): Promise<FoundryEnd<ImplementResult>>;
+declare function foundryEvaluation(
   input: EvaluationInput,
-  host: TasksHost<EvaluationPorts>,
-): Promise<TasksEnd<EvaluationResult>>;
-declare function tasksExamine(
+  host: FoundryHost<EvaluationPorts>,
+): Promise<FoundryEnd<EvaluationResult>>;
+declare function foundryExamine(
   input: ExamineInput,
-  host: TasksHost<ExaminePorts>,
-): Promise<TasksEnd<ExamineResult>>;
+  host: FoundryHost<ExaminePorts>,
+): Promise<FoundryEnd<ExamineResult>>;
 ```
 
-`EvidenceDraft` is the body of `mission.evidence.submit` with no execution identity and no idempotency key. `UnitRecordDraft` is `{ unit_id, content_digest, commits }` (section 5.1). `NativeAgent` implements `AgentSession`. `env` is the environment of each child process, which the tasks host already filtered.
+`EvidenceDraft` is the body of `mission.evidence.submit` with no execution identity and no idempotency key. `UnitRecordDraft` is `{ unit_id, content_digest, commits }` (section 5.1). `NativeAgent` implements `AgentSession`. `env` is the environment of each child process, which the Foundry host already filtered.
 
 The interfaces `EvidencePort`, `UnitRecordPort`, `RepositoryPort` and `AgentPort` answer `PortResult`. `ReleaseTreePort.take` answers `PortResult` too. Four port functions do not: `releaseTrees.give` answers nothing, `secrets.redact` answers the text or `null`, `telemetry` is a `SpanRecorder`, and `log` answers nothing.
 
@@ -587,28 +588,28 @@ Who prepares the input:
 | `budget`                                                                                | Built from `setup.resource_budget` and the overrides                                               | Built by the host after `setup.read`                                  |
 | `env`                                                                                   | `PATH`, `LANG`, `TMPDIR`, `HOME` of the output folder and each `--pass-env` variable (section 5.7) | The `childEnvironment` result of the worker process                   |
 
-The same consumer takes the local materials after the call. The worker host runs `finish`, `onExit` or `onStop` on `TasksEnd`. The CLI host writes the output folder of section 5.7.
+The same consumer takes the local materials after the call. The worker host runs `finish`, `onExit` or `onStop` on `FoundryEnd`. The CLI host writes the output folder of section 5.7.
 
-Rules of the tasks engine:
+Rules of the Foundry:
 
-1. **No construction.** No file of the tasks engine imports a transport, a client constructor, `MethodClients`, `ExecutionRun`, the credential store, the custody contract, the tree pool or `hostToolsOf`. A module test asserts this.
-2. **No host knowledge.** No step of the tasks engine holds placement logic. No step reads which tasks host runs it.
-3. **Port result.** A port answers `ok`, or `failed` with a code or `null`. The tasks engine maps `failed` to the stop of the step: `operation_failed/<code>`, or `operation_failed` with no code for `null`. Two calls are log-only: `unitRecords.put` logs `unit record failed` (D10), and the conflict report of `markers.check` logs `conflict report failed` (D23). A port never throws a stop of the host.
-4. **Port ownership.** The tasks host owns the retry, the idempotency key, the execution proof and the `expired_at` bound of each port call. The D28 retry thus lives in the worker port.
-5. **Execution end.** When a port call or an agent tool call gets an execution-end answer, the tasks host cancels `input.cancel`. The port answers `failed`. The tasks engine checks `input.cancel` before it logs or maps a `failed` answer; on an abort, it writes no log and returns `cancelled`.
+1. **No construction.** No file of the Foundry imports a transport, a client constructor, `MethodClients`, `ExecutionRun`, the credential store, the custody contract, the tree pool or `hostToolsOf`. A module test asserts this.
+2. **No host knowledge.** No step of the Foundry holds placement logic. No step reads which Foundry host runs it.
+3. **Port result.** A port answers `ok`, or `failed` with a code or `null`. The Foundry maps `failed` to the stop of the step: `operation_failed/<code>`, or `operation_failed` with no code for `null`. Two calls are log-only: `unitRecords.put` logs `unit record failed` (D10), and the conflict report of `markers.check` logs `conflict report failed` (D23). A port never throws a stop of the host.
+4. **Port ownership.** The Foundry host owns the retry, the idempotency key, the execution proof and the `expired_at` bound of each port call. The D28 retry thus lives in the worker port.
+5. **Execution end.** When a port call or an agent tool call gets an execution-end answer, the Foundry host cancels `input.cancel`. The port answers `failed`. The Foundry checks `input.cancel` before it logs or maps a `failed` answer; on an abort, it writes no log and returns `cancelled`.
 6. **Stops are values.** A step returns its stop (rule 4 of the runner). The worker host stores it with `ExecutionRun.halt`, so the first stop still wins.
-7. **Stored stop.** In the worker, a failed `run.call` stores the stop and cancels `operationContext`. The worker port then answers `failed`. The worker host takes the stored stop, not the stop that the tasks engine maps from `failed`. One test per final stop reason proves it. A call with `halt: false` uses the no-halt call of section 5.1: it stores no stop and cancels nothing.
-8. **Cancellation.** On an abort of `input.cancel`, the running step ends: `AgentSession.turn` aborts, the verification runner kills its command, and each port call gets the cancelled context. The tasks engine returns `cancelled` with the result of the last completed step. It does not know the reason.
-9. **Local work.** The tasks engine runs local `git` on the given trees, and it runs the commands of the revision as child processes. Every `git` child runs with `isolatedGitEnvironment` and no `SSH_AUTH_SOCK`. A child process is no resource of the tasks host. Each child process gets `input.env`; the tasks engine never reads `process.env`.
-10. **No state between calls.** The tasks engine keeps no module variable. `memo` is a plain object that one call makes and drops.
-11. **`budget` and `cancel` are input, not ports.** `ExecutionBudget` holds counters and a clock and makes no call. The tasks engine reads the time only through `budget`. It reads only the abort of `cancel`.
-12. **Session.** `agent` of implement is input, because the conflict turn of `start` needs the session before `tasks` (D18, D20). `tasksImplement` gets no `agent.open` port. Evaluation and examine open their session through `agent.open`.
-13. **Rounds.** The rework rounds stay inside one call. The tasks host does no work between two rounds; it only serves the port calls and the agent tool calls. The progress counter and the session carry from round to round.
-14. **Shared steps.** A step that runs in `tasks` and in a host phase is one `TasksStep`. `prepare` and `start` stay host phases. `runChain` gives such a step the port set of the worker host and stores its returned stop with `ExecutionRun.halt`. `runPhase` gives it the port set of the CLI host, so `tasks_prepare` has the ports `log`, `secrets`, `telemetry` and `agent`.
+7. **Stored stop.** In the worker, a failed `run.call` stores the stop and cancels `operationContext`. The worker port then answers `failed`. The worker host takes the stored stop, not the stop that the Foundry maps from `failed`. One test per final stop reason proves it. A call with `halt: false` uses the no-halt call of section 5.1: it stores no stop and cancels nothing.
+8. **Cancellation.** On an abort of `input.cancel`, the running step ends: `AgentSession.turn` aborts, the verification runner kills its command, and each port call gets the cancelled context. The Foundry returns `cancelled` with the result of the last completed step. It does not know the reason.
+9. **Local work.** The Foundry runs local `git` on the given trees, and it runs the commands of the revision as child processes. Every `git` child runs with `isolatedGitEnvironment` and no `SSH_AUTH_SOCK`. A child process is no resource of the Foundry host. Each child process gets `input.env`; the Foundry never reads `process.env`.
+10. **No state between calls.** The Foundry keeps no module variable. `memo` is a plain object that one call makes and drops.
+11. **`budget` and `cancel` are input, not ports.** `ExecutionBudget` holds counters and a clock and makes no call. The Foundry reads the time only through `budget`. It reads only the abort of `cancel`.
+12. **Session.** `agent` of implement is input, because the conflict turn of `start` needs the session before `tasks` (D18, D20). `foundryImplement` gets no `agent.open` port. Evaluation and examine open their session through `agent.open`.
+13. **Rounds.** The rework rounds stay inside one call. The Foundry host does no work between two rounds; it only serves the port calls and the agent tool calls. The progress counter and the session carry from round to round.
+14. **Shared steps.** A step that runs in `tasks` and in a host phase is one `FoundryStep`. `prepare` and `start` stay host phases. `runChain` gives such a step the port set of the worker host and stores its returned stop with `ExecutionRun.halt`. `runPhase` gives it the port set of the CLI host, so `tasks_prepare` has the ports `log`, `secrets`, `telemetry` and `agent`.
 15. **Serialized input.** A serialized input follows the seed rules of section 5.7. It holds no credential, no SSH identity, no handover key, no `containerEnv` and no `remoteEnv`.
-16. **Unknown error.** The walker of a `tasks` function catches a throw. It returns `TasksEnd` kind `failed` with the error and the result of the last completed step. The tasks engine gives the error no stop reason. The tasks host merges the result, then maps the error: the worker host with `run.stopOf`, the CLI host with the mapping of section 5.7.
-17. **Redaction.** A `TasksStep` that puts tool output or git output into a stop detail or a log redacts it through `secrets.redact` first.
-18. **Logs.** A `TasksStep` writes each log message of section 3 through the port `log`.
+16. **Unknown error.** The walker of a `tasks` function catches a throw. It returns `FoundryEnd` kind `failed` with the error and the result of the last completed step. The Foundry gives the error no stop reason. The Foundry host merges the result, then maps the error: the worker host with `run.stopOf`, the CLI host with the mapping of section 5.7.
+17. **Redaction.** A `FoundryStep` that puts tool output or git output into a stop detail or a log redacts it through `secrets.redact` first.
+18. **Logs.** A `FoundryStep` writes each log message of section 3 through the port `log`.
 
 Port implementations:
 
@@ -630,7 +631,7 @@ The LLM provider call, the credential lease and the turn telemetry need no port.
 
 Stop code notation: `<EndReason>` or `<EndReason>/<code>`. Every server step can also raise `revoked` and `operation_failed/<server code>` through `run.call`; the entries do not repeat these two. Every LLM step can raise `provider_failed/*` and a budget end. `Chain.budgetEnd` turns a budget end into an exit or a stop (section 2, rule 5). The entries write "budget end" for it.
 
-`Port:` names each engine port that a `TasksStep` calls (section 2). A `TasksStep` raises `operation_failed/<server code>` from the `failed` answer of its port. It raises `revoked` through the abort of `input.cancel`. A `TasksStep` returns each stop of its `Stops:` entry as a value. It writes each message of its `Logs:` entry through the port `log`.
+`Port:` names each Foundry port that a `FoundryStep` calls (section 2). A `FoundryStep` raises `operation_failed/<server code>` from the `failed` answer of its port. It raises `revoked` through the abort of `input.cancel`. A `FoundryStep` returns each stop of its `Stops:` entry as a value. It writes each message of its `Logs:` entry through the port `log`.
 
 Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
@@ -769,7 +770,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: prepare (implement), tasks (examine). Chains: implement, examine (shared).
 - Problem: open the pi session with the prompt layers.
 - Reads: `claim`, `setup`, `checkouts`. Writes: `agent`.
-- Port: `agent.open`. The port holds the model runtime factory of the host, and it adds the guards and the capabilities (section 5.5). In a host phase, the step takes the port from the port set of the tasks host.
+- Port: `agent.open`. The port holds the model runtime factory of the host, and it adds the guards and the capabilities (section 5.5). In a host phase, the step takes the port from the port set of the Foundry host.
 - Work: static, and the model runtime of the credential. No model call. No workspace file read (`noContextFiles`).
 - Stops: `operation_failed`.
 - Parallel: implement: member of `workspace.static`, sibling of S09 and S10. examine: sibling of S25a in `tasks.inputs`.
@@ -880,7 +881,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Stops: `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent`, `operation_failed` (restore invariant failure), `no_progress` (detail per D14; at a count of 2, or with rule `verdict_rule_unmet` when the verification fails after a verdict-rule waiver; the stop ends the `worker.task` span with the `kanthord.stop.*` attributes), budget end.
 - Logs: `verdict rule checked`, `verdict rule waived for review`, `task verified` (every unit), `root entries removed`.
 - Port: `secrets.redact`, for `agent_reason` of the `no_progress` detail (D14). A `null` answer gives a detail with no `agent_reason`.
-- Run state: sets `verificationTimedOut` of `TasksEnd` to `timed_out` of the last result. The host calls `run.noteVerification` with it; the stop cause reads it.
+- Run state: sets `verificationTimedOut` of `FoundryEnd` to `timed_out` of the last result. The host calls `run.noteVerification` with it; the stop cause reads it.
 - Parallel: commands serial.
 - Fail-early: F2.
 
@@ -928,7 +929,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Work: shell. Skipped after a setup failure in the release gate only; `verify.all(evaluation)` always runs. Each command runs with `childEnvironment` and with no SSH agent socket, so its output holds no credential of the execution.
 - Stops (release only): `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent`, budget end.
 - Logs: `verification flaky` (release only).
-- Run state: sets `verificationTimedOut` of `TasksEnd` to `timed_out` of the last result. The host calls `run.noteVerification` with it; the stop cause reads it.
+- Run state: sets `verificationTimedOut` of `FoundryEnd` to `timed_out` of the last result. The host calls `run.noteVerification` with it; the stop cause reads it.
 - Parallel: commands serial, in plan order (D11).
 - Fail-early: F2.
 
@@ -939,7 +940,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Reads: `claim`, `setup`, `revision`, `checkouts`, `heads`. Writes: `verification` (`VerificationRun | null`; null when no checkout exists). S39 reads `verification.verification`.
 - Work: shell. Only the node commands (`revision.content.verifications`), in the examine workspace directory. No flaky rerun, no copy, no baseline. The shared runner reruns an infrastructure-class command once; the second result goes into `verification`. The step skips the run when the workspace has no checkout (`tested_input` is null). Each command runs with `childEnvironment` and with no SSH agent socket, so its output holds no credential of the execution.
 - Stops: none extra. A failed, absent or timed-out command goes into `verification` and does not stop the examine. A command that the wall deadline ends, or that is not started at the wall deadline (class `budget_end`), gives `budget_end`; the step reads `outcome` of `runVerificationsWithOutput` and calls `budget.wallDeadlineReached()` first.
-- Run state: sets `verificationTimedOut` of `TasksEnd` to `timed_out` of the last result. The host calls `run.noteVerification` with it; the stop cause reads it.
+- Run state: sets `verificationTimedOut` of `FoundryEnd` to `timed_out` of the last result. The host calls `run.noteVerification` with it; the stop cause reads it.
 - Parallel: commands serial; sibling of `agent.open`.
 - Fail-early: F2.
 
@@ -1074,7 +1075,7 @@ Chain selection (`runNativeExecution`). `hostExecution` calls `credentials.hando
 | `steps`                                                 | `implement` | `implement`                                    |
 | none (`claude-code@1`, an external harness declaration) | any         | no chain; stop `operation_failed` with no code |
 
-Notation: `[LLM]` marks a model call. `[PAR]` marks a parallel group. Each child of a `[PAR]` line runs at the same time: a `branch` with its own steps, or one `step`. `loop` marks a frame that repeats. `exit` and `stop` name the short-circuit edges. `[cleanup]` marks a step with the cleanup deadline (section 2, rule 10). `host` marks a host function in `hostExecution`. The runner always runs the last `onStop` node, `execution.release(stop)`. `port:` names each engine port that a `TasksStep` calls (section 2). The host runs each `tasks` phase as one call of the `tasks` function of the chain.
+Notation: `[LLM]` marks a model call. `[PAR]` marks a parallel group. Each child of a `[PAR]` line runs at the same time: a `branch` with its own steps, or one `step`. `loop` marks a frame that repeats. `exit` and `stop` name the short-circuit edges. `[cleanup]` marks a step with the cleanup deadline (section 2, rule 10). `host` marks a host function in `hostExecution`. The runner always runs the last `onStop` node, `execution.release(stop)`. `port:` names each Foundry port that a `FoundryStep` calls (section 2). The host runs each `tasks` phase as one call of the `tasks` function of the chain.
 
 ```text
 chain implement
@@ -1103,7 +1104,7 @@ chain implement
     [PAR] start.inputs
       step env.setup(live)                  on the merged heads; stop environment_failed/setup_failed; exit budget_end
       step units.plan                       [PAR] per checkout: unit record range, judged history, verdict rule
-  phase tasks                               one call: tasksImplement(input, host)
+  phase tasks                               one call: foundryImplement(input, host)
     loop release_rounds                     until route = passed or budget end
       loop units                            scope UnitCtx; planned round: pending units, then the verdict unit
         step unit.enter                     writes currentUnit; planned round resets the progress count
@@ -1156,7 +1157,7 @@ chain evaluation
         step env.setup(review)              budget end -> stop assessment_absent
       branch assets
         step assets.place                   at most 4 downloads at a time
-  phase tasks                               one call: tasksEvaluation(input, host)
+  phase tasks                               one call: foundryEvaluation(input, host)
     loop evaluation                         one frame; span worker.evaluation
       step verify.all(evaluation)           budget end -> stop assessment_absent
       step affected.run(evaluation)         implement intent, one checkout or more, verify.all passed, setup passed
@@ -1181,7 +1182,7 @@ chain examine
         step workspace.review(base)         [PAR] per checkout
         step setup.entries
         step env.setup(examine)             stop environment_failed/setup_failed; budget end -> stop budget_end/wall_time
-  phase tasks                               one call: tasksExamine(input, host)
+  phase tasks                               one call: foundryExamine(input, host)
     [PAR] tasks.inputs
       step agent.open                       port: agent.open
       step verify.node(examine)             node commands only; no flaky rerun, copy or baseline; infra rerun once; skipped with no checkout; exit budget_end
@@ -1379,17 +1380,17 @@ Restore sequence after a live verification, per checkout: before 9 processes (`r
 
 Only `credential.store` holds the handover result, and it is host code. The agent open service of the host (`agentPort`, section 5.5) gets the model runtime factory and the known secrets, and no credential. No step of any chain reads a credential, because no context key holds one. `sshAccess` stays a context key, because three steps of the host phases read it: `workspace.node`, `workspace.review` and `branch.push`. The worker port `repository.fetchBase` is its only other reader. No verification command and no affected command reads a credential or `sshAccess`.
 
-Credential rules of the tasks engine (D32):
+Credential rules of the Foundry (D32):
 
-1. No step declares a credential in `reads`, because `ExecutionCtx` holds no credential key. No `TasksStep` declares `sshAccess`; `build()` rejects such a step (section 2, rule 2).
+1. No step declares a credential in `reads`, because `ExecutionCtx` holds no credential key. No `FoundryStep` declares `sshAccess`; `build()` rejects such a step (section 2, rule 2).
 2. No port answers a credential, a signer or a model runtime. `AgentSession` has no such method.
-3. The tasks engine gets `secrets.redact`, not the secret list.
-4. The tasks engine holds no credential and no handle of the credential store. pi asks the store behind `AgentSession` for a token. The lease and the report belong to `credential.store` (C1).
-5. After a refresh, the tasks engine sees a normal turn end or `provider_failed/*`. After `worker.credential.lease_mismatch`, it sees the abort of `input.cancel`.
+3. The Foundry gets `secrets.redact`, not the secret list.
+4. The Foundry holds no credential and no handle of the credential store. pi asks the store behind `AgentSession` for a token. The lease and the report belong to `credential.store` (C1).
+5. After a refresh, the Foundry sees a normal turn end or `provider_failed/*`. After `worker.credential.lease_mismatch`, it sees the abort of `input.cancel`.
 
 Credential rules of a capability (D32):
 
-1. A capability factory gets no handover result, no `sshAccess` and no model runtime. `agentPort` gives it nothing; the tasks host builds it.
+1. A capability factory gets no handover result, no `sshAccess` and no model runtime. `agentPort` gives it nothing; the Foundry host builds it.
 2. A capability that needs a secret gets the value from custody through the host. The host adds the value to the known secrets before the open, as S43 does.
 3. A capability secret never enters `process.env` or the environment of `bash`; `childEnvironment` stays. A stdio MCP server gets only the `childEnvironment` result and the `env` of its config (section 5.5).
 4. The CLI host takes a capability secret only through the standard-input object of section 5.7. No option, no environment variable and no file takes it.
@@ -1402,21 +1403,21 @@ Credential rules of a capability (D32):
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Tool set        | `agent.open` reads the declaration of the agent (`getAgentDeclaration`). `swe@1`: `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash`, plus the agent tools `evidence-upload` and `link_update_list`. `re@1` and `env@1`: `read`, `grep`, `find`, `ls`.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `bash`          | Wrapped by `tool-table.ts`: timeout `min(remaining budget, 600 s)`, refused below 1 s; `childEnvironment` strips the provider environment; `killGroupAtEnd` kills the process group; each call records the requested and applied timeout.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Agent tools     | `evidence-upload` and `link_update_list` are agent tools. Each tasks host registers them through a capability (D32, below). In the worker, they call the server through `hostToolsOf` with the execution context. The proof hook of the transport (section 5.2) covers each agent tool call. An execution-end answer calls `run.revoke()`, in place of `state.revoked` and the cancel of the host context.                                                                                                                                                                                                                                                                                                |
-| Hooks, in order | `homeRelativeCwd`, redaction restore, the guards, `pinnedLayers` (the work prompt as the first user message), the capabilities of the tasks host, redaction. The resource loader loads no extension, skill, prompt template, theme or context file.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Agent tools     | `evidence-upload` and `link_update_list` are agent tools. Each Foundry host registers them through a capability (D32, below). In the worker, they call the server through `hostToolsOf` with the execution context. The proof hook of the transport (section 5.2) covers each agent tool call. An execution-end answer calls `run.revoke()`, in place of `state.revoked` and the cancel of the host context.                                                                                                                                                                                                                                                                                              |
+| Hooks, in order | `homeRelativeCwd`, redaction restore, the guards, `pinnedLayers` (the work prompt as the first user message), the capabilities of the Foundry host, redaction. The resource loader loads no extension, skill, prompt template, theme or context file.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Confinement     | `re@1` in the evaluation chain gets `checkoutConfinement` (D27). The hook resolves each `path` with the path function of pi (`resolveToCwd`: `@` prefix, `~`, `file://`, Unicode spaces), then follows symbolic links. The hook accepts the path when the result is inside one root. The hook refuses a path that it cannot resolve. A call with no `path` takes the agent root. With two checkouts the agent root is `review/checkouts`; the roots are the agent root and the `evidence` directory. A workspace with no checkout has the workspace directory as its root. `swe@1` stays unconfined, because `bash` reaches every path anyway. `toolApproval` stays a hook of the Workbench session only. |
 | Revoke          | `ClaimWatch` cancels `operationContext`. `stopOnEnd` aborts the session, and `killGroupAtEnd` ends a running `bash` group.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 **Host tools (D32)**
 
-A host tool is an agent tool or an engine port (section 2). Section 2 holds the engine ports.
+A host tool is an agent tool or a Foundry port (section 2). Section 2 holds the Foundry ports.
 
-| Kind        | Caller                    | pi mechanism                                                                                                                              |
-| ----------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Agent tool  | The model, inside a turn  | A `ToolDefinition` that a capability registers with `pi.registerTool()`, or an MCP server that it registers with `pi.registerMcpServer()` |
-| Engine port | Step code, outside a turn | None; a typed interface of section 2                                                                                                      |
+| Kind         | Caller                    | pi mechanism                                                                                                                              |
+| ------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent tool   | The model, inside a turn  | A `ToolDefinition` that a capability registers with `pi.registerTool()`, or an MCP server that it registers with `pi.registerMcpServer()` |
+| Foundry port | Step code, outside a turn | None; a typed interface of section 2                                                                                                      |
 
-pi owns the validation, the `tool_call` and `tool_result` pipeline, the parallel calls and the result message of an agent tool. An engine port is no pi tool, because pi runs a tool only for the model or from another tool (`ctx.executeTool()`). Step code decides on a port result, and a model must not call these writes.
+pi owns the validation, the `tool_call` and `tool_result` pipeline, the parallel calls and the result message of an agent tool. A Foundry port is no pi tool, because pi runs a tool only for the model or from another tool (`ctx.executeTool()`). Step code decides on a port result, and a model must not call these writes.
 
 | Agent tool         | Worker host                                                                               | CLI host                                                                                                                                                    |
 | ------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1445,8 +1446,8 @@ declare function agentPort(input: {
 - `executionEvidence` is `(pi) => pi.registerTool(evidenceUploadTool(tools))`. `evidenceUploadTool` and `linkUpdateListTool` keep their `ToolDefinition` and the `HostTools` interface.
 - Each capability tool declares `annotations.openWorldHint` explicitly. `evidence-upload` and `link_update_list` declare `openWorldHint: false`.
 - The two tools are not in the `customTools` list of `sessionTools`. The wrapped `bash` stays in `customTools`.
-- `agentPort` is shared code in `engine/src/agent/`. Both tasks hosts build `ports.agent` with it, and `input.agent` of implement comes from it.
-- The tasks host gives `agentPort` the model runtime factory, the known secrets, the budget, the host home and `env`. `env` is the same filtered environment as `input.env`. `agentPort` gets no credential.
+- `agentPort` is shared code in `engine/src/agent/`. Both Foundry hosts build `ports.agent` with it, and `input.agent` of implement comes from it.
+- The Foundry host gives `agentPort` the model runtime factory, the known secrets, the budget, the host home and `env`. `env` is the same filtered environment as `input.env`. `agentPort` gets no credential.
 - `agentPort` calls `openSession` with the factory order of the table above. pi runs handlers in load order, so a guard sees each call before a capability handler.
 - `agentPort` calls `session.bindExtensions({})` after the session exists. pi emits `session_start` there, and an MCP capability connects its servers on that event.
 - `AgentSession.close()` ends the session through `AgentSessionRuntime.dispose()` of pi. That path emits `session_shutdown` and then calls `session.dispose()`. `session.dispose()` alone emits no `session_shutdown`, so `agentPort` builds each session through `AgentSessionRuntime`.
@@ -1462,7 +1463,7 @@ declare function agentPort(input: {
 
 **Guards (D32)**
 
-A guard is a pi extension factory that `agentPort` adds to each session that it opens. A tasks host cannot leave a guard out. The project environment agent and the Workbench call `openSession` with their own hooks and get no guard of `agentPort`.
+A guard is a pi extension factory that `agentPort` adds to each session that it opens. A Foundry host cannot leave a guard out. The project environment agent and the Workbench call `openSession` with their own hooks and get no guard of `agentPort`.
 
 The `tools` option of `createAgentSession` is the first tool guard. `openSession` passes `tools` plus `host_tools` of the agent declaration. pi registers no tool that the list does not name, and it keeps an MCP tool that the list does not name inactive. The model thus sees no undeclared tool.
 
@@ -1474,7 +1475,7 @@ Every model call of a tool passes the `tool_call` handlers. This holds for a reg
 | Checkout confinement (D27) | `tool_call` handler that returns `block` (`agent/hooks/checkout-confinement.ts`)              | A guard of a confined session only: each `re@1` session. The catalog entry of each tool declares `locations`: the input fields that hold a path or a URL. The handler checks each declared field with the resolution of D27. It blocks a tool with no catalog entry. A `file://` URL of a later tool thus gets the same check as a `path`. |
 | Sensitive-text redaction   | `context`, `message_end` and `tool_call` handlers (`agent/hooks/sensitive-text-redaction.ts`) | The redaction works on messages, not on tool names, so it redacts the result of each tool. The restore of a marker into a tool input stays limited to `RESTORE_TOOLS`. Another tool gets the marker, never the secret value.                                                                                                               |
 
-`agentPort` adds `checkoutConfinement` with the `locations` rule to each `re@1` session in one change (D27). The tasks engine gives `reviewWorkspace`; `agentPort` computes the roots. The tasks engine cannot open a `re@1` session without the hook.
+`agentPort` adds `checkoutConfinement` with the `locations` rule to each `re@1` session in one change (D27). The Foundry gives `reviewWorkspace`; `agentPort` computes the roots. The Foundry cannot open a `re@1` session without the hook.
 
 The project environment agent uses the same hook for `env@1`. The `locations` rule blocks a tool with no catalog entry, and the hook of today passes such a tool. Each session tool of the project environment agent thus gets a catalog entry with its `locations` in the same change.
 
@@ -1492,7 +1493,7 @@ No `tasks` step, no port, no chain listing and no golden chain file changes. A s
 
 **MCP capability (D32)**
 
-An MCP server takes the same five steps, with `pi.registerMcpServer(name, config)` in the factory. The tasks host also adds `createMcpExtension(options)` to the factory list.
+An MCP server takes the same five steps, with `pi.registerMcpServer(name, config)` in the factory. The Foundry host also adds `createMcpExtension(options)` to the factory list.
 
 - The server config uses `exposure: "direct"`. The model then sees each tool by its name `mcp__<server>__<tool>`, and the declaration and the allowlist name it.
 - The session gets no `codemode` extension and no `tool_search` extension.
@@ -1527,17 +1528,17 @@ A reader finds the turns of a task as the `agent.turn` descendants of its `worke
 
 ### 5.7 Standalone tasks run
 
-`kanthord worker tasks run` runs the `tasks` phase of an `implement` execution on one machine with no server call during the phase. The command uses the production step code of `tasks` unchanged: no `tasks` step imports a transport constructor or a client constructor. The command is the CLI host. It builds a `TasksHost<ImplementPorts>` and an `ImplementInput`, and it calls `tasksImplement(input, host)` (section 2). Each side effect flows through an engine port or an agent tool of the CLI host. `kanthord worker tasks compare` and `kanthord worker tasks seed` are companion commands. The command adds one production behavior: the capture hook below.
+`kanthord worker tasks run` runs the `tasks` phase of an `implement` execution on one machine with no server call during the phase. The command uses the production step code of `tasks` unchanged: no `tasks` step imports a transport constructor or a client constructor. The command is the CLI host. It builds a `FoundryHost<ImplementPorts>` and an `ImplementInput`, and it calls `foundryImplement(input, host)` (section 2). Each side effect flows through a Foundry port or an agent tool of the CLI host. `kanthord worker tasks compare` and `kanthord worker tasks seed` are companion commands. The command adds one production behavior: the capture hook below.
 
 **Seams**
 
-`runPhase` runs the nodes of `tasks_prepare` with the node walker and the loop rules. It shares the node walker and the loop rules with `runChain`. `tasksImplement` runs the `tasks` phase with the same walker.
+`runPhase` runs the nodes of `tasks_prepare` with the node walker and the loop rules. It shares the node walker and the loop rules with `runChain`. `foundryImplement` runs the `tasks` phase with the same walker.
 
 Before the first node, `runPhase` lists each key that a node of the phase reads before a writer inside the phase, and each key in `LoopFrame.reads` of each loop of the phase. Each listed key must be in `seed.keys`. A missing key fails with `cli.worker.tasks.seed_invalid`; the diagnostic names the missing keys. The seed check requires a `LoopFrame.reads` key only when no node of the phase writes it before the first read of the frame. A scope field is no key and needs no seed. The command builds `ImplementInput` from the seed and from the context at the end of `tasks_prepare`. A missing input key fails with `cli.worker.tasks.seed_invalid`.
 
 With `input.until` set to `release_gate`, the walker ends with `completed` on entering the `release_gate` loop. After the end, the caller disposes the resources of the CLI host and sends no server call. It runs no `onExit` node, no `onStop` node and no final step, so it makes no checkpoint commit and no push.
 
-The CLI host implements each engine port of `ImplementPorts` over the output folder and the local mirror. The CLI column of the port table in section 2 holds each implementation. The CLI ports `evidence.submit` and `unitRecords.put` record each write in call order in `outbox.json`. No port reads the server, so the CLI host has no read answer.
+The CLI host implements each Foundry port of `ImplementPorts` over the output folder and the local mirror. The CLI column of the port table in section 2 holds each implementation. The CLI ports `evidence.submit` and `unitRecords.put` record each write in call order in `outbox.json`. No port reads the server, so the CLI host has no read answer.
 
 `HostTools` holds the agent tool calls. The local implementation `localHostTools(outbox, seed)` records each call and copies each uploaded file into `uploads/` of the output folder. `evidenceUpload` answers synthetic evidence identities and the URI `s3://local/<evidence_id>/<asset_id>`. The CLI host gives the two agent tools as the capabilities `executionEvidence(localHostTools(...))` and `linkUpdates(localHostTools(...))` (section 5.5).
 
@@ -1604,7 +1605,7 @@ SSH:
 
 - The run needs no SSH. `base.fetch` fetches from `origin` of the prepared tree, which is the mirror at `state/origin/<binding_id>.git`.
 - The command takes no SSH option and reads no `SSH_AUTH_SOCK`. `isolatedGitEnvironment` removes `SSH_AUTH_SOCK` from every `git` child.
-- The tasks engine takes no `sshAccess`, so the command builds no `sshAccess` entry. The CLI port `repository.fetchBase` holds no signer.
+- The Foundry takes no `sshAccess`, so the command builds no `sshAccess` entry. The CLI port `repository.fetchBase` holds no signer.
 
 **Production behavior**
 
@@ -1678,7 +1679,7 @@ Overrides edit the seed before `tasks_prepare`. Replay mode refuses each overrid
 
 **Output**
 
-The command writes one output folder with mode `0700`. `result.json` records the `TasksEnd` kind, the exit or stop, the step, the mode, `provider_id`, the overrides, the seed digest and the check results. `context.json` holds the input and the result of `TasksEnd` with no resource key and no `sshAccess`. `progress.json` holds the last `progress` and the last `UnitCtx` of each unit. `metrics.json` holds unit metrics, step run times and phase totals. `outbox.json` holds each engine port write and each agent tool call with its operation, body, step and time. `turns.jsonl` holds each model request and answer in replay format with a version header. It also holds the recorded tool results of the replay rule below. `spans.jsonl` holds the spans. `uploads/` holds the files of `evidence-upload`. `state/` holds the trees, the base tree and the pi directory. The CLI port `releaseTrees.give` removes each release tree at its frame end.
+The command writes one output folder with mode `0700`. `result.json` records the `FoundryEnd` kind, the exit or stop, the step, the mode, `provider_id`, the overrides, the seed digest and the check results. `context.json` holds the input and the result of `FoundryEnd` with no resource key and no `sshAccess`. `progress.json` holds the last `progress` and the last `UnitCtx` of each unit. `metrics.json` holds unit metrics, step run times and phase totals. `outbox.json` holds each Foundry port write and each agent tool call with its operation, body, step and time. `turns.jsonl` holds each model request and answer in replay format with a version header. It also holds the recorded tool results of the replay rule below. `spans.jsonl` holds the spans. `uploads/` holds the files of `evidence-upload`. `state/` holds the trees, the base tree and the pi directory. The CLI port `releaseTrees.give` removes each release tree at its frame end.
 
 Replay rule (D32): a replay runs each agent tool again, and the result of an open-world capability tool changes over time.
 
@@ -1713,7 +1714,7 @@ With `--verify`, the command runs these checks and records each result in `resul
 **Tests**
 
 1. Golden chain test prints `tasks_prepare`. Both chains use the production chain builder.
-2. Module test asserts rule 1 of the tasks engine (section 2): no file of the tasks engine imports a transport, a client constructor, `MethodClients`, `ExecutionRun`, the credential store, the custody contract, the tree pool or `hostToolsOf`.
+2. Module test asserts rule 1 of the Foundry (section 2): no file of the Foundry imports a transport, a client constructor, `MethodClients`, `ExecutionRun`, the credential store, the custody contract, the tree pool or `hostToolsOf`.
 3. Each port runs once with the worker implementation over a fake transport and once with the CLI implementation, with the same draft. Both runs make the same operation and body.
 4. A live run with a scripted provider writes a capture. A replay of that capture passes check 8 with `--verify`.
 5. A replay of `turns.jsonl` from test 4 with a changed tool set stops with `replay_diverged`.
@@ -1722,7 +1723,7 @@ With `--verify`, the command runs these checks and records each result in `resul
 8. A minimal seed fills every `tasks_prepare` default.
 9. `--tree` leaves the source repository unchanged; an agent `git push origin` fails.
 10. `compare` shows each section of difference and refuses two seeds with different digests.
-11. Canary test: a live run with a canary credential, one `--pass-env` canary value and a scripted provider searches every output file, including `context.json`, and both standard streams for each canary value and expects no match. A test asserts that `context.json` holds no `credentials` key and no `sshAccess` key. The test also searches each serialized input and each `TasksEnd`.
+11. Canary test: a live run with a canary credential, one `--pass-env` canary value and a scripted provider searches every output file, including `context.json`, and both standard streams for each canary value and expects no match. A test asserts that `context.json` holds no `credentials` key and no `sshAccess` key. The test also searches each serialized input and each `FoundryEnd`.
 12. Credential test proves each refusal, the empty `auth.json` path under the pi directory and the frozen store.
 13. Replay mode reads no standard input and calls no provider.
 14. Route test of `worker.execution.seed.get`.
@@ -1789,4 +1790,4 @@ Steps S16a, S18, S21 and S27 apply these rules. The runner seeds `progress` with
 - `agent.impl.md`: `checkoutConfinement` (D27).
 - Open in HANDOFF (Architecture): `docs/reference/erd/` (`worker_unit_record`), `engine/docs/cli/` worker page (new operation, error codes, section 5.7 commands).
 - `HANDOFF.md`: the D22 item, the two section 5.7 items and the Architecture documents item under the Worker Service.
-- D32: `worker-service.vocabulary.md` holds the terms tasks engine, tasks host, host tool, agent tool, engine port, capability, guard and host resource. `worker-service.impl.md` holds the `tasks` engine and its build order. `HANDOFF.md` holds the build item with its checks and the open items under the Worker Service.
+- D32: `worker-service.vocabulary.md` holds the terms Foundry, Foundry host, host tool, agent tool, Foundry port, capability, guard and host resource. `worker-service.impl.md` holds the Foundry and its build order. `HANDOFF.md` holds the build item with its checks and the open items under the Worker Service.
