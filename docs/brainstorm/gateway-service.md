@@ -75,11 +75,22 @@ It describes no mechanism of another service.
 - The Gateway Service establishes the [machine identity](gateway-service.vocabulary.md#machine-identity) from that credential, and it passes the machine identity to the service that the request targets.
 - This transfer satisfies the [forwarding contract](gateway-service.vocabulary.md#forwarding-contract), a downstream service confirms that the Gateway Service established the identity, and no caller nominates itself as a machine.
 
+## Guest authentication
+
+- The public operation `workbench.invite.join` exchanges an invite token and a name for a JWT of kind `guest`. A guest holds no account and no human credential.
+- The Gateway Service signs the guest JWT with its own key. The JWT ends when the invite ends.
+- Every guest request verifies the JWT and re-reads the invite row. A deleted or expired invite refuses the request with 401.
+- A successful verification establishes the [guest identity](gateway-service.vocabulary.md#guest-identity).
+- The Gateway Service passes the guest identity to the Workbench Service. This transfer satisfies the [forwarding contract](gateway-service.vocabulary.md#forwarding-contract).
+- No caller nominates itself as a guest.
+- The invite token is the only gate of `workbench.invite.join`.
+
 ## Human authority
 
 - Every authenticated human carries the same authority over every project of the server.
 - The human identity serves attribution and the human-only restriction of the [unblock](mission-service.md#the-unblock).
 - No per-project role binding governs a human operation.
+- A guest identity carries no human authority. It reaches only the guest operations of its conversation.
 
 ## Boundary
 
@@ -88,4 +99,4 @@ It describes no mechanism of another service.
 - The [Mission Service](mission-service.md#criterion-and-authority) owns node writes and their authority.
 - The [Scheduler Service](scheduler-service.md#work-pulls) owns claim and scheduling.
 - The [Tracking Service](tracking-service.md) owns telemetry.
-- The Gateway Service owns the RESTful API surface, [human authentication](gateway-service.vocabulary.md#human-authentication), the human identity, the credentials of a human account, and the [forwarding contract](gateway-service.vocabulary.md#forwarding-contract).
+- The Gateway Service owns the RESTful API surface, [human authentication](gateway-service.vocabulary.md#human-authentication), the human identity, the [guest identity](gateway-service.vocabulary.md#guest-identity), the credentials of a human account, and the [forwarding contract](gateway-service.vocabulary.md#forwarding-contract).

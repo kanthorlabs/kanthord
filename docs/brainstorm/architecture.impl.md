@@ -1126,8 +1126,8 @@ The kernel holds shared contracts and runtime components.
 - It also holds `OperationRegistry`, `ServiceClient`, `ClientOptions`, `OperationResult` and `OperationResultType`.
 - `OperationRegistry` performs structural validation only.
 - The Gateway emitter validates the OpenAPI scope of each registry entry.
-- `caller.ts` holds `HumanIdentity`, `MachineIdentity`, `ServiceIdentity`, module-private `WeakSet`s, `isHumanIdentity`, `isMachineIdentity` and `isServiceIdentity`.
-- `caller-mint.ts` holds the human and the machine identity factory, and `service-mint.ts` holds the service identity factory.
+- `caller.ts` holds `HumanIdentity`, `MachineIdentity`, `GuestIdentity`, `ServiceIdentity`, module-private `WeakSet`s, `isHumanIdentity`, `isMachineIdentity`, `isGuestIdentity` and `isServiceIdentity`.
+- `caller-mint.ts` holds the human, the machine and the guest identity factory (`mintGuestIdentity`), and `service-mint.ts` holds the service identity factory.
 - Only `src/gateway/` and `src/kernel/test-identity.ts` import `src/kernel/caller-mint.ts`, and only `src/apps/server/` imports `src/kernel/service-mint.ts`.
 - `test-identity.ts` holds the test factory of a minted human identity. Only a `*.test.ts` file imports it, so a service test needs no import exception.
 
