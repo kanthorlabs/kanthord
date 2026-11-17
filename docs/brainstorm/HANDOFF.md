@@ -167,9 +167,8 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
      - The D27 test passes.
      - A capability registers a `direct` tool that the declaration does not name. The tool is not in `pi.getActiveTools()`, and its call is blocked.
      - A tool outside `RESTORE_TOOLS` gets a marker.
-     - A capability resource and an MCP server stop at `AgentSession.close()`. The close ends at the cleanup deadline, and the session writes no `auth.json`.
-     - A `.pi/mcp.json` in the checkout starts no server.
-     - A stdio MCP server gets no canary variable of the worker process environment.
+     - A capability resource stops at `AgentSession.close()`. The close ends at the cleanup deadline, and the session writes no `auth.json`.
+     - The MCP checks (a server stops at the close, a `.pi/mcp.json` in the checkout starts no server, a stdio server gets no canary variable) come with the first MCP capability.
      - The `env@1` session of the project environment agent still runs each of its session tools.
   6. CLI host. Add the CLI port implementations, the CLI capability list, the end mapping and `kanthord worker tasks run` for implement. Check: tests 3, 4, 5, 11, 13 and 16 of design section 5.7 pass. SIGINT gives the stop `worker_stopped`, and an unknown error gives exit code 5.
   - Pages: update [agent.impl.md](agent.impl.md) with the guards and the `locations` field of the catalog at layer 5. Update `engine/docs/cli/worker.md` at layer 6.
