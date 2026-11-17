@@ -9,10 +9,11 @@ Update a step when its state changes. Record the pull request of each step.
 - [x] A1. Chain runner (D21 layer 4). Implementer: Fable 5.2. Reviewer: Opus 5.5.
 - [x] A2. Implement ports in the worker (D32 layer 1). Implementer: Opus 5.5. Reviewer: Fable 5.2.
 - [x] A3. Evaluation and examine ports (D32 layer 2). Implementer: Opus 5.5. Reviewer: Fable 5.2.
-- [ ] A4. Stops as values (D32 layer 3). Implementer: Fable 5.2. Reviewer: Opus 5.5.
+- [x] A4. Stops as values (D32 layer 3). Implementer: Fable 5.2. Reviewer: Opus 5.5.
   - Add an optional stop detail to the `failed` variant of `PortResult`. Remove the `run.stopOf` call from the worker ports. The step builds its stop from the answer. Ruled 2026-11-17 by Aelita as owner.
   - Give a budget end of a port call its own answer. The worker `agent.open` and the step then decide the budget end once, not twice.
 - [ ] A5. Boundary of the Foundry (D32 layer 4). Implementer: Opus 5.5. Reviewer: Fable 5.2.
+  - Add the worker-only port `dependencies.read` and make `inputs.read(dependencies)` a `FoundryStep`. Replace the context key `env` with `input.env`.
 - [ ] A6. Capabilities and guards (D32 layer 5). Implementer: Fable 5.2. Reviewer: Opus 5.5 and `/security-review`.
   - Build D27: `checkoutConfinement` with the `locations` rule in each `re@1` session, with the D27 test.
 - [ ] A7. CLI host and `worker tasks run` (D32 layer 6). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`.
@@ -54,6 +55,17 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - `Chain` and `ChainIo.ports` have the type `CommonPorts`. `hostedChainOf` pairs each chain with its port set. A5 types the pair.
 - D27, the checkout confinement of the judgement session, moves to A6. Ruled 2026-11-17 by Aelita as owner, because it changes behavior.
 
+### A4 deviations
+
+- `ImplementPorts` holds a worker-only port `claim.check` over `run.checkClaim()`. `unit.turn` calls it at the place of today. C3 deletes it with the claim check.
+- `env` is a context key that the runner seeds from the host. A5 replaces it with `input.env`.
+- `inputs.read(dependencies)` of `evaluation` and `examine` stays a host `Step` with `io.run` inside `tasks`. A5 adds a worker-only port `dependencies.read`, so that the step becomes a `FoundryStep`. C4 deletes the port when the read moves to `prepare`. Ruled 2026-11-17 by Aelita as owner.
+- The host stores a stop of `tasks` when the walk ends, before the dispose of the resources. In `evaluation` and `examine`, today's code stored a thrown stop after the dispose. The release body, the spans and the server calls are the same.
+- The walker returns `cancelled` when a step ends normally under an `operationContext` that a stored stop or a requested stop aborted. Under any other abort, the walk goes on as today.
+- A worker port maps each caught error to `failed`. An unstored `ExecutionStop` with another reason inside a port becomes `operation_failed`. No port has such a throw today.
+- Only `agent.open` answers `budget_end`.
+- The test helper `stoppingRunner` of `steps-implement-release.test.ts` throws an `ExecutionStop` in place of `state.run.stop`, because `StepsState` holds no `run`. The stop-reason cases now test a stop that the step returns.
+
 ## Phase B: eval set baseline
 
 - [ ] B1. Select 8 to 12 executions. Ulrich selects. Aelita proposes candidates from the traces.
@@ -83,3 +95,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | A1   | `engine`   | [#623](https://github.com/kanthorlabs/kanthord-engine/pull/623) | `03531d79`   |
 | A2   | `engine`   | [#624](https://github.com/kanthorlabs/kanthord-engine/pull/624) | `2e4295aa`   |
 | A3   | `engine`   | [#625](https://github.com/kanthorlabs/kanthord-engine/pull/625) | `fcf92d88`   |
+| A4   | `engine`   | [#626](https://github.com/kanthorlabs/kanthord-engine/pull/626) | `03dd90de`   |
