@@ -72,7 +72,7 @@ It describes no mechanism of another service.
 - A new conversation opens with a host greeting from `greeting.md`, with the display name and the model. The server writes it with no model call.
 - An untagged first message runs the host. A leading mention in the first message runs the mentioned member (H4).
 - One session exists per member: the host session, and one [participant session](workbench-service.vocabulary.md#participant-session) for each other agent. Another agent joins at its first [mention](workbench-service.vocabulary.md#mention).
-- Only a leading `@<display name>` routes, case-insensitively. An untagged message goes to the member that answered last (D8). The greeting counts as the answer of the host.
+- Only a leading `@<display name>` routes, case-insensitively. Outside a [shared conversation](workbench-service.vocabulary.md#shared-conversation) (C6), an untagged message goes to the member that answered last (D8). The greeting counts as the answer of the host.
 - One run exists per conversation (D14). The queue item stores its mention target, and an untagged item resolves at its start (Q2).
 - A queued row shows "to @<display name>", or "to last answer" for an untagged item.
 - `get`, `events`, `message`, `abort`, `queue.remove` and `autoMode.set` on a participant session id answer 409 `workbench.session.not_host`.
@@ -113,7 +113,7 @@ It describes no mechanism of another service.
 - A [note](workbench-service.vocabulary.md#note) is a message that starts no run. It shows its author, the owner or a guest by name. The members of the conversation read it with that author.
 - Every message of a guest is a note, also with a leading mention. The text of a guest never authorizes an act.
 - Ruling C6: in a conversation with a live invite, only a leading mention starts a run. An untagged message of the owner or a guest is a note. D8 applies again when the last invite ends.
-- Ruling C9: guests see the whole history, and the share dialog states it. The history from before the invite is included.
+- Ruling C9: guests see the whole history, and the share dialog states it. The guest view includes the history from before the invite.
 - The owner-only acts are the acts of a human operation. They are a message that starts a run, an approval, Stop, the queue, the configuration, auto mode and a fork. A guest holds none of them.
 - A card of the agent shows to a guest as an action card with no button. Only the owner runs it.
 - A guest reads new entries and the state of the run through the [guest stream](workbench-service.vocabulary.md#guest-stream). The stream ends when the invite ends.
@@ -242,7 +242,7 @@ Setup cards:
 - A human sends each message through its own request.
 - A [run](workbench-service.vocabulary.md#run) is the work of the agent on one human message.
 - The owner reads the entries and the state of the active run of a session through a long poll. A guest reads the guest view through one `stream` operation.
-- A session holds one run at a time. A message during a run waits in the queue.
+- A session holds one run at a time. Outside a [shared conversation](workbench-service.vocabulary.md#shared-conversation) (C6), a message during a run waits in the queue.
 - A [replace](workbench-service.vocabulary.md#replace) clears the queue, stops the run and runs the new message next.
 - Stop ends the run and clears the queue.
 - The owner removes a queued message.

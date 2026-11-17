@@ -36,7 +36,7 @@ Ulrich writes "@RE check this plan" in a conversation with `swe@1`. The server c
 
 A leading `@<display name>` in a human message. It names the member that runs the message and matches case-insensitively.
 The term names no closed set.
-Ulrich writes "@yumi Report the system status". Yumi runs the message. A message with no leading mention goes to the member that answered last.
+Ulrich writes "@yumi Report the system status". Yumi runs the message. Outside a [shared conversation](#shared-conversation), a message with no leading mention goes to the member that answered last.
 
 ## run
 

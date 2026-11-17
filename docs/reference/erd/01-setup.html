@@ -295,7 +295,7 @@ erDiagram
 
     workbench_invite {
         text id PK "workbench_invite_ + ULID, one invite"
-        text session_id "host Workbench session, read by list, resolve and the stream"
+        text session_id "host Workbench session, read by join, list, resolve and isShared"
         text token_hash UK "SHA-256 hex of the link token, read by join only"
         text invited_by "owner account id, read by resolve"
         text invited_by_name "owner display name, read by guest.get as owner_name"
@@ -1472,17 +1472,17 @@ erDiagram
               exists, because the guest identity comes from the guest JWT.
             </li>
             <li>
-              <code>id</code> is read by <code>workbench.invite.list</code>, by
-              the path of <code>workbench.invite.revoke</code> and by
-              <code>resolveInvite</code>, which the claim
-              <code>invite_id</code> of a guest JWT names.
+              <code>workbench.invite.list</code>, the path of
+              <code>workbench.invite.revoke</code> and
+              <code>resolveInvite</code> read <code>id</code>. The claim
+              <code>invite_id</code> of a guest JWT names it.
             </li>
             <li>
               <code>session_id</code> names a host Workbench session. The
               session lives in a pi session file, so no foreign key exists.
               <code>workbench.invite.join</code>,
-              <code>workbench.invite.list</code> and
-              <code>resolveInvite</code> read it.
+              <code>workbench.invite.list</code>, <code>resolveInvite</code> and
+              <code>isShared</code> read it.
             </li>
             <li>
               <code>token_hash</code> holds the SHA-256 of the UUIDv4 link token
