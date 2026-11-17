@@ -356,6 +356,7 @@ This section realizes [Shared conversation](workbench-service.md#shared-conversa
   - The relay and the `kanthord.workbench.configuration` entry.
   - The `guard` and `auto_mode` records.
   - Every entry of a phase session.
+- The view reads `mergeEntries`, so it hides the opening entries as the owner view does. A guest reads the greeting and never the opening text.
 - A guest never reads evidence content. The view has no evidence row and no tool result.
 - The view reads the merged entries of every member, with no `after`. It includes the entries of the active run.
 - `projectStreaming` keeps only the blocks of the streaming message in the form of an `assistant` entry.
