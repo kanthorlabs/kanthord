@@ -1164,6 +1164,16 @@ flowchart TB
                   </td>
                 </tr>
                 <tr>
+                  <td>G2a</td>
+                  <td>all</td>
+                  <td>
+                    Check that each merge commit after <code>before</code> is
+                    the merge of step M. Outside conflict mode, any merge commit
+                    fails. Else the violation
+                    <code>worker.turn.foreign_merge</code>.
+                  </td>
+                </tr>
+                <tr>
                   <td>G3</td>
                   <td>conflict</td>
                   <td>
@@ -1245,7 +1255,7 @@ flowchart TB
             branch, because G4 folds every agent commit into the worker commit.
           </p>
           <p>
-            A violation at G1, G2 or G3 is a defect of the agent turn. The
+            A violation at G1, G2, G2a or G3 is a defect of the agent turn. The
             worker then runs the restore sequence to <code>before</code> on
             every checkout, so the work of the turn is lost. It makes no
             checkpoint commit. It stops with <code>operation_failed</code>, the

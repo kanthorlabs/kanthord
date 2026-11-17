@@ -61,7 +61,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 - `ExecutionRelease` is the input of `scheduler.execution.release`: `further_work` as a boolean, and `stop` as `null` or `{ reason, code, detail?, cause? }`. `detail` is a string of 1 to 2048 characters. The worker cuts a redacted cause text to 300 characters.
   `cause` is the [cause of the stop](worker-service.impl.md#the-cause-of-a-stop) that the worker computes. The execution row stores `reason`, `code` and `detail` only. The cause lives on the root span end alone.
   `false` states that the execution of the attempt requires no further work.
-  `stop.reason` is `operation_failed | judgement_invalid | report_absent | action_unsettled | assessment_absent | budget_end | provider_failed | no_progress | environment_failed`.
+  `stop.reason` is `operation_failed | judgement_invalid | report_absent | action_unsettled | assessment_absent | budget_end | provider_failed | no_progress | environment_failed | instance_archived | worker_stopped | human_paused | conflict_unresolved`. A release with `instance_archived` or `human_paused` needs a stop order of the execution with that reason (`ORDERED_STOP_REASONS`).
   For a failure, `stop.code` is the error code of the failed operation or `null`. For `budget_end`, it is `turns | wall_time`.
   For `provider_failed`, it is `rate_limited | quota_exhausted | unauthorized | bad_request | unavailable`. For `no_progress`, it is `null`. For `environment_failed`, it is `setup_failed | command_absent | affected_invalid | affected_timeout`.
   A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance).
@@ -261,6 +261,8 @@ The loss declaration counts the lost rows and the stopped rows of the attempt af
 A `budget_end` row is no stopped row, and the count excludes it.
 A release with a `stop` other than `budget_end` counts the same rows, itself included, in the release transaction.
 A row with an advancing `provider_failed` stop is neutral. It neither counts nor ends the count.
+A release with the stop `conflict_unresolved` counts no failure and sets no `available_at`. `countsFailure` of `src/scheduler/settlement.ts` answers false for it.
+`recordStop` of `src/scheduler/release.ts` hands that stop to the Mission Service, which moves the node `Executing -> Blocked` with the transition rule `conflict_unresolved` under [the release admission](mission-service.impl.md#the-release-admission).
 The Mission Service consumes the loss or the stop in that transaction.
 Below `mission.consecutive_failure_limit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
 It inserts a job only when the node is claimable.
@@ -306,13 +308,14 @@ Each write follows the commit of the transaction that changes the execution row.
 - The transition span holds `kanthord.node.state.from`, the node state before the transaction, and `kanthord.node.state.to`, the node state at the commit.
 - A transition to `Completed` also writes `kanthord.node.lead_time_ms`: the milliseconds from the first `Available` of the node to the transition. The Mission Service hands the time of the first `Available` with the states of a transition to `Completed`. An analytics read adds up and divides it, and no service decides from it.
 - The Mission Service hands both states to the release, to the loss and to the revocation by an assessment.
-- The transition span holds `kanthord.transition.rule`, with one of five values:
+- The transition span holds `kanthord.transition.rule`, with one of six values:
   - `failure_limit` when the count of consecutive failures moves the node to `Paused`;
   - `further_work_limit` when the count of stalled releases moves the node to `Paused`;
   - `rework_limit` when a `criterion-not-met` assessment of the final round (round limit + 1) moves the node to `Blocked`;
   - `plan_defect` when a current `criterion-not-met` assessment with a cause of the category `plan` moves the node to `Blocked`;
+  - `conflict_unresolved` when a release with the stop `conflict_unresolved` moves the node to `Blocked`;
   - `none` otherwise.
-- With the rule `failure_limit`, `further_work_limit` or `rework_limit`, the transition span holds `kanthord.transition.count` and `kanthord.transition.limit`. The rules `none` and `plan_defect` hold neither.
+- With the rule `failure_limit`, `further_work_limit` or `rework_limit`, the transition span holds `kanthord.transition.count` and `kanthord.transition.limit`. The rules `none`, `plan_defect` and `conflict_unresolved` hold neither.
 - A transition of a loss and of a release with a stop other than `budget_end` holds `kanthord.transition.failure_count`. The value is the count of consecutive failures that the Scheduler hands to the Mission Service. A stop that does not count gives the count of the earlier failures.
 - When the stop backoff delays the job of the node, the transition span also holds `kanthord.node.available_at`: the value that the Scheduler writes to `scheduler_job.available_at`. A node with no job, for example a `Paused` node, gives no such attribute.
 - A transition span of a node that keeps its state holds the same state in both attributes.
@@ -354,6 +357,7 @@ Each write follows the commit of the transaction that changes the execution row.
 - Tests assert that a later cooldown leaves the pin unchanged and that a pull answers no work when every entry cools down.
 - Tests assert that the record rebuilds the selection from the pinned worker binding row and enablement revision.
 - Tests assert that an advancing `provider_failed` stop neither counts nor ends the count, and that `bad_request` and `unauthorized` count.
+- Tests release a steps claim with the stop `conflict_unresolved` after earlier stopped rows. They assert no failure count, no `available_at`, the node in `Blocked` and the transition rule `conflict_unresolved` with no count and no limit.
 - Tests release steps and evaluation claims with a `stop` below and at `mission.consecutive_failure_limit`, mix lost and stopped rows in one count, and assert that `execution get` answers the `stop`. A test refuses a `stop` with `further_work: false`.
   They assert one loss increment, the specified node state and a job only when claimable.
 - A test computes the deadline from a binding override of `wall_time_ms` and the configured reserve, including the default `600` seconds.

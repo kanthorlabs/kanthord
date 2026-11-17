@@ -721,6 +721,11 @@ A fatal error runs as below.
 - `create` and `rotate` of a machine generate the key pair on the computer of the CLI and send only `public_key`. With `--output`, they write the machine file. Without it, they print the answer with `machine_configuration` once, and they refuse a standard output that is no terminal.
 - The CLI checks a machine name against the instance name form before the request, and it answers `worker.machine.name_invalid`.
 - `--worker-endpoint` sets `endpoint` of the instance configuration, the server address that the instance calls. It defaults to the resolved `--endpoint` of the CLI.
+- The `worker tasks` group holds three commands. `seed` holds the remote flags of the engine CLI. `run` and `compare` are local commands that need no configuration file of the server and open no database:
+  - `kanthord worker tasks run <seed-folder> (--replay <turns.jsonl> | --credential-stdin) [options]` runs the `tasks` phase of an `implement` execution locally. `[options]` includes `--tree`, `--pass-env`, `--model`, `--reasoning`, `--system-prompt`, `--templates`, `--unit`, `--budget-turns`, `--budget-wall`, `--skip-release-gate`, `--output`, `--force` and `--verify`. [worker-service.impl.md](worker-service.impl.md#standalone-tasks-run) holds the full option list.
+  - `kanthord worker tasks seed <execution_id> --output <folder> [--force]` calls `worker.execution.seed.get`.
+  - `kanthord worker tasks compare <output-a> <output-b>` compares two output folders.
+- `--credential-stdin` of `worker tasks run` reads the LLM credential from standard input, as `kanthord worker join` reads its instance configuration, so no secret reaches the command line.
 - The `auth` group holds every authentication command, and a bare `kanthord auth` prints the help of the group. Its `jwt` group holds `generate` and `inspect`, and a bare `kanthord auth jwt` prints the help of the group.
 - The CLI provides `kanthord auth jwt generate [username] [--name <display>] [--project <project id> --binding <binding name>] [--output [path]] [--endpoint <url>] [--config <path>]` to generate a JWT. Without `--project` and `--binding` it generates a human JWT, and the optional positional `username` argument defaults to `KANTHORD_AUTH_USERNAME` when omitted. With `--project` and `--binding` it generates the machine JWT of an external harness for one new client identity of that worker binding. It then rejects a `username` argument. It reads the validated server configuration, derives its signing key from `master_key`, and prints the token using the secret-display rule. It requires no running server, opens no database and writes no account, password or secret. It writes a client configuration file only for a human JWT with `--output`, under [the Gateway Service sibling](gateway-service.impl.md#local-jwt-issuance). It is the only issuance entry point of a human token and of the token of an external harness. The [instance exchange](worker-service.impl.md#the-instance-exchange) mints the machine JWTs of the `worker` placement. The Gateway Service sibling owns the claim validation and the token contract.
 - The CLI provides `kanthord auth jwt inspect [token]` to decode a JWT locally. It reads no server configuration, verifies no signature and calls no route.
@@ -1053,6 +1058,11 @@ A process split retains these boundaries.
 Imports point downward through four layers.
 
 - `src/kernel/` holds the runtime with no domain authority.
+- `src/kernel/slug.ts` holds `slugify(text, { maxLength, fallback })`, the one slug function of the system. Every slug of the system comes from it.
+  1. It folds the text with NFKD and drops each combining mark. It maps `đ` and `Đ` to `d`, because they do not decompose.
+  2. It writes the text in lower case, keeps `a-z` and `0-9`, and writes one `-` for every other run of characters.
+  3. It trims `-` at both ends, cuts the text to `maxLength` characters, and trims a final `-` again.
+  4. An empty result answers `fallback`.
 - `src/<service>/` holds one directory for each of the nine services, as peers.
 - `src/gateway/` is one of the nine services and also the transport.
 - `src/apps/` holds the composition roots of the `server`, `worker` and `cli` applications.
@@ -1750,7 +1760,7 @@ The board holds seven tabs in a fixed order. The cost of the wait sets the order
 
 | `kind`     | Name            | Short   | Verb                     | Key | Items                                                                                                                                           |
 | ---------- | --------------- | ------- | ------------------------ | --- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tool`     | Approve tool    | Tool    | Approve or reject.       | 1   | `tool_approval`                                                                                                                                 |
+| `tool`     | Approve tool    | Tool    | Approve or reject.       | 1   | `tool_approval`, `reply_approval`                                                                                                               |
 | `setup`    | Fix setup       | Setup   | Change the setup.        | 2   | `credential_refused`, `request_rejected`, `environment_failed`, `environment_pending`, `no_taker`, `agent_invalid`, `project_paused`            |
 | `paused`   | Resume          | Resume  | Resume or discard.       | 3   | `paused`                                                                                                                                        |
 | `proposal` | Decide proposal | Decide  | Decide the proposals.    | 4   | `blocked` of an examine node with an open proposal, or with a proposals read that is not ready; a terminal node with an open follow-up proposal |
@@ -1763,9 +1773,12 @@ The rules of the board model follow.
 - A blocked examine node stays in Decide proposal until its proposals read answers no open proposal. It then moves to Rule.
 - The board reads `mission.followup.list` once for each project at each poll. A terminal node, `Completed` or `Discarded`, with an open follow-up proposal stays in Decide proposal until no open proposal remains.
 - A node item holds its node. A fix item holds its own `nodeIds` and `projects`. A tool approval holds no node and names no project.
+- A reply approval holds the node of its `draft` and names the project of its request.
+- The board reads `intake.outbound.request.list` for reply requests in `awaiting_approval`, `failed` or `pending` once at each poll. Each reply request in `awaiting_approval`, in `failed`, or in `pending` with no running call gives one reply approval.
+- A reply approval stays in those states, also after its node completes. A failed request shows the label "Post failed" and its error.
 - An environment item holds each node that is not terminal and whose `content.bindings` holds its binding revision id.
 - The held nodes of an item are its nodes plus their transitive dependents that are not terminal. `Completed` and `Discarded` are terminal.
-- A tool approval counts under every project filter. Under a filter, the Approve tool tab states "all projects".
+- A tool approval counts under every project filter. Under a filter, the Approve tool tab states "all projects". A reply approval counts only under the filter of its project.
 - A paused item is gated when its newest execution stops with `provider_failed` and code `unauthorized`. A `credential_refused` item must also name a credential of that execution.
 - The need of a gated item reads "Rotate <credential> in Fix setup". The short need reads "Rotate <credential>".
 - `rankBoardItems` orders the items: gated last, then more held nodes first, then the oldest `at` first with null last, then the subject, then the id.
@@ -1826,19 +1839,19 @@ The rules of the screen follow.
 - After an act, the next card is the card at the same index in the new list of the tab, or the last card.
 - After an act on expanded width, the board selects the next card and focuses the detail title. On medium and compact width, it closes the detail and focuses the next card.
 
-The detail holds the head, the sections and the act bar, top to bottom. The head holds the crumbs and the title. The crumbs hold the project chips, the tab name, the node state badge and the age. The sections follow in this order: What, Change asked, Proposal, Message, Impact, Why, Root cause, Evidence and Suggestion. An inbox item shows What, Message and Impact only. Each text column is at most 80 characters wide.
+The detail holds the head, the sections and the act bar, top to bottom. The head holds the crumbs and the title. The crumbs hold the project chips, the tab name, the node state badge and the age. The sections follow in this order: What, Change asked, Proposal, Message, Impact, Why, Root cause, Evidence and Suggestion. An inbox item shows What, Message and Impact only. A reply approval shows What, Change asked and Impact only. Each text column is at most 80 characters wide.
 
-| Section      | Content                                                                                                                                                                     |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| What         | The cause sentence. A pause at the failure limit adds "failures <count> of <limit>" from the `scheduler.transition` span of the newest execution.                           |
-| Change asked | A tool approval only: the operation and one "<field> becomes" row for each input field of the call that waits, from the session read.                                       |
-| Proposal     | Each open proposal of a node in Decide proposal: the name, the requirement and the verifications.                                                                           |
-| Message      | An inbox item only: the author, the time of `occurred_at`, the redacted body and the platform link. A null content reads "The text is no longer stored."                    |
-| Impact       | The spread text of a fix item, the held text, and each held node with its project and state.                                                                                |
-| Why          | The assessment rationale of a blocked node with the reviewer quote (`figure`, `blockquote`, `cite`), the discard reason of each discarded dependency, and a failed command. |
-| Root cause   | The cause line of the newest trace and "assigned by <assigner>". A discarded dependency reads "No fault. A human act ended the dependency."                                 |
-| Evidence     | `listNodeEvidence` of a blocked node, the executions with links to `/traces/<trace_id>`, and the log tail and the reproduce command of a failure.                           |
-| Suggestion   | One client rule for each kind with "Source: client rule". A blocked node with an open proposal shows "Source: proposal of <reviewer>".                                      |
+| Section      | Content                                                                                                                                                                                                                 |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What         | The cause sentence. A pause at the failure limit adds "failures <count> of <limit>" from the `scheduler.transition` span of the newest execution.                                                                       |
+| Change asked | A tool approval: the operation and one "<field> becomes" row for each input field of the call that waits, from the session read. A reply approval: the platform, the link, the thread and the draft text, from `draft`. |
+| Proposal     | Each open proposal of a node in Decide proposal: the name, the requirement and the verifications.                                                                                                                       |
+| Message      | An inbox item only: the author, the time of `occurred_at`, the redacted body and the platform link. A null content reads "The text is no longer stored."                                                                |
+| Impact       | The spread text of a fix item, the held text, and each held node with its project and state.                                                                                                                            |
+| Why          | The assessment rationale of a blocked node with the reviewer quote (`figure`, `blockquote`, `cite`), the discard reason of each discarded dependency, and a failed command.                                             |
+| Root cause   | The cause line of the newest trace and "assigned by <assigner>". A discarded dependency reads "No fault. A human act ended the dependency."                                                                             |
+| Evidence     | `listNodeEvidence` of a blocked node, the executions with links to `/traces/<trace_id>`, and the log tail and the reproduce command of a failure.                                                                       |
+| Suggestion   | One client rule for each kind with "Source: client rule". A blocked node with an open proposal shows "Source: proposal of <reviewer>".                                                                                  |
 
 - On compact width, Evidence shows three lines and "Show <n> more".
 - The suggestion of a gated pause reads "<gate need> first. A resume before that fix spends the extra try."
@@ -1850,6 +1863,7 @@ Each kind follows one order: the primary act, the other acts, Last trace, then D
 | Kind                                 | Acts in order                                                                                                           |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `tool_approval`                      | Approve, Reject, Open chat                                                                                              |
+| `reply_approval`                     | Approve, Edit, Reject                                                                                                   |
 | `credential_refused`                 | Rotate, Verify credential, Open credential                                                                              |
 | `environment_failed`                 | Open project, Run onboarding again                                                                                      |
 | `project_paused`                     | Resume project                                                                                                          |
@@ -1864,6 +1878,8 @@ Each kind follows one order: the primary act, the other acts, Last trace, then D
 
 - The board keeps each KanthorD act of today, also an act outside the mockup set.
 - Approve, Reject, Run onboarding again, Check now and Verify credential send at once. Rotate opens the rotate sheet.
+- Approve of a reply approval calls `intake.outbound.request.approve` with no text, and Reject calls `intake.outbound.request.reject`.
+- Edit opens a dialog with the draft text in a text field. Its submit calls `intake.outbound.request.approve` with the edited text.
 - The rotate sheet title reads "Rotate <credential>". The description reads "The new secret becomes the next revision of the server copy."
 - The footer holds "Rotate secret" and "Cancel". The sheet shows no stock Close. Cancel and Esc close it.
 - The secret fields of the rotate sheet follow the `secret_shape` of the platform of the server copy, as on the credential detail. An `api_key` platform shows "API Key". An `oauth` platform shows "Refresh Token", "Access Token" and "Access Token Expiry".
@@ -1872,7 +1888,7 @@ Each kind follows one order: the primary act, the other acts, Last trace, then D
 - An OAuth provider can issue a new refresh token on each refresh. Two copies of one refresh token can thus make each other invalid.
 - For the shape `oauth`, the sheet names each other holder that has a live revision: "<holder> keeps its own secret. Sign in again on its machine page or its worker instance page."
 - The holder lines end with "Open machines", which opens `/machines`, and "Open workers", which opens `/workers`. The board read holds no holder kind and no worker name of a holder, so the links open the two lists. With no such holder, the sheet shows no holder line and no link.
-- An act that waits for a read stays in the row through `DisabledAction` with "<Act> needs: <read name>.". Approve waits for the session read. Reject does not wait. Rotate waits for the credential read, a server copy and the platform read. Its need reads "Rotate needs: the credential read.", "Rotate needs: a server copy of <credential>." or "Rotate needs: the platform read." A credential with no live revision on the holder `server` keeps the need "a server copy of <credential>". The board does not rotate it.
+- An act that waits for a read stays in the row through `DisabledAction` with "<Act> needs: <read name>.". Approve of a tool approval waits for the session read. Reject does not wait. Rotate waits for the credential read, a server copy and the platform read. Its need reads "Rotate needs: the credential read.", "Rotate needs: a server copy of <credential>." or "Rotate needs: the platform read." A credential with no live revision on the holder `server` keeps the need "a server copy of <credential>". The board does not rotate it.
 - A gated Resume stays in the row through `DisabledAction` with its need. Go to <credential> selects the `credential_refused` card in Fix setup.
 - On compact width, the act bar shows the lead act and `More`. `More` opens a bottom sheet with the other acts and Discard last.
 - The lead act is the first act that is not gated and not Discard. With no such act, the lead act is the first act.

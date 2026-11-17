@@ -165,7 +165,7 @@ The reviewer execution of `reviewer@1` evaluates "Add password reset" with agent
 Its evaluation method passes only the execution identity to the action performer, which opens pull request 42 through the [Repository component](repository.md#write-operations).
 The reviewer execution of external harness `claude-code` invokes the same action performer through its MCP tool for "Add password reset".
 It passes only its execution identity.
-The action performer derives node branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV` and base branch `main` from the records, without operands from either caller.
+The action performer derives node branch `feat/add-password-reset` and base branch `main` from the records, without operands from either caller.
 A second invocation under the same claim dispatches nothing when the first dispatch remains unresolved.
 
 ## return class
@@ -406,22 +406,24 @@ An `examine` node that names no repository binding uses a fresh execution worksp
 ## node branch
 
 The node branch is the branch that the steps method uses for one `implement` node in one repository, from the latest attempt that starts from the base branch.
-The node branch of "Add password reset" takes its name from the node identity, for example `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV`.
+The node branch has the name `<commit_type>/<node name slug>` and holds no identity.
+The node branch of "Add password reset" with the commit type `feat` is `feat/add-password-reset`.
 Attempt 1 and attempt 2 both work on that branch when attempt 2 records the start point `node_branch`.
-When attempt 2 records the start point `base_branch`, attempt 2 starts the node branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV-a2` from the base branch.
+When attempt 2 records the start point `base_branch`, attempt 2 starts the node branch `feat/add-password-reset-2` from the base branch.
+When a human branch `feat/add-password-reset` exists at the repository before the first push of attempt 1, that push fails, and the execution pushes `feat/add-password-reset-2`.
 A revision of the node that names another repository binding starts a new node branch in that repository.
 
-## done record
+## unit record
 
-A done record is the trailer `Kanthord-Done: <unit id> <digest>` that the execution adds to the commit of a work unit after its own commands pass. An own command is a verification of the unit that the node does not list.
-Task "Add reset token expiry" of "Add password reset" passes its verifications, so Execution 1 adds `Kanthord-Done: task_01ARZ3NDEKTSV4RRFFQ69G5FAW <digest>` to its last commit.
-Execution 2 reads the trailer on the node branch and skips the task. A revision that changes the content of the task changes the digest, so the task runs again.
+A unit record is the row of `worker_unit_record` that the execution writes for a work unit after its own commands pass. An own command is a verification of the unit that the node does not list.
+Task "Add reset token expiry" of "Add password reset" passes its verifications, so Execution 1 writes the record `task_01ARZ3NDEKTSV4RRFFQ69G5FAW` with the digest of the task content and the commit `d4e5f6` of `kanthorlabs/kanthord`.
+Execution 2 reads the record through the execution setup, finds `d4e5f6` on the node branch and skips the task. A revision that changes the content of the task changes the digest, so the task runs again.
 
 ## checkpoint commit
 
 A checkpoint commit is the commit of the work in progress that the execution makes before a release with further work.
 The resource budget of Execution 1 ends while task "Add reset token expiry" is half done, so the execution commits the changed files as a checkpoint commit, pushes the node branch and releases with further work.
-The checkpoint commit has no done record, so Execution 2 continues the task from that commit.
+The task has no unit record, so Execution 2 continues the task from that commit.
 
 ## affected test command
 

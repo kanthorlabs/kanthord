@@ -475,7 +475,7 @@ The set holds twelve states.
   No claim holds the node.
 - **Evaluating**: A reviewer execution holds the claim.
 - **Blocked**: The attempt closes on a condition, and a human unblock authorizes the next attempt.
-  A condition follows the evaluation, except the human block of a paused node.
+  A condition follows the evaluation, except the human block of a paused node and an unresolved merge conflict of a steps execution.
   No claim holds the node.
 - **Paused**: A human holds the work of the node temporarily.
   An open attempt stays open.
@@ -496,8 +496,12 @@ No human override reaches a terminal node, and no correction reaches its outcome
 A human who needs further work on a completed node adds a new node.
 An edit writes the WHAT, and a correction writes a new outcome record.
 
-Three conditions reach `Blocked`, and each follows the evaluation except the human block.
-They are a current assessment that does not pass and causes no [rework](#rework-limit), the end state other of a request evidence and a human reason on a paused node.
+Four conditions reach `Blocked`.
+They are a current assessment that does not pass and causes no [rework](#rework-limit), the end state other of a request evidence, a human reason on a paused node and an unresolved merge conflict.
+Each condition follows the evaluation, except the human block and the unresolved merge conflict.
+A steps execution that fails to resolve a merge conflict releases with the stop `conflict_unresolved`, and that release closes the attempt into `Blocked`.
+That release writes an outcome whose basis is the execution stop. The outcome asserts `undetermined` and names the conflict report evidence.
+A human unblock then opens the next attempt.
 A dependency produces `Pending` under the dependency rules of Mission structure and nodes.
 `External.Failed` folds every non-success end state of the external system.
 
@@ -517,9 +521,18 @@ Attempt 1 records `base_branch`.
 A later attempt records the start point that its unblock names.
 The start point applies to every repository binding of the node.
 The start point of an `examine` attempt has no effect, because an `examine` node has no node branch.
+An `implement` attempt that records `base_branch` gets a new node branch name, and the Mission Service stores that name on the attempt.
+An attempt that records `node_branch` continues the node branch of the attempt before it.
+The Mission Service never gives one node branch name out twice for one repository.
+The transaction that opens an attempt with the start point `base_branch` deletes the unit records of the node under [the Worker Service](worker-service.md).
+The transaction that moves the node to `Completed` or `Discarded`, or that retires it, deletes them too.
 An execution pins the attempt that it starts under.
 The required external actions of an attempt are the configured actions of the repository bindings that its pinned `implement` revision names.
-They also hold the reply action of each external link of that revision, when the conversation binding of the link configures a reply policy.
+A reply to an external link is no required external action.
+The transaction that moves the node to `Completed` drafts one reply for each external link whose conversation binding holds a reply policy.
+Each draft waits for a human approval under the [Intake Service](intake-service.md#outbound-requests), and no node state waits for it.
+The draft text names the node, the attempt and the platform address of each request evidence of the attempt.
+A move to `Discarded` or `Blocked` drafts no reply.
 Every record names its attempt, and it stays the record of that attempt forever.
 An attempt closure ends every execution in flight under that attempt.
 It invalidates continuation, and it never invalidates a completed record.
@@ -548,7 +561,8 @@ The Project Service owns what a configured action follows.
 ### Consecutive failure limit
 
 The consecutive failures of an attempt are its lost executions and its stopped executions after its latest finished execution with no stop.
-A stopped execution is an execution whose release carries a `stop` other than `budget_end`.
+A stopped execution is an execution whose release carries a `stop` other than `budget_end` and `conflict_unresolved`.
+A release with a `conflict_unresolved` stop counts no failure and closes the attempt into `Blocked`.
 A release with a `budget_end` stop is no failure and does not count toward the limit. It ends the count as a finished execution with no stop does.
 The Scheduler Service counts them at each loss declaration and at each release with a `stop`, and it hands the count to the Mission Service.
 A revocation at a Mission transition before the expiry of the claim is no loss.
@@ -559,7 +573,7 @@ The human act then checks its own precondition against the settled state.
 A finished execution of the attempt with no stop ends the count: a release with no stop, an assessment end or a revocation.
 A stop that [advances the fallback chain](agent.md#advance) is neutral. It neither counts nor ends the count.
 A human resume resets nothing, so it grants one more try.
-Below the limit, a loss or a release with a `stop` returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
+Below the limit, a loss or a release with a `stop` other than `conflict_unresolved` returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
 A loss or a release with a `stop` that reaches the limit moves the node to `Paused` with a service actor, the attempt stays open, and no job exists.
 A release with a `stop` writes no outcome and no assessment.
 The configuration file of the server sets the limit.
@@ -751,6 +765,7 @@ A forced delete of the request evidence of the open attempt holds the node, and 
 | `Executing -> Available`                 | Release with no stop; execution requires further work                                                                                                                                 | No effect                                                                               | None                                                                                                                                                                  |
 | `Executing -> Available`                 | Loss declaration or release with a stop of the steps claim below the consecutive failure limit                                                                                        | No effect                                                                               | None                                                                                                                                                                  |
 | `Executing -> Available`                 | Forced archive of the instance revokes the steps claim                                                                                                                                | No effect                                                                               | None                                                                                                                                                                  |
+| `Executing -> Blocked`                   | Release with the stop `conflict_unresolved`; transition rule `conflict_unresolved`; no failure count                                                                                  | Closes                                                                                  | Outcome with the basis execution stop                                                                                                                                 |
 | `Executing -> Paused`                    | Loss declaration or release with a stop of the steps claim that reaches the consecutive failure limit                                                                                 | Stays open                                                                              | None                                                                                                                                                                  |
 | `Executing -> Paused`                    | Human holds the node; execution stops                                                                                                                                                 | Stays open                                                                              | None                                                                                                                                                                  |
 | `Executing -> Completed`                 | Human override asserts success                                                                                                                                                        | Closes by force                                                                         | Outcome                                                                                                                                                               |
@@ -811,6 +826,7 @@ stateDiagram-v2
     Executing --> Available: Release, further work
     Executing --> Available: Loss declaration or stop
     Executing --> Available: Forced archive of the instance
+    Executing --> Blocked: Merge conflict unresolved
     Executing --> Paused: Failure limit reached
     Executing --> Paused: Human hold
     Executing --> Completed: Success override
@@ -880,7 +896,7 @@ The Scheduler Service owns the work queue, the claim and its deadline.
 
 ### The block
 
-A block is the closure of an attempt on one of the three conditions that Outcome and completion names.
+A block is the closure of an attempt on one of the four conditions that Outcome and completion names.
 Outcome and completion owns the block of a node that holds no attempt.
 
 A block writes no separate block record.
@@ -1083,7 +1099,7 @@ If one required external action holds end state `other`, the fold moves the node
 If every required external action holds end state `expected`, the fold moves the node to `External.Success`, then to `Completed`.
 Otherwise the node stays in `External.Requested`.
 After a reviewer release to `External.Requested`, the Mission Service schedules one deferred check.
-The deferred check calls the Intake check for each unresolved `pull_request`, `branch_push` and `comment` evidence of the attempt.
+The deferred check calls the Intake check for each unresolved `pull_request` and `branch_push` evidence of the attempt.
 It applies the result when no live claim exists on the node.
 An `expected` result moves the node to `Completed` only when every required action then holds end state `expected`.
 An `other` result moves the node to `Blocked`.

@@ -204,6 +204,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The view refuses `delete()`.
 - At every placement, the view reads the decrypted handover. The worker unit reads no custody record directly. At the `worker` placement, the worker unit opens the sealed item of the handover with the private key of the item `holder`. That holder is its instance or its machine.
 - Custody drops the view at execution end.
+- A local run (`kanthord worker tasks run`, [design.md §5.7](worker-execution-refactor/design.md#57-standalone-tasks-run)) holds a frozen store from `src/llm/refresh-watch.ts` in place of the execution view. Its `modify` answers the stored value and never calls the pi-ai refresh, so the run sends no `worker.credential.lease` and no `worker.credential` report. The frozen store holds no revision and pins no row. The credential enters through `--credential-stdin`, which reads one JSON object from standard input before any other work, following `piCredentialSchema` of `src/custody/contract.ts`. Replay mode uses a placeholder `{ type: "api_key", key: "replay" }` and reads no standard input.
 - A workbench view reads the newest live revision and pins no revision.
 
 ## The credential handover
@@ -236,7 +237,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - The envelope has no forward secrecy. A client secret that leaks later opens every recorded envelope of its client identity.
 - The handover carries the revisions that the execution pins.
 - Custody refreshes no pinned revision on the server while a live execution holds it.
-- A check of a `server` row writes a refreshed OAuth value through `replaceServerCopy`, by the same digest rule. The healthcheck, the record verify, the provider check and the model check use it. Custody runs one refresh of a revision at a time. In server and container placements, a handover waits for a refresh in flight. [The OAuth refresh of a check](llm.impl.md#the-oauth-refresh-of-a-check) states the rule.
+- A check of a `server` row writes a refreshed OAuth value through `replaceServerCopy`, by the same digest rule. The healthcheck, the record verify, the provider check and the model check use it. Custody runs one refresh of a revision at a time. In server and container placements, a handover waits for a refresh in flight. [The OAuth refresh of a check](llm.impl.md#the-oauth-refresh-of-a-check) states the rule. A worker-held copy has no server-side check refresh, so its handover at the `worker` placement never waits for a refresh.
 - `replaceServerCopy` tests the pin again at the write. The handover refusal makes a pin during a refresh unreachable, so this test is a guard. When the guard refuses the write, the check answers the refused-write answers of [the OAuth refresh of a check](llm.impl.md#the-oauth-refresh-of-a-check), and the stored value does not change.
 - Two executions can hold one revision at once. The [refresh lease](#the-refresh-lease) lets only one of them refresh it at a time.
 - Custody logs the execution identity, the record identity, `client_id` and `runtime_identity` of each handover and report, and `instance_id` at the `worker` placement, never material.

@@ -247,17 +247,17 @@ The branch that the work of an attempt starts from.
 The value is `base_branch` or `node_branch`.
 The start point says where the work starts, not what the work is.
 
-Take "Add password reset" after a human rejects the work of attempt 1 on `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV`.
+Take the `feat` node "Add password reset" after a human rejects the work of attempt 1 on `feat/add-password-reset`.
 
 1. Attempt 1 records `base_branch`, because every attempt 1 starts from the base branch.
 2. A human blocks the node and unblocks it with `start_point: base_branch`.
    Attempt 2 opens and records `base_branch`.
-3. The claim of attempt 2 names the node branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV-a2`.
+3. The claim of attempt 2 names the node branch `feat/add-password-reset-2`, because the name `feat/add-password-reset` is reserved.
    The steps execution starts that branch from the base branch.
 4. A later human unblock without a start point opens attempt 3, and attempt 3 records `node_branch`.
-   Attempt 3 continues `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV-a2`.
+   Attempt 3 continues `feat/add-password-reset-2`.
 
-The branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV` and its commits stay unchanged.
+The branch `feat/add-password-reset` and its commits stay unchanged.
 The start point of an `examine` attempt has no effect.
 
 ## state of a node
@@ -280,21 +280,23 @@ The set is closed and it holds twelve values.
 
 ## basis
 
-The assessment that an outcome names as its basis.
-The kind of the basis is the kind of the actor of that assessment.
-The set is closed and it holds two values.
+The assessment or the execution stop that an outcome names as its basis.
+The kind of an assessment basis is the kind of the actor of that assessment.
+The set is closed and it holds three values.
 
 - **execution assessment**
 - **human assessment**, which records a human assertion
+- **execution stop**, which records the stop of an execution whose release closes the attempt into `Blocked`
 
 ## block condition
 
 A block condition is a condition that closes an attempt and reaches `Blocked`.
-The set is closed and it holds three values.
+The set is closed and it holds four values.
 
 - **a current assessment that does not pass**
 - **the end state other of a request evidence**
 - **a human reason on a paused node**
+- **an unresolved merge conflict of a steps execution**
 
 ## asserted result
 
@@ -553,12 +555,11 @@ The dependency closure of "Account recovery" holds "Add password reset" alone.
 The remote thing that serves one requested external action, and that the `platform` asset of a request evidence addresses.
 The term names no closed set.
 
-An external object takes one of many forms, and these five are examples of it.
+An external object takes one of many forms, and these four are examples of it.
 
 - pull request 42 that must merge
 - document "Password reset checklist" whose every item must carry a check
 - issue 117 that must close with the tag `security`
-- a reply in the "Account recovery" thread
 - a notification in `#account-recovery` that must be posted
 
 ## external link

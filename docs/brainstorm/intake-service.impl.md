@@ -162,42 +162,44 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 
 ## Error codes
 
-| HTTP | Code                                      | Condition                                                                                  |
-| ---- | ----------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 400  | `intake.inbound.event.filter_invalid`     | An event delete names no filter, both filters or the state `pending`.                      |
-| 400  | `intake.outbound.request.filter_invalid`  | An outbound request delete names no filter, both filters or the state `pending`.           |
-| 400  | `intake.outbound.request.force_required`  | An outbound request delete omits `force: true`.                                            |
-| 401  | `intake.inbound.event.signature_invalid`  | A webhook post fails verification.                                                         |
-| 404  | `intake.inbound.not_found`                | No inbound has that identity, or a webhook post names a poll inbound.                      |
-| 404  | `intake.inbound.project_not_found`        | The project of a create does not exist.                                                    |
-| 404  | `intake.inbound.event.not_found`          | No inbound event has that identity.                                                        |
-| 404  | `intake.outbound.request.not_found`       | No outbound request has that identity.                                                     |
-| 409  | `intake.inbound.events_pending`           | A delete names an inbound that holds a pending event.                                      |
-| 409  | `intake.inbound.event.in_flight`          | A discard names a pending event whose handoff runs.                                        |
-| 409  | `intake.inbound.event.state_conflict`     | The state of the event permits no such transition, or a delete list names a pending event. |
-| 409  | `intake.link.inbound_missing`             | A link read names a link with no inbound of its resource. `details: { external_link }`.    |
-| 409  | `intake.outbound.request.discarded`       | A repeat names a discarded request.                                                        |
-| 409  | `intake.outbound.request.in_flight`       | A repeat or a discard names a request whose call runs.                                     |
-| 409  | `intake.outbound.request.state_conflict`  | A discard names a request that is not `pending`, or a delete list names a pending request. |
-| 409  | `intake.storage.object_mismatch`          | The object check finds no object, or its size or SHA-256 differs from the asset.           |
-| 422  | `intake.inbound.credential_invalid`       | The credential name does not exist, or its platform does not suit the inbound.             |
-| 422  | `intake.inbound.platform_refused`         | The platform refuses a validation request of a poll create.                                |
-| 422  | `intake.outbound.request.action_unmapped` | A configured action has no row in the action table.                                        |
-| 502  | `intake.platform.<platform>.<class>`      | A Jira or Slack call of a link read or a reply fails. `details: { status }`.               |
-| 503  | `intake.inbound.event.capacity_exceeded`  | The count of pending events is at its bound.                                               |
-| 503  | `intake.outbound.request.cli_unavailable` | The binary of a CLI operation is missing or below its minimum version.                     |
+| HTTP | Code                                      | Condition                                                                                                                                                                                                                                |
+| ---- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | `intake.inbound.event.filter_invalid`     | An event delete names no filter, both filters or the state `pending`.                                                                                                                                                                    |
+| 400  | `intake.outbound.request.filter_invalid`  | An outbound request delete names no filter, both filters, the state `pending` or the state `awaiting_approval`.                                                                                                                          |
+| 400  | `intake.outbound.request.force_required`  | An outbound request delete omits `force: true`.                                                                                                                                                                                          |
+| 401  | `intake.inbound.event.signature_invalid`  | A webhook post fails verification.                                                                                                                                                                                                       |
+| 404  | `intake.inbound.not_found`                | No inbound has that identity, or a webhook post names a poll inbound.                                                                                                                                                                    |
+| 404  | `intake.inbound.project_not_found`        | The project of a create does not exist.                                                                                                                                                                                                  |
+| 404  | `intake.inbound.event.not_found`          | No inbound event has that identity.                                                                                                                                                                                                      |
+| 404  | `intake.outbound.request.not_found`       | No outbound request has that identity.                                                                                                                                                                                                   |
+| 409  | `intake.inbound.events_pending`           | A delete names an inbound that holds a pending event.                                                                                                                                                                                    |
+| 409  | `intake.inbound.event.in_flight`          | A discard names a pending event whose handoff runs.                                                                                                                                                                                      |
+| 409  | `intake.inbound.event.state_conflict`     | The state of the event permits no such transition, or a delete list names a pending event.                                                                                                                                               |
+| 409  | `intake.link.inbound_missing`             | A link read names a link with no inbound of its resource. `details: { external_link }`.                                                                                                                                                  |
+| 409  | `intake.outbound.request.discarded`       | A repeat names a discarded request.                                                                                                                                                                                                      |
+| 409  | `intake.outbound.request.in_flight`       | A repeat or a discard names a request whose call runs.                                                                                                                                                                                   |
+| 409  | `intake.outbound.request.state_conflict`  | A discard names a request that is not `pending`, an approve or a reject names a request that is not `awaiting_approval`, `failed` or `pending` with no running call, or a delete list names a pending or an `awaiting_approval` request. |
+| 409  | `intake.storage.object_mismatch`          | The object check finds no object, or its size or SHA-256 differs from the asset.                                                                                                                                                         |
+| 422  | `intake.inbound.credential_invalid`       | The credential name does not exist, or its platform does not suit the inbound.                                                                                                                                                           |
+| 422  | `intake.inbound.platform_refused`         | The platform refuses a validation request of a poll create.                                                                                                                                                                              |
+| 422  | `intake.outbound.request.action_unmapped` | A configured action has no row in the action table.                                                                                                                                                                                      |
+| 502  | `intake.platform.<platform>.<class>`      | A Jira or Slack call of a link read or a reply fails. `details: { status }`.                                                                                                                                                             |
+| 503  | `intake.inbound.event.capacity_exceeded`  | The count of pending events is at its bound.                                                                                                                                                                                             |
+| 503  | `intake.outbound.request.cli_unavailable` | The binary of a CLI operation is missing or below its minimum version.                                                                                                                                                                   |
 
 ## Outbound operations and checks
 
 - Each operation forwards the identity of its caller in `ClientOptions.identity`. The protected facility consumes the authorization result of the service that owns the entity of the operation, custody releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret), and the handler performs the call through the Repository component, the [Storage component](storage.md) or its own Jira and Slack platform code and drops the material in `finally`.
 - The handler builds its platform client for one call and caches no client and no token.
 - `intake.action.perform` is a `client` operation under the forwarded execution identity. It takes the configured action and its request key, maps the action to its outbound operation, and answers the `PlatformAddress` or the result class of the Repository component.
-- The action table maps `pull_request` on a `github` binding to `github.pull_request` and `merge_push` on a git binding to `git.merge_push`. A merge call from the action performer with `merge_evidence_id` maps to `github.pull_request_merge`. The action `reply` on a `conversation` binding maps to `github.issue_comment`, `jira.issue_comment` or `slack.thread_reply` by the platform of the binding. An action without a row answers 422 `intake.outbound.request.action_unmapped` and records no request.
+- The action table maps `pull_request` on a `github` binding to `github.pull_request` and `merge_push` on a git binding to `git.merge_push`. A merge call from the action performer with `merge_evidence_id` maps to `github.pull_request_merge`. An action without a row answers 422 `intake.outbound.request.action_unmapped` and records no request.
+- `intakeReplies.draftReply(tx, draft)` is the in-process port of the reply draft. The Mission Service calls it in the transaction that moves a node to `Completed`, under [the attempt](mission-service.impl.md#the-attempt).
+- The port maps `platform` of `draft` to `github.issue_comment`, `jira.issue_comment` or `slack.thread_reply`. It inserts the request with `request_key` of `draft` as `awaiting_approval`, with `draft` `{ node_id, external_link, text }`.
+- The port takes no custody release and performs no call. An insert that meets the unique index keeps the existing request.
 - For `git.merge_push` and for the reuse of a pull request, the handler creates a fresh clone through the repository connector. The clone uses the SSH identity of the binding. It performs the network git write and removes the clone after the call. A `git.merge_push` answers the pushed commit in its `PlatformAddress`.
 - A create of `github.pull_request` whose `ActionFacts` hold a nonempty `gate_files` sends a body. The body holds three parts, separated by a blank line: the text "KanthorD does not merge this pull request. The change set of the node changes these gate files of the affected test declaration:", one line `` - `<path>` `` for each gate file, and the text "A human reviews and merges this pull request." A create with an empty `gate_files` sends no body. A reused pull request keeps its text.
 - `github.pull_request_merge` reads the allowed merge methods of the repository. It sends `PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge` with the tested commit as the head guard `sha`. It reads back the pull request. A 405 sets `failed`. A 409 or 422 sets `failed`.
 - `intake.action.check` is a `service` operation under the service identity of the Mission Service. It takes the request evidence, reads the binding and its credential from the pinned `FrozenAction`, and answers `{ end_state, landed_commits }` that the platform implementation folds.
-- For a reply evidence, `intake.action.check` answers `posted` when its outbound request is `succeeded`. It makes no platform call.
 - The read-back of `intake.action.check` for a `git.merge_push` request takes an `ssh_identity` release under the service identity of the Mission Service, through the pinned `FrozenAction`. That release pins no revision.
 - `intake.action.read` is a `client` operation under the forwarded execution identity. It serves the MCP read tools `github-pull-request-get` and `github-pull-request-review-comment-list`, and it returns the platform body unchanged.
 - `intake.action.read` also serves the method `github-pull-request-change-request-get` to the [unblock reads](worker-service.impl.md#the-unblock-reads) of the Worker Service. It answers `{ head_commit, change_requests }`.
@@ -232,6 +234,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 | `slack.thread_reply`   | `POST https://slack.com/api/chat.postMessage` with `channel`, `thread_ts`, `text` | `{ update_key: slack_message:<team_id>:<channel>:<ts>, actor_id }` |
 
 - The request key is `<node_id>:<attempt>:<link>`, where `<link>` is the canonical JSON of the external link.
+- Only `intake.outbound.request.approve` starts the first call of a reply request. Each call posts `text` of `draft`.
 - A reply posts with the credential of the conversation binding, the one account of the developer. On Slack this is the user token of the developer. No bot and no app identity post.
 - No reply operation has a read-back, and no body holds a hidden marker. A call that ends with no answer sets the request `failed`, and a repeat posts again.
 - A crash during the call leaves the request `pending`. A repeat of a pending request with no running call posts again. A duplicate reply after a lost answer is accepted.
@@ -247,7 +250,8 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - Custody pins each released revision to the execution at its first use.
 - `credential` of the outbound request of `git.merge_push` holds the `ssh_credential` name.
 - `s3.delete_object`: the Mission Service authorizes the forwarded human identity through the evidence asset and its storage binding revision, and custody releases the storage binding credential.
-- `github.issue_comment`, `jira.issue_comment` and `slack.thread_reply`: the Mission Service applies the grant of the `FrozenAction` of the reply. Custody releases `credential` of the conversation binding revision that the node pins for the link resource.
+- `github.issue_comment`, `jira.issue_comment` and `slack.thread_reply`: the draft insert runs inside the Mission transaction through `intakeReplies.draftReply`, and it forwards no identity.
+- At `intake.outbound.request.approve`, the Mission Service authorizes the human through the node of `draft`. Custody then releases `credential` of the conversation binding revision that the node pins for the link resource.
 - `intake.link.read`: the Mission Service authorizes the human through the node, as for `intake.action.check`.
 - `intake.action.check`, `intake.action.read`, the presigned PUT and GET and the object check: the Mission Service authorizes the caller through the request evidence or the evidence asset. These operations record no outbound request.
 - A native push send and a CLI write declare their authorization with their designs.
@@ -276,16 +280,18 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 
 - `intake_outbound_request` of [ERD 3](../reference/erd/03-integration.html) holds the outbound requests. `id` is `outbound_request_` and a ULID.
 - `project_id` names the project of the binding that the caller resolved. `operation` holds a value of the closed set of outbound operations in code. `request_key` holds the key that the caller derives. `credential` holds the name of the credential that custody released for the write, and `git.merge_push` holds null. A credential removal is not refused by an outbound request that names it.
-- A unique index covers `(operation, request_key)`.
+- A unique index covers `(project_id, operation, request_key)`.
+- `draft` is JSON text `{ node_id, external_link, text }` of a reply request, and null for every other operation. The approval and the Overview read it.
 - `result` is JSON text that holds the bounded body of the 2xx answer, for example the `PlatformAddress`, or null. `error` holds the shape and the byte bound of `error` of an inbound event. Every property name is snake_case.
 - The `result` of a succeeded reply holds `{ update_key, actor_id }`. The `result` of a pending reply holds `{ actor_id }` of the reply account.
-- In one invocation, the handler authorizes, obtains the release, inserts the request as `pending`, commits, and only then performs the call.
+- In one invocation, the handler authorizes, obtains the release, inserts the request as `pending`, commits, and only then performs the call. A reply draft inserts as `awaiting_approval` with no release and no call.
 - An insert that meets the unique index reads the existing request and answers the repeat rule of [intake-service.md](intake-service.md#outbound-requests).
 - A module-private `Set` holds the identity of every request whose call runs. The handler adds the identity in the synchronous step of its insert, and it removes the identity after the write of the answer. A repeat and a discard read the set and write their conditional update in one synchronous step.
 - The deadline of the operation aborts the call through an `AbortController`. The handler then sets `failed` with `timeout`, and a late answer writes nothing.
 - The call sets `succeeded` with `result`, or `failed` with an appended `{ code, message, created_at }`, through an update conditional on `pending`. `code` holds the result class of the Repository component or the [Storage component](storage.md), the HTTP status, `timeout` or `cli.exit_<n>`. A `failed` write commits in its own transaction before the handler answers the error, and a later failure of the handler keeps it.
 - A read-back match sets `succeeded` with `result` through an update conditional on `pending` or `failed`.
 - A repeat of `succeeded` answers `result`. A repeat of a running request answers 409 `intake.outbound.request.in_flight`, and a repeat of `discarded` answers 409 `intake.outbound.request.discarded`.
+- A repeat of an `awaiting_approval` request answers the state `awaiting_approval` and writes nothing.
 - A repeat of a `pending` request with no running call, or of a `failed` request, runs the read-back once. A match answers the result. Otherwise a `pending` request answers the result class `unknown_outcome`, and a `failed` request answers its newest error.
 - A start runs nothing for an outbound request, and a `pending` request that a crash leaves keeps its state.
 
@@ -305,10 +311,16 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 
 - `intake.outbound.request.list` is a `human` operation. It answers a bounded page in the order of `id`, optionally filtered by project, state and operation.
 - `intake.outbound.request.get` is a `human` operation. It answers one request with its state, `result` and `error`.
+- The list and the get answer `draft` of a reply request.
+- `intake.outbound.request.approve` is a `human` operation. Its input holds an optional nonempty `text`. It accepts a reply request in `awaiting_approval`, in `failed`, or in `pending` with no running call. A running request answers 409 `intake.outbound.request.in_flight`, and every other state answers 409 `intake.outbound.request.state_conflict`.
+- The approve authorizes the human and obtains the release first. A refusal answers its error and keeps the state.
+- In one synchronous step, the approve writes `text` into `draft` when the input holds it, sets `pending` through an update conditional on the state that it read, and adds the identity to the running set. It commits, and only then performs the call of [the reply operations](#the-reply-operations).
+- The approve answers the request with its state, `result` and `error`. A failed or a stuck post leaves the request for the next approval.
+- `intake.outbound.request.reject` is a `human` operation. It accepts the same states as the approve and sets `discarded` through an update conditional on the state that it read. A running request answers 409 `intake.outbound.request.in_flight`, and every other state answers 409 `intake.outbound.request.state_conflict`.
 - `intake.outbound.request.discard` is a `human` operation. It turns a `pending` request with no running call to `discarded`. A running request answers 409 `intake.outbound.request.in_flight`, and every other state answers 409 `intake.outbound.request.state_conflict`.
 - `intake.outbound.request.delete` is a `human` operation. Its input holds `force` and either a state with a ULID range of `id` or a list of exact request identities.
-- A delete without `force: true` answers 400 `intake.outbound.request.force_required` and deletes nothing. A delete without a filter, with both filters or with the state `pending` answers 400 `intake.outbound.request.filter_invalid`.
-- An exact list that names a pending request answers 409 `intake.outbound.request.state_conflict` and deletes nothing. The delete removes the matching requests in one transaction and answers their count.
+- A delete without `force: true` answers 400 `intake.outbound.request.force_required` and deletes nothing. A delete without a filter, with both filters, with the state `pending` or with the state `awaiting_approval` answers 400 `intake.outbound.request.filter_invalid`.
+- An exact list that names a pending or an `awaiting_approval` request answers 409 `intake.outbound.request.state_conflict` and deletes nothing. The delete removes the matching requests in one transaction and answers their count.
 - No `client` or `service` operation reads a request.
 
 ## The CLI transport
@@ -406,6 +418,11 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - A test covers a repeat of a `failed` request whose read-back finds nothing, and it asserts no second write and the recorded error.
 - A test covers an unmapped action, and it asserts the 422 and no request.
 - Tests cover a discard of a running request, a delete without `force`, and a delete list that names a pending request.
+- A test covers `intakeReplies.draftReply`, and it asserts an `awaiting_approval` request with `draft`, no custody release and no platform call.
+- A test covers a repeat of an `awaiting_approval` request, and it asserts the same state and no platform call.
+- A test covers an approve with an edited text, and it asserts `pending` before the call, one post of the edited text and the state that the answer sets.
+- A test covers a refused release at an approve, and it asserts that the request stays `awaiting_approval`.
+- Tests cover a reject, an approve and a reject of a `failed` reply and of a `pending` reply with no running call, and an approve or a reject of a running request or of another state, and assert `discarded`, a new post and the 409.
 - Tests answer a `github.pull_request` whose snapshot commit the base branch contains with the `branch_push` address of the oldest first-parent commit that contains it.
 - Tests open no pull request for that snapshot, and they fold the check to `pull_request_merged` with that landed commit.
 - A test covers a CLI child, and it asserts the fresh `HOME`, the environment allowlist, the removal of its directory and the kill of its process group at the deadline.

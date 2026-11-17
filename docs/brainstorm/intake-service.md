@@ -137,7 +137,7 @@ The [admission contract](mission-service.md#delivery-admission-and-check) assign
 ## Outbound operations and checks
 
 The Intake Service performs a configured action for the action performer of the Worker Service: it opens a pull request, or it merges the node branch into the base branch and pushes.
-It also posts a reply to an external link.
+It inserts the reply draft of an external link for the Mission Service when a node completes, and it posts that reply only after a human approves it.
 For a network git write, it creates a fresh clone through the repository connector with the SSH identity of the binding.
 It performs the write and removes the clone after the call.
 It checks the state of the external object of a request evidence for the Mission Service, and it answers the end state that the platform implementation folds.
@@ -160,6 +160,7 @@ A link read of Check now reads the items of one external link.
 It stores each item as an inbound event of the newest inbound of the link resource.
 A link with no such inbound refuses the whole check before any read.
 A reply operation posts one reply to a link with the credential of the conversation binding, and it has no read-back.
+A reply is external communication, so a human reviews every reply before it posts, as for a damage action.
 The [implementation](intake-service.impl.md#the-credential-platforms) defines the credential platforms, the receipts, the [decoders](intake-service.impl.md#the-jira-and-slack-decoders), the link read and the reply operations.
 
 ## Outbound requests
@@ -168,6 +169,7 @@ An [outbound request](intake-service.vocabulary.md#outbound-request) records one
 A read, a check, a presign and an inbound control call record no outbound request.
 An outbound write runs inside the operation of its caller, and no dispatcher sends an outbound request.
 The Intake Service authorizes a write and obtains its credential release before the insert, and a refusal records no request.
+A reply request is the exception. Its insert takes no authorization and no credential release, and its approval obtains the release before the post.
 
 The caller derives the [request key](intake-service.vocabulary.md#request-key) of an outbound write from its durable intent.
 A request key holds every operand that can change under its intent, so the Intake Service holds no digest of the operands.
@@ -176,20 +178,25 @@ One request exists for each operation and request key, so a repeat finds the fir
 
 The [outbound request state](intake-service.vocabulary.md#outbound-request-state) records the outcome of the write.
 
-- The insert commits the request as pending before the call.
+- The insert of a request other than a reply request commits it as pending before the call.
+- The insert of a reply request commits it as `awaiting_approval` with the drafted text, and it posts nothing.
+- Only a human act leaves `awaiting_approval`. An approval, with an optional edited text, sets pending and posts with the credential of the conversation binding. A rejection sets discarded.
+- Every post of a reply request sends the stored text of the request.
 - A 2xx answer or a CLI exit code 0 sets succeeded with the bounded result.
 - Every other result sets failed and appends its error. A failed request proves no absence of the effect.
 - A deadline aborts the call, so a late answer writes nothing.
 - A call that ends without a write of its state, for example at a crash, leaves pending.
-- Only a [read-back](intake-service.vocabulary.md#read-back) moves pending or failed to succeeded. A reply operation has no read-back. A repeat of a failed reply request, or of a pending reply request with no running call, sets it pending and posts again, and the answer of that call sets its state.
+- Only a [read-back](intake-service.vocabulary.md#read-back) moves pending or failed to succeeded. A reply operation has no read-back.
 - A human discard turns a pending request to discarded, and it is refused while the call runs.
+- A reply posts again only through a human approval. An approval also accepts a failed reply request and a pending reply request with no running call. It sets pending and posts the stored or the edited text, and the answer of that call sets its state. A rejection of such a request sets discarded.
 - Succeeded and discarded are terminal.
 - Every write of the state is conditional on the state that the write expects.
 
-A repeat with the same key never calls the write again, except a repeat of a reply request with no running call.
+A repeat with the same key never calls the write again.
 
 - A repeat of a succeeded request answers its result.
-- A repeat of a pending request with no running call, or of a failed request, runs the read-back once. A repeat of such a reply request posts again.
+- A repeat of an `awaiting_approval` request answers its state and changes nothing.
+- A repeat of a pending request with no running call, or of a failed request, runs the read-back once. A repeat of a reply request answers its state and posts nothing.
 - A repeat of a running request or of a discarded request is refused.
 
 A read-back is one read call to the platform that checks whether the write of a request took effect.
@@ -218,11 +225,11 @@ It promises no receipt of every update that a platform produces.
 
 No process deletes an outbound request.
 A human deletes outbound requests with a filter and with force, and the human accepts that a repeat of a deleted key calls the write again.
-A delete removes succeeded, failed and discarded requests, and no delete removes a pending request.
+A delete removes succeeded, failed and discarded requests, and no delete removes a pending or an `awaiting_approval` request.
 
 ## Authority
 
-Every authenticated human holds authority to create and delete an inbound, to retry, discard and delete an inbound event, and to list, read, discard and delete an outbound request.
+Every authenticated human holds authority to create and delete an inbound, to retry, discard and delete an inbound event, and to list, read, approve, reject, discard and delete an outbound request.
 The [Gateway Service](gateway-service.md#human-authority) owns that human authority rule.
 An inbound names its consumer from the closed set of [admission operations](mission-service.vocabulary.md#delivery-admission).
 It names no arbitrary operation.

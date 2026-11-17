@@ -8,7 +8,7 @@ title: Worker Service
 
 This document describes the Worker Service.
 It describes the workers and their agents, the worker instances and how they host an execution, the lifecycle of an execution, the performance of a required external action and the owner of memory.
-For a required external action, it describes the configured repository action and the reply action of a conversation binding.
+For a required external action, it describes the configured repository action.
 The Worker Service uses the [Repository component](repository.md) for repository operations and the [Intake Service](intake-service.md#outbound-operations-and-checks) for platform operations.
 It describes the MCP server through which a native agent and an external harness reach the server tools.
 It describes the prompt of a native agent and the prompt composer that produces it.
@@ -364,6 +364,7 @@ The [Tracking Service](tracking-service.md#producer-and-ownership) owns what a s
 Every operation of the execution presents its execution identity under the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 The execution holds a fixed `expired_at` under [Scheduler configuration](scheduler-service.impl.md#configuration).
 A revoked or lost execution stops its agent and performs no further operation under its execution identity.
+The execution learns of a revocation from a stop order of its instance, from a refused call or from its claim watch, under [Stop and budget](worker-service.impl.md#stop-and-budget).
 The execution identity is the identity of the [agent session](agent.vocabulary.md#agent-session) of the execution.
 
 Every worker declares a default [resource budget](worker-service.vocabulary.md#resource-budget) with `wall_time_ms` for one execution.
@@ -374,6 +375,7 @@ An execution reads the [node revision](mission-service.md#mission-structure-and-
 After an unblock, it performs the reads that the [unblock rules](mission-service.md#the-unblock) of the Mission Service require.
 It fetches the external content that the request evidence addresses through `intake.action.read` of the [Intake Service](intake-service.md#outbound-operations-and-checks).
 Every attempt, attempt 1 included, also reads the trusted link updates of its node through `worker.execution.link_update.get`.
+The worker sends these reads in parallel, each as its own operation. No server operation joins them.
 The Mission Service applies `link_trust` of the binding revision that the node pins for each link resource.
 The Intake Service describes the stored content of each update and redacts it under the sensitive text rule set.
 The update text is context, and the requirement stays in the node revision.
@@ -408,16 +410,21 @@ The rules of the four paragraphs below hold for the steps method on an `implemen
 The steps method uses one node branch for each `implement` node and repository binding.
 The node branch has the same name in each repository that the node names.
 The node branch of an attempt is the branch of the latest attempt k, at or before it, that records the [start point](mission-service.md#attempt) `base_branch`.
-The node branch takes its name from the node identity, in the form `kanthord/<node identity>` when k is 1, and `kanthord/<node identity>-a<k>` when k is later.
-The claim names the node branch, and the execution reads it from the claim.
+The node branch has a semantic name with no identity: `<commit_type>/<node name slug>`, with a counter `-2`, `-3` when the name is taken.
+The first handover of attempt k chooses and reserves the name, under [Attempt](mission-service.md#attempt). It skips each name that a reservation holds or that a repository of the node holds.
+The execution reads the name from the execution setup.
 The first execution on that branch creates it from the base branch that the [repository strategy](project-service.md#repository-configuration-and-policy) names.
+The first push of the node branch creates it and expects no branch of that name at the repository.
+When that push fails, the execution stops with `operation_failed` and the code `repository.node_branch.taken`.
+A remote branch with the name of the attempt is a push of an attempt of the node, because no repository held that name when the handover chose it.
 When a record shows an earlier push of the node branch and the repository holds no such branch, the execution stops with `operation_failed` and the code `repository.node_branch.missing`.
 That execution never starts the node branch again from the base branch.
 A human restores the branch at the repository, or restarts the attempt from the base branch through an [unblock](mission-service.md#the-unblock) with the start point `base_branch`.
-No act deletes, renames or force-pushes a node branch.
+No act deletes, renames or overwrites a node branch.
 The execution never rewrites a commit that it pushed or that a record of the Mission Service names.
-Every commit that the execution makes is attributable to its task and its attempt.
-Today the commit names its unit and no attempt, under [Commit attribution](worker-service.impl.md#commit-attribution).
+Every commit that gate G makes is attributable to its unit and its attempt through the `worker.gate` span of the trace.
+A commit message names the unit and no identity, under [Commit attribution](worker-service.impl.md#commit-attribution).
+The commit identity is the commit identity of the repository binding, never an identity of the host.
 The execution uses the [node-branch push](repository.md#write-operations) of the Repository component before every release.
 
 The steps method chooses the order of the tasks of the pinned revision.
@@ -434,16 +441,28 @@ The execution code, never the agent, runs the verifications of the unit against 
 It discards every change that the verifications make.
 A failed verification leads the agent to revise the unit within the resource budget.
 A verification that a signal ends, or that fails to start, runs once more, and a second such failure stops the execution with `operation_failed`.
-A unit whose own commands pass is complete, and the execution writes a done record on its commit. An own command is a verification of the unit that the node does not list.
-The done record names the unit and the digest of its content, and it lives in the node branch.
-The execution writes no evidence, no assessment and no outcome for a task.
+A unit whose own commands pass is complete, and the execution writes a unit record of it to the Worker Service. An own command is a verification of the unit that the node does not list.
+The [unit record](worker-service.vocabulary.md#unit-record) names the node, the unit, the digest of the unit content and the gate commit of the unit at the head of each checkout that the unit changed.
+The unit record never enters the repository.
+The execution writes no assessment and no outcome for a task. The coder report of a unit is its only evidence of a task.
 
 At each steps claim on an `implement` node, the execution first merges `origin/<base_branch>` into the node branch of each checkout, with the base branch of that binding.
-`swe@1` resolves a merge conflict in a conflict turn, and the execution commits the merge.
-A conflict marker that stays in a conflicted file aborts that merge and stops the execution with `operation_failed`.
+`swe@1` resolves a merge conflict in a conflict turn.
+After each conflict turn, the execution code checks the conflicted files for conflict markers.
+When a conflicted file still holds a marker, the execution keeps the merge open, commits nothing and sends another conflict turn with the files that hold markers.
+When no marker is left, the execution commits the merge.
+A conflict turn that leaves the same marker files with the same content as the check before adds one to the marker counter of that merge.
+At 2, the resolution fails. A budget end with markers left also fails it.
+A budget end with no marker left commits the merge after the conflict-mode checks of gate G.
+A failed resolution loses no work.
+The execution submits a conflict report evidence with the content of each conflicted file and the files that still hold markers, then aborts the merge.
+It pushes the node branch at its last gate commit and releases with the stop `conflict_unresolved`.
+The Mission Service then moves the node to `Blocked` for a human, under [State transitions](mission-service.md#state-transitions).
+After the base merge, the execution runs the live environment setup on the merged heads.
 
-At its start, every execution reads the done records of the node branch.
-A work unit with a done record for its id and its current digest is complete, and the execution skips it.
+At its start, every execution reads the unit records of the node through the execution setup.
+A work unit with a valid unit record is complete, and the execution skips it.
+A unit record is valid when its digest equals the digest of the current unit content and each of its commits is on the node branch after the base branch.
 The execution executes every other work unit, also when its verifications pass on the base.
 No record of an earlier attempt decides that a task is complete, unless the attempt continues the same node branch.
 The verdict of a rework is the rationale of the assessment that caused the latest rework of the attempt, or else the change requests of the pull request of the cleared attempt.
@@ -466,7 +485,7 @@ The release gate merges `origin/<base_branch>` again in every checkout and runs 
 A failed verification of the release gate sends a revision turn to the unit that owns the command, and the release gate runs again after that unit passes.
 After every verification passes, the release gate of an `implement` node runs the affected test command of each repository that declares one. The verdict `failed` of that run sends a revision turn to the node unit.
 The release gate is the only path to a release with no further work.
-The execution pushes the node branch of every checkout before every release. Before the push of a release with no further work, it submits the coder report. It submits the head commit evidence only after every push succeeds.
+The execution pushes the node branch of every checkout before every release. After each unit passes, it submits the coder report of that unit. It submits the head commit evidence only after every push succeeds.
 Before every release with no further work, the execution submits one evidence with the head commit of the node branch of each repository binding.
 When the resource budget ends, the agent stops and the execution performs cleanup.
 The execution code, not the stopped agent, writes the checkpoint commit, pushes and releases with further work.
@@ -514,7 +533,9 @@ sequenceDiagram
         end
         rect rgb(248, 215, 218)
             A-->>E: steps done in the workspace, revised within the resource budget
-            E->>E: gate G commits the turn, run the verifications, discard their changes, write the done record
+            E->>E: gate G commits the turn, run the verifications, discard their changes
+            E->>W: write the unit record
+            E->>M: evidence of the node: the coder report of the unit
         end
     end
     rect rgb(248, 215, 218)
@@ -576,20 +597,22 @@ sequenceDiagram
     participant H as Human
     participant M as Mission Service
     participant S as Scheduler Service
+    participant W as Worker Service
     participant E as Execution (steps method)
     participant A as Native agent
 
     rect rgb(212, 237, 218)
-        H->>M: pause the node
-        Note over M,S: the transition revokes the claim of the execution
+        H->>M: a human act that revokes the claim, for example a success override
+        Note over M,S: the transition revokes the claim of the execution and queues the stop order revoked
     end
     rect rgb(214, 234, 248)
-        E->>S: next execution call or claim read
-        S-->>E: call refused, or claim not running
+        E->>W: next heartbeat of the instance and its work read
+        W-->>E: stop order revoked of the execution
+        Note over E,S: with no stop order, a refused call or a claim read of the claim watch ends the execution
     end
     rect rgb(248, 215, 218)
         E->>A: stop the agent
-        E->>E: no further operation under the execution identity
+        E->>E: no release and no further operation under the execution identity
         Note over E: the instance is idle again and pulls
     end
     rect rgb(214, 234, 248)
@@ -699,14 +722,10 @@ A request of a repository action calls `intake.action.perform`, and the Intake S
 The action performer derives every operand from the records of the attempt, the evidence snapshot and the request evidence.
 The agent supplies no operand, and an external harness supplies none.
 
-A required action of a conversation binding is the reply to one external link.
-The action performer requests a reply through the Intake Service with the outbound operation of the platform of the binding.
-A reply follows the passing assessment, and it posts with the one account of the developer.
-The reply holds the outcome that the review passed: the node name, the attempt and the platform address of each request evidence of the attempt.
+A reply to an external link is no required external action.
+The reviewer execution and the action performer take no part in a reply.
+The Mission Service drafts each reply when the node completes, under [Attempt](mission-service.md#attempt).
 No agent tool writes to a link during an execution.
-A call that ends with no answer sets the request `failed`, and a repeat posts the reply again.
-A crash during the call leaves the request `pending`, and a repeat of a pending request with no running call posts the reply again.
-A duplicate reply after a lost answer is accepted.
 
 Before it performs a request, the action performer reads the request evidence of the node.
 The request reuses the external object of a request evidence of an earlier attempt when three conditions hold.
@@ -888,10 +907,10 @@ sequenceDiagram
         IN-->>E: the change request
         E->>RG: reuse the workspace of the node and its repository binding, same node branch
         loop for each task
-            alt a done record of the node branch matches the task
+            alt a valid unit record of the node matches the task
                 E->>E: skip the task
             else
-                E->>E: execute the task, new commit and done record
+                E->>E: execute the task, new commit and unit record
             end
         end
         E->>E: verdict unit with the requested changes
@@ -1028,7 +1047,7 @@ The [Project Service](project-service.md) owns bindings, their entries and confi
 The [Scheduler Service](scheduler-service.md) owns the work queue, claim, execution record, fixed deadline and live-execution accounting.
 The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the request evidence and the readiness and continuation conditions.
 The Worker Service owns the workers and their agents, the runtime identity, the pool and the hosting of an execution.
-It owns the instance records, the worker unit, both placement wrappers, the slot drivers and the server instances.
+It owns the instance records, the unit records, the worker unit, both placement wrappers, the slot drivers and the server instances.
 The [Gateway Service](gateway-service.md#the-restful-api) owns the invocation chain that both worker transports reach.
 It owns the healthcheck, the compatibility declarations, the workspace, the model connector and the prompt composer.
 It owns the action performer, the MCP server and the exposure of its tools.
