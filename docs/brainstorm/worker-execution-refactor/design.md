@@ -32,6 +32,10 @@ Code facts:
 - Evaluation and examine turn a thrown `ContextCancelled` or `DeadlineExceeded` into the budget end when the budget is exhausted and `operationContext` is not aborted (`evaluation.ts:425-442`, `steps-examine.ts:152-161`).
 - Examine runs only the node commands, with no flaky rerun, no copy, no baseline and no infrastructure or environment stop. The shared runner reruns an infrastructure-class command once; the second result goes into `verification`. It skips the run when no checkout exists (`steps-examine.ts:70-97`).
 - `runNativeExecution` selects the method from the worker declaration. A declaration with no method stops with `operation_failed` and no code (`native-method.ts:103-104`, `:146-149`).
+- `openSession` gives pi a list of inline extension factories through `DefaultResourceLoader`: `homeRelativeCwd`, the redaction restore, the hooks of the caller, the redaction hook. It sets `noExtensions`, `noSkills`, `noPromptTemplates`, `noThemes` and `noContextFiles`. It passes the allowlist as `tools` of `createAgentSession` (`agent/agent-session.ts:104-129`). It does not call `session.bindExtensions({})`, so pi emits no `session_start` event. It ends a session with `session.dispose()`, which emits no `session_shutdown` event (`agent/agent-session.ts:136`).
+- `sessionTools` builds each `host_tools` entry of the agent declaration as a pi `ToolDefinition`. It passes them as `customTools`, with the wrapped `bash` (`tool-table.ts:91`, `:144`).
+- No worker session uses `checkoutConfinement`. Only the project environment agent uses it (`project/environment-agent.ts:306`). Only the Workbench session uses `toolApproval` (`workbench/service.ts:410`). The hook checks the field `path` of `read`, `grep`, `find` and `ls` (`agent/hooks/checkout-confinement.ts:7`).
+- The redaction hook restores a marker into a tool input only for the tools of `RESTORE_TOOLS`: `write` and `edit` (`agent/hooks/sensitive-text-redaction.ts:101`).
 
 ## 1. Decisions
 
@@ -64,7 +68,7 @@ Code facts:
 - **D22 (EM ruling 2026-11-14): measure and improve the `Conflict` prompt during the refactor.** Keep one `swe@1` turn and add no second agent. Record per turn the conflicted file count, the model turns, the end, and a release gate failure on a command whose owner touched a conflicted file. Candidate: add the base-side log and diff since the merge base per conflicted file, cut at a byte limit. Compare before it becomes the default. Reason: the prompt asks to keep the base change intact but does not show it. HANDOFF holds the item under the Worker Service.
 - **D23 (EM ruling 2026-11-14): loop the conflict turn on a programmatic marker check.** The `conflict.revisions` loop runs `conflict.turn`, then `markers.check` (`conflictMarkerFiles` over the files of `openMerge`). Markers left: keep the merge open, commit nothing, and send a conflict turn that lists the files with markers. No marker: gate G in conflict mode commits the merge. Bound: the first `markers.check` of a merge sets the marker counter to 0; a later check that finds the same marker files with the same content adds 1; at 2 the resolution fails. A failed resolution loses no work (EM ruling 2026-11-14): the worker submits a conflict report evidence with the content of each conflicted file and the files that still hold markers, aborts the merge, and releases with a stop that closes the attempt into `Blocked` through a new Mission transition `Executing -> Blocked`. New: a failed submit logs `conflict report failed`; the step still aborts the merge and stops with `conflict_unresolved`. A budget end while markers are left takes the same path: report evidence, merge abort, node `Blocked` (EM ruling 2026-11-14). Blocked release (EM ruling 2026-11-14, audit B8): the stop reason and the transition rule are `conflict_unresolved`; `recordStop` moves the node to `Blocked` with no failure count. `onStop` pushes `heads` first. The conflict report is a produced asset only. The marker counter belongs to one merge, separate from the no-progress counter. The cause is the `merge_base` git step. Reason: today the first check with markers left ends the execution, and the work of the turn is lost.
 - **D24 (EM ruling 2026-11-14): semantic branch names and commit messages with no id.** Commit: keep the header `<type>: <unit name>` and drop the id body. Branch: a name chosen once per attempt start and stored with the start point; the push guard checks the `node_branch` of the claim. Branch rule (EM ruling 2026-11-14): `<commit_type>/<node name slug>`, slug lower-case kebab, at most 50 characters; a `-2`, `-3` counter when the remote holds the name; a new attempt from the base gets the next free counter. Branch ownership (EM ruling 2026-11-14, audit B5 and B6): the server reserves each name per binding and never gives it out twice. The first push of an attempt uses `--force-with-lease=refs/heads/<branch>:` and expects the branch to be absent. The first handover of the attempt chooses the name: it skips each reserved name and each name that `git ls-remote` shows, then pins the name like `prompt_commits` (EM ruling 2026-11-16). A refused first push stops with `repository.node_branch.taken`; the name of an attempt never changes. Commit attribution (EM ruling 2026-11-14, audit B9): when gate G commits, the `worker.gate` span ends with `kanthord.unit.id` and `kanthord.git.commit`; the rule of worker-service.md:419 becomes attribution through that span. The create-only first push does not overwrite a branch, so the rule text becomes "No act deletes, renames or overwrites a node branch". `.kanthord/*` stays as the project configuration directory (EM ruling 2026-11-14, S16).
-- **D25 (gap found by Ulrich 2026-11-14): make credentials part of the host execution.** The host (`hostExecution`) runs `credentials.handover` then `setup.read` before `runChain`, creates the dispose stack, and defers the credential entry first. It calls `runChain` with the seed `claim`, `setup`, `credentials` and `sshAccess`. `credential.store` (C1, pi auth, refresh lease and report) and `ssh.access` (C2, handed key or relay signer per binding) stay host resources on that stack. Every final step settles the credentials once before the call (audit B2). Dispose discards every credential, clears SSH access and zeroes the handover keys. Section 5.4 holds the rules.
+- **D25 (gap found by Ulrich 2026-11-14): make credentials part of the host execution.** The host (`hostExecution`) runs `credentials.handover` then `setup.read` before `runChain`, creates the dispose stack, and defers the credential entry first. It calls `runChain` with the seed `claim`, `setup` and `sshAccess`. `hostExecution` gives the handover result only to `credential.store`, and no context key holds a credential (D32). `agentPort` gets the model runtime factory over that store and the known secrets. `credential.store` (C1, pi auth, refresh lease and report) and `ssh.access` (C2, handed key or relay signer per binding) stay host resources on that stack. Every final step settles the credentials once before the call (audit B2). Dispose discards every credential, clears SSH access and zeroes the handover keys. Section 5.4 holds the rules.
 - **D26 (gap found by Ulrich 2026-11-14): make the agent tool set part of the `agent.open` contract.** The step reads the agent declaration (`tools`, `host_tools`) and writes the tool allowlist, the host tools and the hook list. Section 5.5 holds the rules.
 - **D27 (EM ruling 2026-11-14): confine the `re@1` read tools.** The agent open service of `judgement` adds `checkoutConfinement`. The allowed roots are the review checkouts and the `evidence` directory. A workspace with no checkout places the assets in the workspace directory itself, so that directory is the root (`evaluation-input.ts:524-527`). The hook resolves each `path` with the path function of pi (`resolveToCwd`: `@` prefix, `~`, `file://`, Unicode spaces), then follows symbolic links. The hook accepts the path when the result is inside one root. The hook refuses a path that it cannot resolve. A call with no `path` takes the agent root. With two checkouts the agent root is `review/checkouts`; the roots are the agent root and the `evidence` directory. The review bundle keeps its paths relative to the agent root. A test reads `@<absolute path>`, `~`, `file://` and a symbolic link that leaves the roots, and asserts a refusal. Reason: `re@1` has no `bash`, so the hook is its only path boundary; today it can read every file of the worker user.
 - **D28 (EM ruling 2026-11-14, audit S2): retry an indeterminate answer with the same idempotency key.** `run.call` keeps one key for all tries. It retries `Indeterminate` and 409 `gateway.idempotency.conflict` with `Backoff` for at most 30 s and never past `expired_at`. It stops at once on `closed` and on a stop of the run. After the bound it stops with `operation_failed`. `retryIndeterminate` takes the key outside its loop. Reason: the gateway replays a recorded answer by key, so a lost response must not cost a counted failure.
@@ -80,7 +84,25 @@ Code facts:
 
   Reason: layers 1 to 3 each change one file group (`turn-gate.ts` and `local-git.ts`, `done-record.ts`, `execution-run.ts`) and give the cost cut that the EM asks for with no runner. Layer 4 then ports verified behavior, and the golden file keeps section 4 equal to the code.
 
-- **D31 (own idea): run the `tasks` phase as a standalone local command through `MethodClients` and `HostTools` seams.** The command uses production step code with no step of its own. No `tasks` step holds placement logic or imports a transport constructor; placement lives only in the resources. The only production behavior addition is the capture hook of section 5.7. Reason: a developer runs and replays the core of an execution on one machine with no server access and can change one variable and compare the result.
+- **D31 (own idea): run the `tasks` phase as a standalone local command through the engine ports and the agent tools of D32.** The command uses production step code with no step of its own. No `tasks` step holds placement logic or imports a transport constructor; placement lives only in the tasks host. The command adds one production behavior: the capture hook of section 5.7. Reason: a developer runs and replays the core of an execution on one machine with no server access and can change one variable and compare the result.
+
+- **D32 (EM ruling 2026-11-17): the tasks engine is the core of a node execution. It is a custom framework on pi-coding-agent.** D32 extends D31 to all three chains.
+  - A tasks host calls one function of the tasks engine per chain: `tasksImplement`, `tasksEvaluation` or `tasksExamine`. The tasks engine does not know its tasks host.
+  - The tasks host has two forms: the KanthorD worker and the standalone CLI. Both forms run the same code of the tasks engine.
+  - A human, a harness or the long-running worker process prepares the input. The same consumer takes the local materials after the phase and acts on them.
+  - The tasks engine depends only on its input and on the host tools that the tasks host injects. It constructs no client, no transport and no resource.
+  - The tasks engine makes a side effect only through a host tool. A host tool is an agent tool or an engine port.
+  - Typed engine ports take the place of the operation-shaped `MethodClients` for `tasks`. A chain gets only the ports that its steps call.
+  - `ExecutionRun`, the credentials, the SSH signer and the tree service stay outside the tasks engine. A `tasks` step returns its stop as a value.
+  - No context key holds a credential, so no step of any phase can read one. Only `credential.store` holds the handover result, as host code.
+  - The agent tools build on the pi extension design. A capability is one pi extension factory. The design adds no registry, no plugin format and no tool interface where pi has one.
+  - A later capability (search, browser, MCP) is one more pi extension factory in the capability list. No `tasks` step changes for it.
+  - D32 keeps these parts of D31:
+    - the seed, `tasks_prepare`, `--tree` and the mirror;
+    - the credential input, the capture hook and the seed export;
+    - the output folder, the `--verify` checks, `compare` and `until`.
+
+  Sections 2, 5.4, 5.5 and 5.7 hold the rules. Reason: one boundary lets a human, a harness and the worker drive the same core. No code of the tasks engine can reach a server, a remote or a credential.
 
 ### Invariants
 
@@ -120,7 +142,6 @@ interface ProgressCtx {
 interface ExecutionCtx {
   claim: MethodClaim;
   setup: ExecutionSetup;
-  credentials: ExecutionCredentials;
   sshAccess: ReadonlyMap<BindingId, SshAccess>;
   revision: Revision;
   attemptEvidence: readonly Evidence[];
@@ -138,7 +159,7 @@ interface ExecutionCtx {
   affectedTests: readonly AffectedTest[];
   refreshed: RefreshResult;
   openMerge: ConflictMerge | null;
-  agent: NativeAgent;
+  agent: AgentSession;
   plan: UnitPlan;
   currentUnit: TaskContent | null;
   completedUnits: number;
@@ -196,8 +217,41 @@ interface Step<S, R extends Key, W extends Key> {
   ): Promise<StepResult<S, W>>;
 }
 
+interface TasksIo<P extends CommonPorts> {
+  budget: ExecutionBudget;
+  context: CancellationContext;
+  deadline: number;
+  ports: P;
+}
+
+type TasksStepResult<S, W extends Key> =
+  | StepResult<S, W>
+  | {
+      kind: "stop";
+      stop: ExecutionStop;
+      patch: Partial<Pick<ExecutionCtx, W>>;
+      scope: S;
+    };
+
+interface TasksStep<S, R extends Key, W extends Key, P extends CommonPorts> {
+  id: StepId;
+  deadline: DeadlineKind;
+  reads: readonly R[];
+  writes: readonly W[];
+  stops: readonly StopCode[];
+  ports: readonly (keyof P)[];
+  run(
+    ctx: Readonly<Pick<ExecutionCtx, R>>,
+    scope: S,
+    io: TasksIo<P>,
+  ): Promise<TasksStepResult<S, W>>;
+}
+
 type ChainNode =
-  | { kind: "step"; step: Step<unknown, Key, Key> }
+  | {
+      kind: "step";
+      step: Step<unknown, Key, Key> | TasksStep<unknown, Key, Key, CommonPorts>;
+    }
   | {
       kind: "parallel";
       id: string;
@@ -208,7 +262,9 @@ type ChainNode =
 interface LoopFrame<S> {
   reads: readonly Key[];
   init(ctx: ExecutionCtx, outer: unknown): S | null;
-  body: readonly (Step<S, Key, Key> | ChainNode)[];
+  body: readonly (
+    Step<S, Key, Key> | TasksStep<S, Key, Key, CommonPorts> | ChainNode
+  )[];
   next(ctx: ExecutionCtx, scope: S): S | null;
   span?(ctx: ExecutionCtx, scope: S): SpanContext;
   end?(
@@ -229,7 +285,9 @@ interface Chain {
 
 interface ChainBuilder {
   phase(phase: Phase): ChainBuilder;
-  step(step: Step<unknown, Key, Key>): ChainBuilder;
+  step(
+    step: Step<unknown, Key, Key> | TasksStep<unknown, Key, Key, CommonPorts>,
+  ): ChainBuilder;
   parallel(
     id: string,
     ...branches: ((b: ChainBuilder) => ChainBuilder)[]
@@ -243,7 +301,7 @@ interface ChainBuilder {
 declare function chain(id: ChainId): ChainBuilder;
 declare function runChain(
   chain: Chain,
-  seed: Pick<ExecutionCtx, "claim" | "setup" | "credentials" | "sshAccess">,
+  seed: Pick<ExecutionCtx, "claim" | "setup" | "sshAccess">,
   io: StepIo,
 ): Promise<ExecutionEnd>;
 
@@ -252,7 +310,6 @@ declare function runPhase(
   phase: Phase,
   seed: PhaseSeed,
   io: StepIo,
-  options: { until: string | null },
 ): Promise<PhaseEnd>;
 
 interface PhaseSeed {
@@ -261,9 +318,7 @@ interface PhaseSeed {
 }
 
 interface PhaseResources {
-  clients: MethodClients;
-  tools: HostTools;
-  credentials: CredentialStore;
+  ports: ImplementPorts & { agent: AgentPort };
   trees: TreeService;
 }
 
@@ -275,36 +330,307 @@ type PhaseEnd =
 
 Rules of the runner:
 
-1. **Context.** The host runs `credentials.handover` then `setup.read` before `runChain`; it creates the dispose stack and defers the credential entry first. The seed holds `claim`, `setup`, `credentials` and `sshAccess`. The runner seeds `currentUnit = null`, `openMerge = null`, `completedUnits = 0`, `progress` and `memo` (a new `VerificationMemo`) before the first phase. The build check counts the seed as a writer. A step gets a shallow-frozen slice of its `reads`. A resource key (`agent`, `baseHead`, `memo`) holds a live object. The runner merges the patch into the context. A step never mutates a context object other than a resource. `heads` replaces the in-place `checkout.head` writes of today.
-2. **Build check.** `build()` walks every path of the chain. It rejects a read with no earlier writer on that path, two parallel branches that write one key, and an `onExit` or `onStop` node that reads a key that the end of `prepare` can lack. Each `LoopFrame` declares the keys that `init` and `next` read from the outer context. The seed check requires a `LoopFrame.reads` key only when no node of the phase writes it before the first read of the frame. A scope field is no key and needs no seed.
+1. **Context.** The host runs `credentials.handover` then `setup.read` before `runChain`; it creates the dispose stack and defers the credential entry first. The seed holds `claim`, `setup` and `sshAccess`. The handover result is no context key: `hostExecution` gives it only to `credential.store` (D32). The runner seeds `currentUnit = null`, `openMerge = null`, `completedUnits = 0` and `progress` before the first phase. A `tasks` function seeds `memo` (a new `VerificationMemo`) for its call. Only `verify.own` and `verify.all(release)` read `memo`. The build check counts the seed as a writer. A step gets a shallow-frozen slice of its `reads`. A resource key (`agent`, `baseHead`, `memo`) holds a live object. The runner merges the patch into the context. A step never mutates a context object other than a resource. `heads` replaces the in-place `checkout.head` writes of today. The host builds the input of a `tasks` function from the context. It merges the result of each `TasksEnd` kind into the context.
+2. **Build check.** `build()` walks every path of the chain. It rejects a read with no earlier writer on that path, two parallel branches that write one key, and an `onExit` or `onStop` node that reads a key that the end of `prepare` can lack. Each `LoopFrame` declares the keys that `init` and `next` read from the outer context. The seed check requires a `LoopFrame.reads` key only when no node of the phase writes it before the first read of the frame. A scope field is no key and needs no seed. `build()` rejects a `TasksStep` whose `ports` are not in the port set of its phase. In a `tasks` phase, the port set is the port type of the `tasks` function of the chain. In a host phase, the port set is the port set of the tasks host, which holds every engine port. `runChain` takes it from the worker host. `runPhase` takes it from `PhaseResources.ports` of the tasks host that calls it. `build()` rejects a `TasksStep` that declares `sshAccess` in `reads`. It rejects a `Step` in a `tasks` phase. No step can declare a credential, because no context key holds one.
 3. **Loop scope.** A `LoopFrame` gets the scope of its outer loop in `init`. `UnitCtx` lives in the `units` scope. `refreshed` and `openMerge` are context keys: `base.merge` and `markers.check` write them. A step returns its scope and a patch of its declared keys. The `revisions` frame `next` keeps `instruction` and `template` when the template is `CriterionRevision`.
-4. **Stop.** A step calls `io.run.stop(reason, code, detail)`. The throw ends the phase. The first stop wins, as in `ExecutionRun.halt` today. For a stop that is not `revoked`, the runner first aborts the agent. When the chain reached the end of `prepare`, it runs the `onStop` nodes. It then always runs `execution.release(stop)` (`releaseStop`). An `onStop` failure logs `checkpoint failed` and does not replace the stop. For `revoked`, the runner runs no `onStop` node and ends the execution. `ClaimWatch` calls `run.revoke()`. This sets the stop and cancels `operationContext`. The running step sees an aborted `io.context`. The runner reads the stored stop and ends with `revoked`.
-   4a. **Requested stop.** A stop order (`human_paused`, `instance_archived`) and a unit stop (`worker_stopped`) cancel the joined `stop` context with an `ExecutionStop`. The runner adopts that abort reason through `run.stopOf` as the stop. It wins over the code of the step that it aborted, because `ExecutionRun.halt` reads the requested stop first. The `ClaimWatch` ends, `onStop` runs as in rule 4, and `execution.release(stop)` carries the ordered reason. The Scheduler accepts it, because the stop order exists. One test per reason proves the release reason. A stop order with reason `revoked` (D4) is not a requested stop: it calls `run.revoke()`, and rule 4 applies.
+4. **Stop.** A `Step` calls `io.run.stop(reason, code, detail)`, and the throw ends the phase. A `TasksStep` returns the result kind `stop`. The walker then ends the `tasks` function with `TasksEnd` kind `stop`, and the host stores that stop with `ExecutionRun.halt`. The first stop wins, as in `ExecutionRun.halt` today: a stored stop wins over a returned stop. For a stop that is not `revoked`, the runner first aborts the agent. When the chain reached the end of `prepare`, it runs the `onStop` nodes. It then always runs `execution.release(stop)` (`releaseStop`). An `onStop` failure logs `checkpoint failed` and does not replace the stop. For `revoked`, the runner runs no `onStop` node and ends the execution. `ClaimWatch` calls `run.revoke()`. This sets the stop and cancels `operationContext`. The running step sees an aborted `io.context`. A `tasks` function returns `cancelled` on an abort of `input.cancel`. The runner reads the stored stop and ends with `revoked`.
+   4a. **Requested stop.** A stop order (`human_paused`, `instance_archived`) and a unit stop (`worker_stopped`) cancel the joined `stop` context with an `ExecutionStop`. The runner adopts that abort reason through `run.stopOf` as the stop. It wins over the code of the step that it aborted, because `ExecutionRun.halt` reads the requested stop first. The `ClaimWatch` ends, `onStop` runs as in rule 4, and `execution.release(stop)` carries the ordered reason. The Scheduler accepts it, because the stop order exists. One test per reason proves the release reason. A stop order with reason `revoked` (D4) is not a requested stop: it calls `run.revoke()`, and rule 4 applies. Inside `tasks`, the tasks engine sees only the abort of `input.cancel` and returns `cancelled`; the host applies this rule.
 5. **Budget end.** A step returns `budget_end`, or the `NativeAgent` turn call returns the budget end before the send when `budget.exhausted()` holds; each LLM step maps it. `conflict.turn` maps it to `next` (S14). A step can throw `ContextCancelled` or `DeadlineExceeded` while `budget.exhausted()` holds and `operationContext` is not aborted. `stopMapped` maps that throw to the budget end, as `endedByBudget` and `endedByBudgetExhaustion` do today. `stopMapped` wraps every step of every chain. Kept: the mapping in `affected.run(evaluation)`, `judgement`, and in `env.setup(examine)`, `inputs.read(dependencies)`, `agent.open`, `verify.node` and `examine.turn` of examine. New: the mapping in `inputs.read(revision)` and `workspace.review(base)` of examine, and in every other step of implement and evaluation. The `onExit` nodes are the `nodes` of `Chain.budgetEnd` with `kind: exit`. `Chain.budgetEnd` decides the result:
    - `implement`: before the end of `prepare`, the stop `budget_end/wall_time`. From the end of `prepare`, the exit runs the `onExit` nodes.
    - `examine`: before the end of `prepare`, the stop `budget_end/wall_time`. From the end of `prepare`, the exit nodes release with `further_work: true` and the stop `budget_end/<limit>`.
    - `evaluation`: the stop `assessment_absent`, as `endedByBudget` does today.
 
+   A `tasks` function returns `TasksEnd` kind `budget_end` with its result. The host applies `Chain.budgetEnd` to it. Inside `tasks`, the walker maps a thrown `ContextCancelled` or `DeadlineExceeded` to `budget_end` when `input.budget.exhausted()` holds and `input.cancel` is not aborted.
+
    For `kind: exit`, a budget end before the end of `prepare` is the stop `budget_end/wall_time` in every chain. A step that returns `budget_end` from the wall deadline calls `budget.wallDeadlineReached()` first, so `budget.limit()` holds at the release.
 
-6. **Parallel group.** The runner gives each branch a child `CancellationContext` and awaits all branches with `Promise.allSettled`. When one branch stops, the runner aborts its siblings. The first stop in time wins, because `run.stop` stores it. A step that must name one code for several branches collects the branch results first, then calls `run.stop` once. Gate G does this for its violations. When one branch returns `budget_end`, the runner aborts its siblings, awaits all branches, merges the patch of each branch that ended with `next`, and then takes the exit. A stop of a sibling before the abort wins over the exit.
-7. **Telemetry.** `runStep` opens `worker.step` with `kanthord.step.id` and `kanthord.step.outcome`: `next`, `budget_end` or `stop`. The span holds no error text and no stop detail. The runner opens a phase span for each phase. A loop frame with a `span` hook opens its span at frame start; its `end` hook returns the attributes and runs the frame release at frame end. `worker.task`, `worker.release_gate` and `worker.evaluation` use the loop frame hooks. The `end` hook of the `evaluation` loop takes `kanthord.evaluation.*` from `judgement`; the outcome `stop` or `budget_end` ends the span with `Error`. The spans of `assessment.submit` and `execution.release` end before the server call (S37, S41). These `worker.step` spans end with the outcome `next`, or `stop` in `onStop`; the answer of the call changes no span. Every current span and attribute stays with the owning step of section 5.6. `worker.step` nests under the enclosing `worker.task` or `worker.phase` span. An `agent.turn` span becomes a child of the `worker.step` span of its LLM step. The runner gives each branch of a parallel group, and each per-checkout task inside a step, its own span scope. The parent of that scope is the span that is open when the group starts. A span of one branch never becomes the parent of a span of another branch. The runner opens one `worker.phase` span with `kanthord.phase` `on_exit` or `on_stop` around the nodes of `onExit` and `onStop`.
-8. **Resources.** A step that takes a tree, a base head or an agent session calls `io.resources.defer(...)`. A loop frame with an `end` hook registers a release that runs at the frame end. The host disposes the stack once at every end: after `runChain` returns, and after each end before `runChain` (section 5.4). The stack runs in reverse order of registration. This replaces the `finally` blocks of `runStepsImplement` and `runEvaluation`.
-9. **Composition.** A chain file lists phases and steps with the builder. A step file holds one step. A test runs one step with a fake `StepIo` and a context slice. A golden test prints each built chain in the notation of section 4. The golden test also asserts the set of log messages of section 3 (`Logs:` of each step).
+6. **Parallel group.** The runner gives each branch a child `CancellationContext` and awaits all branches with `Promise.allSettled`. When one branch stops, the runner aborts its siblings. The first stop in time wins: `run.stop` stores it, and the walker of a `tasks` function keeps the first returned stop. A step that must name one code for several branches collects the branch results first, then raises one stop. Gate G does this for its violations. When one branch returns `budget_end`, the runner aborts its siblings, awaits all branches, merges the patch of each branch that ended with `next`, and then takes the exit. A stop of a sibling before the abort wins over the exit.
+7. **Telemetry.** `runStep` opens `worker.step` with `kanthord.step.id` and `kanthord.step.outcome`: `next`, `budget_end` or `stop`. The span holds no error text and no stop detail. The runner opens a phase span for each phase. A loop frame with a `span` hook opens its span at frame start; its `end` hook returns the attributes and runs the frame release at frame end. `worker.task`, `worker.release_gate` and `worker.evaluation` use the loop frame hooks. The `end` hook of the `evaluation` loop takes `kanthord.evaluation.*` from `judgement`; the outcome `stop` or `budget_end` ends the span with `Error`. The spans of `assessment.submit` and `execution.release` end before the server call (S37, S41). These `worker.step` spans end with the outcome `next`, or `stop` in `onStop`; the answer of the call changes no span. Every current span and attribute stays with the owning step of section 5.6. `worker.step` nests under the enclosing `worker.task` or `worker.phase` span. An `agent.turn` span becomes a child of the `worker.step` span of its LLM step. The runner gives each branch of a parallel group, and each per-checkout task inside a step, its own span scope. The parent of that scope is the span that is open when the group starts. A span of one branch never becomes the parent of a span of another branch. The runner opens one `worker.phase` span with `kanthord.phase` `on_exit` or `on_stop` around the nodes of `onExit` and `onStop`. A `TasksStep` writes its spans through the port `telemetry`. The host gives that port the open `worker.phase` span as the parent scope.
+8. **Resources.** A `Step` that takes a tree, a base head or an agent session calls `io.resources.defer(...)`. A loop frame with an `end` hook registers a release that runs at the frame end. The host disposes the stack once at every end: after `runChain` returns, and after each end before `runChain` (section 5.4). The stack runs in reverse order of registration. This replaces the `finally` blocks of `runStepsImplement` and `runEvaluation`. A `TasksStep` registers no resource. A port that makes a resource registers the release on the dispose stack of the host.
+9. **Composition.** A chain file lists phases and steps with the builder. A step file holds one step. A test runs one `Step` with a fake `StepIo`, or one `TasksStep` with fake ports, and a context slice. A golden test prints each built chain in the notation of section 4. The golden test also asserts the set of log messages of section 3 (`Logs:` of each step). The golden file prints `port:` for each `TasksStep` that calls a port.
 10. **Deadline.** The runner builds `io.context` and `io.deadline` from `Step.deadline`:
     - `work`: `io.context` is `operationContext`, bounded by `expired_at`. `io.deadline` is `budget.wallDeadline()`. Shell and git runners read `io.deadline`. An LLM step takes its deadline from the agent context of the budget.
     - `cleanup`: a fresh context bounded by `expired_at`. In phases and in `onExit`, it is `budget.cleanupContext(operationContext)`. In `onStop`, it is `run.cleanupContext()`, because the stop already cancelled `operationContext`.
     - Report (`worker.credential`): a context bounded by `expired_at` that a stop does not cancel. The lease joins that context with the signal of the session.
 
-    `gate.g`, `checkpoint.gate`, `markers.check`, `branch.push`, `assessment.submit` and `execution.release` are `cleanup` steps. `assessment.submit`, `execution.release` and `execution.release(stop)` are the final steps. The restore sequence inside `verify.own` and `env.setup(live)` runs under the cleanup deadline. `base.merge`, `base.fetch` and `release_trees.prepare` are `work` steps. Every other step is a `work` step. Kept: `run.call` uses `operationContext`, so `expired_at` bounds each server call of a step of either kind, not the wall deadline. After a stop, `run.call` throws the stored stop, so no `onStop` node uses `run.call`.
+    `gate.g`, `checkpoint.gate`, `markers.check`, `branch.push`, `assessment.submit` and `execution.release` are `cleanup` steps. `assessment.submit`, `execution.release` and `execution.release(stop)` are the final steps. The restore sequence inside `verify.own` and `env.setup(live)` runs under the cleanup deadline. `base.merge`, `base.fetch` and `release_trees.prepare` are `work` steps. Every other step is a `work` step. Kept: `run.call` uses `operationContext`, so `expired_at` bounds each server call of a step of either kind, not the wall deadline. After a stop, `run.call` throws the stored stop, so no `onStop` node uses `run.call`. A `tasks` function builds the `work` context from `input.cancel`. It builds the `cleanup` context from `input.budget.cleanupContext(input.cancel)`, bounded by `claim.expired_at`. A worker port bounds each call by `operationContext` and by the context that the step gives; the call ends when either aborts.
 
-11. **`runPhase`.** `runPhase` seeds the context with `seed.keys`, then runs the nodes of the named phase with the loop rules. It shares the node walker and the loop rules with `runChain`. `runPhase` applies the runner defaults of rule 1 for a key that the seed lacks. It starts no `claim.watch`. On a stop it aborts the agent. It runs no `onExit` node, no `onStop` node and no final step, so it makes no checkpoint commit and no push. After the end, the caller disposes `io.resources` and sends no server call. When `options.until` names a loop id, the walker ends with `completed` on entering that loop. The `--skip-release-gate` option sets `until` to `release_gate`.
+11. **`runPhase`.** `runPhase` runs the chain `tasks_prepare`. It seeds the context with `seed.keys`, then runs the nodes of the named phase with the loop rules. It shares the node walker and the loop rules with `runChain` and with the `tasks` functions. `runPhase` applies the runner defaults of rule 1 for a key that the seed lacks. It starts no `claim.watch`. On a stop it aborts the agent. It runs no `onExit` node, no `onStop` node and no final step, so it makes no checkpoint commit and no push. After the end, the caller disposes `io.resources` and sends no server call. When `input.until` of a `tasks` function names a loop id, the walker ends with `completed` on entering that loop. The `--skip-release-gate` option sets `until` to `release_gate`. The worker gives `until: null`.
 
-The node walker runs each step through `runStep`: opens `worker.step`, runs the step, and applies the `stopMapped` mapping. `stopMapped` maps `ContextCancelled` and `DeadlineExceeded` to the chain budget end when `budget.exhausted()` holds and `operationContext` is not aborted (rule 5). It maps an abort with an `ExecutionStop` reason to that stop (rule 4a). It maps every other unknown error to `run.stopOf`.
+The node walker runs each step through `runStep`: opens `worker.step`, runs the step, and applies the `stopMapped` mapping. `stopMapped` maps `ContextCancelled` and `DeadlineExceeded` to the chain budget end when `budget.exhausted()` holds and `operationContext` is not aborted (rule 5). It maps an abort with an `ExecutionStop` reason to that stop (rule 4a). It maps every other unknown error to `run.stopOf`. `stopMapped` runs on the host side. The walker of a `tasks` function catches a throw and returns `TasksEnd` kind `failed` with the error and the result. The host merges the result, then maps the error: the worker with `run.stopOf`, the CLI with the mapping of section 5.7.
+
+### The tasks engine (D32)
+
+The tasks engine is one function per chain. One call runs the whole `tasks` phase of section 4, with the rework rounds inside. No step of `tasks` moves to another phase. Each side effect of a step is a call of a host tool, at the same place in the step.
+
+| Term          | Meaning                                                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| tasks engine  | The `tasks` function of a chain and the steps that it runs.                                                         |
+| tasks host    | The code that calls a `tasks` function: the worker host (`runChain`) or the CLI host (`kanthord worker tasks run`). |
+| host tool     | An agent tool or an engine port. The tasks engine makes a side effect only through a host tool.                     |
+| agent tool    | A pi tool that the model calls in a turn (`evidence-upload`, `link_update_list`). The tasks engine never calls it.  |
+| engine port   | A typed function of the tasks host that step code calls outside a model turn.                                       |
+| capability    | One pi extension factory (`InlineExtension`) of the tasks host that registers agent tools or MCP servers.           |
+| guard         | A pi extension factory that `agentPort` adds to each session that it opens.                                         |
+| host resource | A long-running object of the tasks host that runs beside `tasks`: `claim.watch`, `credential.store`, `ssh.access`.  |
+| side effect   | A call to a kanthord server, a git remote, a tree pool, the credential custody or an LLM provider.                  |
+
+```ts
+type PortResult<T> =
+  | { kind: "ok"; value: T }
+  | { kind: "failed"; code: string | null; message: string };
+
+interface EvidencePort {
+  submit(
+    draft: EvidenceDraft,
+    context: CancellationContext,
+    options: { halt: boolean },
+  ): Promise<PortResult<EvidenceId>>;
+}
+
+interface UnitRecordPort {
+  put(
+    record: UnitRecordDraft,
+    context: CancellationContext,
+  ): Promise<PortResult<null>>;
+}
+
+interface RepositoryPort {
+  fetchBase(
+    checkout: CheckoutRef,
+    context: CancellationContext,
+    deadline: number,
+  ): Promise<PortResult<null>>;
+}
+
+interface ReleaseTreePort {
+  take(
+    checkout: CheckoutRef,
+    head: Commit,
+    context: CancellationContext,
+    deadline: number,
+  ): Promise<PortResult<CommandTree>>;
+  give(tree: CommandTree): Promise<void>;
+}
+
+interface AgentPort {
+  open(
+    request: AgentOpenRequest,
+    context: CancellationContext,
+  ): Promise<PortResult<AgentSession>>;
+}
+
+interface AgentOpenRequest {
+  claim: MethodClaim;
+  setup: ExecutionSetup;
+  checkouts: readonly CheckoutRef[];
+  reviewWorkspace: ReviewWorkspace | null;
+}
+
+interface AgentSession {
+  turn(request: TurnRequest, context: CancellationContext): Promise<TurnEnd>;
+  lastText(): string | undefined;
+  close(): Promise<void>;
+}
+
+interface SecretPort {
+  redact(text: string): Promise<string | null>;
+}
+
+interface LogPort {
+  log(message: string, fields: LogFields): void;
+}
+
+interface CommonPorts {
+  telemetry: SpanRecorder;
+  secrets: SecretPort;
+  log: LogPort;
+}
+
+interface TasksHost<P extends CommonPorts> {
+  capabilities: readonly InlineExtension[];
+  ports: P;
+}
+
+interface ImplementPorts extends CommonPorts {
+  evidence: EvidencePort;
+  unitRecords: UnitRecordPort;
+  repository: RepositoryPort;
+  releaseTrees: ReleaseTreePort;
+}
+
+interface EvaluationPorts extends CommonPorts {
+  evidence: EvidencePort;
+  agent: AgentPort;
+}
+
+interface ExaminePorts extends CommonPorts {
+  evidence: EvidencePort;
+  agent: AgentPort;
+}
+
+interface TasksControl {
+  cancel: CancellationContext;
+  budget: ExecutionBudget;
+  until: string | null;
+  env: Readonly<Record<string, string>>;
+}
+
+interface ImplementInput extends TasksControl {
+  claim: MethodClaim;
+  setup: ExecutionSetup;
+  revision: Revision;
+  checkouts: readonly CheckoutRef[];
+  heads: ReadonlyMap<BindingId, Commit>;
+  gitPaths: ReadonlyMap<BindingId, OperationPaths>;
+  setupEntries: readonly SetupEntry[];
+  baseHead: BaseHead | null;
+  affectedTests: readonly AffectedTest[];
+  plan: UnitPlan;
+  setupPending: boolean;
+  setupInstruction: string | null;
+  progress: ProgressCtx;
+  agent: AgentSession;
+}
+
+interface EvaluationInput extends TasksControl {
+  claim: MethodClaim;
+  setup: ExecutionSetup;
+  revision: Revision;
+  checkouts: readonly CheckoutRef[];
+  heads: ReadonlyMap<BindingId, Commit>;
+  baseHead: BaseHead | null;
+  commandTrees: CommandTrees;
+  setupFailure: SetupFailure | null;
+  reviewWorkspace: ReviewWorkspace;
+  placedAssets: readonly PlacedAsset[];
+  reviewRound: ReviewRound;
+  dependencies: DependencyRead;
+}
+
+interface ExamineInput extends TasksControl {
+  claim: MethodClaim;
+  setup: ExecutionSetup;
+  revision: Revision;
+  checkouts: readonly CheckoutRef[];
+  heads: ReadonlyMap<BindingId, Commit>;
+  dependencies: DependencyRead;
+}
+
+interface ImplementResult {
+  heads: ReadonlyMap<BindingId, Commit>;
+  currentUnit: TaskContent | null;
+  openMerge: ConflictMerge | null;
+  completedUnits: number;
+  route: ReleaseRoute | null;
+  progress: ProgressCtx;
+}
+
+interface EvaluationResult {
+  verification: VerificationRun | null;
+  affected: AffectedStep | null;
+  evidenceIds: readonly EvidenceId[];
+  judgement: Judgement | null;
+}
+
+interface ExamineResult {
+  verification: VerificationRun | null;
+}
+
+type TasksEnd<R> =
+  | { kind: "completed"; result: R; verificationTimedOut: boolean }
+  | { kind: "budget_end"; result: R; verificationTimedOut: boolean }
+  | {
+      kind: "stop";
+      stop: ExecutionStop;
+      result: R;
+      verificationTimedOut: boolean;
+    }
+  | { kind: "cancelled"; result: R; verificationTimedOut: boolean }
+  | {
+      kind: "failed";
+      error: unknown;
+      result: R;
+      verificationTimedOut: boolean;
+    };
+
+declare function tasksImplement(
+  input: ImplementInput,
+  host: TasksHost<ImplementPorts>,
+): Promise<TasksEnd<ImplementResult>>;
+declare function tasksEvaluation(
+  input: EvaluationInput,
+  host: TasksHost<EvaluationPorts>,
+): Promise<TasksEnd<EvaluationResult>>;
+declare function tasksExamine(
+  input: ExamineInput,
+  host: TasksHost<ExaminePorts>,
+): Promise<TasksEnd<ExamineResult>>;
+```
+
+`EvidenceDraft` is the body of `mission.evidence.submit` with no execution identity and no idempotency key. `UnitRecordDraft` is `{ unit_id, content_digest, commits }` (section 5.1). `NativeAgent` implements `AgentSession`. `env` is the environment of each child process, which the tasks host already filtered.
+
+The interfaces `EvidencePort`, `UnitRecordPort`, `RepositoryPort` and `AgentPort` answer `PortResult`. `ReleaseTreePort.take` answers `PortResult` too. Four port functions do not: `releaseTrees.give` answers nothing, `secrets.redact` answers the text or `null`, `telemetry` is a `SpanRecorder`, and `log` answers nothing.
+
+Each input key is a context key that a step of the phase reads before a writer inside the phase. Each result key has a reader after the call: `finish`, `onExit` or `onStop` of the worker host, or the output folder of the CLI host. The CLI output is the only reader of `route` and `progress` of implement, and of `verification` and `affected` of evaluation and examine.
+
+Who prepares the input:
+
+| Part                                                                                    | Human or harness (CLI host)                                                                        | Worker host                                                           |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `claim`, `setup`, `revision`, `heads`                                                   | `seed.json`, written by hand or exported with `worker tasks seed`                                  | `credentials.handover`, `setup.read`, `inputs.read`, `workspace.node` |
+| `checkouts`, `gitPaths`                                                                 | `--tree <binding_id>=<path>`, cloned from a bare mirror                                            | `workspace.node`                                                      |
+| `setupEntries`, `baseHead`, `affectedTests`, `plan`, `setupPending`, `setupInstruction` | `tasks_prepare`; a hand-written `plan` replaces `units.plan`                                       | `prepare` and `start`                                                 |
+| `progress`                                                                              | The runner default of rule 1                                                                       | The context at the end of `start`                                     |
+| `agent` (implement)                                                                     | `agent.open` of `tasks_prepare`, with the frozen store or the replay provider                      | `agent.open` of `prepare`                                             |
+| `cancel`                                                                                | SIGINT cancels it with `worker_stopped`                                                            | `operationContext` of `ExecutionRun`                                  |
+| `budget`                                                                                | Built from `setup.resource_budget` and the overrides                                               | Built by the host after `setup.read`                                  |
+| `env`                                                                                   | `PATH`, `LANG`, `TMPDIR`, `HOME` of the output folder and each `--pass-env` variable (section 5.7) | The `childEnvironment` result of the worker process                   |
+
+The same consumer takes the local materials after the call. The worker host runs `finish`, `onExit` or `onStop` on `TasksEnd`. The CLI host writes the output folder of section 5.7.
+
+Rules of the tasks engine:
+
+1. **No construction.** No file of the tasks engine imports a transport, a client constructor, `MethodClients`, `ExecutionRun`, the credential store, the custody contract, the tree pool or `hostToolsOf`. A module test asserts this.
+2. **No host knowledge.** No step of the tasks engine holds placement logic. No step reads which tasks host runs it.
+3. **Port result.** A port answers `ok`, or `failed` with a code or `null`. The tasks engine maps `failed` to the stop of the step: `operation_failed/<code>`, or `operation_failed` with no code for `null`. Two calls are log-only: `unitRecords.put` logs `unit record failed` (D10), and the conflict report of `markers.check` logs `conflict report failed` (D23). A port never throws a stop of the host.
+4. **Port ownership.** The tasks host owns the retry, the idempotency key, the execution proof and the `expired_at` bound of each port call. The D28 retry thus lives in the worker port.
+5. **Execution end.** When a port call or an agent tool call gets an execution-end answer, the tasks host cancels `input.cancel`. The port answers `failed`. The tasks engine checks `input.cancel` before it logs or maps a `failed` answer; on an abort, it writes no log and returns `cancelled`.
+6. **Stops are values.** A step returns its stop (rule 4 of the runner). The worker host stores it with `ExecutionRun.halt`, so the first stop still wins.
+7. **Stored stop.** In the worker, a failed `run.call` stores the stop and cancels `operationContext`. The worker port then answers `failed`. The worker host takes the stored stop, not the stop that the tasks engine maps from `failed`. One test per final stop reason proves it. A call with `halt: false` uses the no-halt call of section 5.1: it stores no stop and cancels nothing.
+8. **Cancellation.** On an abort of `input.cancel`, the running step ends: `AgentSession.turn` aborts, the verification runner kills its command, and each port call gets the cancelled context. The tasks engine returns `cancelled` with the result of the last completed step. It does not know the reason.
+9. **Local work.** The tasks engine runs local `git` on the given trees, and it runs the commands of the revision as child processes. Every `git` child runs with `isolatedGitEnvironment` and no `SSH_AUTH_SOCK`. A child process is no resource of the tasks host. Each child process gets `input.env`; the tasks engine never reads `process.env`.
+10. **No state between calls.** The tasks engine keeps no module variable. `memo` is a plain object that one call makes and drops.
+11. **`budget` and `cancel` are input, not ports.** `ExecutionBudget` holds counters and a clock and makes no call. The tasks engine reads the time only through `budget`. It reads only the abort of `cancel`.
+12. **Session.** `agent` of implement is input, because the conflict turn of `start` needs the session before `tasks` (D18, D20). `tasksImplement` gets no `agent.open` port. Evaluation and examine open their session through `agent.open`.
+13. **Rounds.** The rework rounds stay inside one call. The tasks host does no work between two rounds; it only serves the port calls and the agent tool calls. The progress counter and the session carry from round to round.
+14. **Shared steps.** A step that runs in `tasks` and in a host phase is one `TasksStep`. `prepare` and `start` stay host phases. `runChain` gives such a step the port set of the worker host and stores its returned stop with `ExecutionRun.halt`. `runPhase` gives it the port set of the CLI host, so `tasks_prepare` has the ports `log`, `secrets`, `telemetry` and `agent`.
+15. **Serialized input.** A serialized input follows the seed rules of section 5.7. It holds no credential, no SSH identity, no handover key, no `containerEnv` and no `remoteEnv`.
+16. **Unknown error.** The walker of a `tasks` function catches a throw. It returns `TasksEnd` kind `failed` with the error and the result of the last completed step. The tasks engine gives the error no stop reason. The tasks host merges the result, then maps the error: the worker host with `run.stopOf`, the CLI host with the mapping of section 5.7.
+17. **Redaction.** A `TasksStep` that puts tool output or git output into a stop detail or a log redacts it through `secrets.redact` first.
+18. **Logs.** A `TasksStep` writes each log message of section 3 through the port `log`.
+
+Port implementations:
+
+| Port                   | Worker host                                                                                                                                               | CLI host                                                                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `evidence.submit`      | `mission.evidence.submit` through `run.call` with the D28 retry. With `halt: false`, it uses the no-halt call of section 5.1.                             | Appends the draft to `outbox.json` and copies each asset to `uploads/`. Answers a synthetic identity whose ULID encodes the call position. |
+| `unitRecords.put`      | `worker.execution.unit_record.put` through the no-halt call of section 5.1. An execution-end answer calls `run.revoke()`; the port then answers `failed`. | Appends the record to `outbox.json`. Answers `ok`.                                                                                         |
+| `repository.fetchBase` | `transport.fetchBase` with the signer of `ssh.access` for the binding, inside `worker.git` with the git step mark `fetch_base`.                           | `git fetch --prune origin` from the mirror `state/origin/<binding_id>.git`. It holds no signer.                                            |
+| `releaseTrees.take`    | Command pool take, else `clonePacked` from the live checkout.                                                                                             | `clonePacked` to `state/release/<binding_id>/`, with no pool.                                                                              |
+| `releaseTrees.give`    | Gives the tree back to the Command pool and removes the release directory.                                                                                | Removes the directory.                                                                                                                     |
+| `agent.open`           | `agentPort` of section 5.5 over the custody model runtime and the telemetry trace. It registers the close on the dispose stack of the host.               | `agentPort` over the frozen store or the replay provider, and the `spans.jsonl` trace.                                                     |
+| `telemetry`            | `SpanRecorder` over the telemetry sink of the execution.                                                                                                  | `SpanRecorder` over a sink that writes `spans.jsonl`.                                                                                      |
+| `secrets.redact`       | `run.reasonOf` with the secret list of the execution (D14).                                                                                               | Redaction over the standard-input credential and each `--pass-env` value.                                                                  |
+| `log`                  | `run.log` of the execution.                                                                                                                               | The log of the command.                                                                                                                    |
+
+The LLM provider call, the credential lease and the turn telemetry need no port. pi owns them behind `AgentSession`: `session.prompt()`, the `ModelRuntime` of the host and `session.subscribe()`.
 
 ## 3. Step catalogue
 
 Stop code notation: `<EndReason>` or `<EndReason>/<code>`. Every server step can also raise `revoked` and `operation_failed/<server code>` through `run.call`; the entries do not repeat these two. Every LLM step can raise `provider_failed/*` and a budget end. `Chain.budgetEnd` turns a budget end into an exit or a stop (section 2, rule 5). The entries write "budget end" for it.
+
+`Port:` names each engine port that a `TasksStep` calls (section 2). A `TasksStep` raises `operation_failed/<server code>` from the `failed` answer of its port. It raises `revoked` through the abort of `input.cancel`. A `TasksStep` returns each stop of its `Stops:` entry as a value. It writes each message of its `Logs:` entry through the port `log`.
 
 Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
@@ -324,7 +650,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: host function (before runChain). Chains: implement, examine, evaluation (shared).
 - Problem: open the handover envelope, build the credential store and take the SSH identities.
-- Reads: `claim`. Writes: `credentials`, the handed SSH identities.
+- Reads: `claim`. Writes: no context key. It returns the handover result and the handed SSH identities to `hostExecution`.
 - Work: server (`worker.handover`). The first handover of an attempt writes `mission_attempt.prompt_commits`. Retry `worker.handover.refresh_in_flight` until the claim expires. S43 adds each credential value to the known secrets of the run before it returns.
 - Stops: `operation_failed/worker.handover.decryption_failed`, `operation_failed/worker.handover.sealed_unopened`, `operation_failed/worker.credential.lease_mismatch`, `operation_failed/custody.handover.holder_refused`, `operation_failed/project.bindings.repository.ssh_unreachable`, `operation_failed/project.bindings.repository.base_branch_absent`.
 - Logs: `credential handover received`.
@@ -345,7 +671,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: all phases (registered after setup.read). Chains: implement, examine, evaluation (shared).
 - Problem: manage the pi auth view, the refresh lease and the credential report.
-- Reads: `credentials`. Writes: none.
+- Reads: no context key. `hostExecution` gives it the handover result. Writes: none.
 - Work: server. The pi auth view exposes only the credential of the effective agent provider at the pinned revision. A refresh takes `worker.credential.lease`, then sends `worker.credential`. A lease retry ends when the claim expires or `operationContext` aborts. No credential reaches a file, a span or a log.
 - Stops: `operation_failed/worker.credential.lease_mismatch`.
 - Parallel: runs in the background of every step.
@@ -442,7 +768,8 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: prepare (implement), tasks (examine). Chains: implement, examine (shared).
 - Problem: open the pi session with the prompt layers.
-- Reads: `claim`, `setup`, `credentials`, `checkouts`. Writes: `agent`.
+- Reads: `claim`, `setup`, `checkouts`. Writes: `agent`.
+- Port: `agent.open`. The port holds the model runtime factory of the host, and it adds the guards and the capabilities (section 5.5). In a host phase, the step takes the port from the port set of the tasks host.
 - Work: static, and the model runtime of the credential. No model call. No workspace file read (`noContextFiles`).
 - Stops: `operation_failed`.
 - Parallel: implement: member of `workspace.static`, sibling of S09 and S10. examine: sibling of S25a in `tasks.inputs`.
@@ -465,7 +792,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: start and tasks release_gate loop. Chains: implement.
 - Problem: let `swe@1` resolve the conflicts of one checkout. The first turn uses the `Conflict` template. A later turn lists the files that still hold markers (D23).
 - Reads: `agent`, `checkouts`, `heads`, `openMerge`, `claim`, `revision`, `setup`, `affectedTests`; scope (marker files of the last check). Writes: none.
-- Work: LLM (`Conflict` template).
+- Work: LLM (`Conflict` template). The turn runs on `agent`, which is `input.agent` in `tasks`. The step calls no port.
 - Stops: `provider_failed/*`. At a budget end, before the send or inside the turn, `conflict.turn` sends no further model call and returns `next`. `markers.check` then runs once more and reads `io.budget.exhausted()` (D13).
 - Parallel: none; one agent.
 - Fail-early: F3.
@@ -475,7 +802,8 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: start and tasks release_gate loop. Chains: implement.
 - Problem: decide after each conflict turn whether the merge is resolved; own the failed resolution.
 - Reads: `claim`, `checkouts`, `openMerge`; scope (marker counter of this merge, marker files and content of the last check). Writes: `openMerge` (writes `resolved: true` when no marker); scope.
-- Work: git and file reads (`conflictMarkerFiles` over the files of `openMerge`). On a failed resolution: server call then git.
+- Work: git and file reads (`conflictMarkerFiles` over the files of `openMerge`). On a failed resolution: port call then git.
+- Port: `evidence.submit` with `halt: false`, for the conflict report of a failed resolution. A `failed` answer logs `conflict report failed` and stores no stop, so `conflict_unresolved` stays the stop.
 - Deadline: `cleanup` (section 2, rule 10).
 - Rules (D23):
   - No marker: writes `openMerge` with `resolved: true`; leave the loop; `gate.g(conflict)` commits the merge.
@@ -483,8 +811,8 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
   - The first check of a merge sets the marker counter of this merge to 0. A later check that finds the same marker files with the same content as the last check adds 1. The counter is separate from the no-progress counter. At 2, the resolution fails.
   - `io.budget.exhausted()` and no marker: `markers.check` returns `budget_end`.
   - `io.budget.exhausted()` and markers left: the resolution fails.
-  - Failed resolution: submit the conflict report evidence (the cut content of each conflicted file and the list of files still holding markers; cut at a byte limit so the asset stays below 5 MiB; each cut marked; one `produced` asset, no repository asset), log `conflict report failed` on a failed submit, run `git merge --abort`, then call `run.stop` with `conflict_unresolved`.
-- Stops: `conflict_unresolved` (node `Blocked`, no failure count; `onStop` pushes `heads` first; the stop detail names the conflicted files, fitted to `STOP_DETAIL_MAX_LENGTH`; the cause is the `merge_base` git step), and through `run.call` (D28) on a failed resolution submit.
+  - Failed resolution: submit the conflict report evidence (the cut content of each conflicted file and the list of files still holding markers; cut at a byte limit so the asset stays below 5 MiB; each cut marked; one `produced` asset, no repository asset), log `conflict report failed` on a failed submit, run `git merge --abort`, then return the stop `conflict_unresolved`.
+- Stops: `conflict_unresolved` (node `Blocked`, no failure count; `onStop` pushes `heads` first; the stop detail names the conflicted files, fitted to `STOP_DETAIL_MAX_LENGTH`; the cause is the `merge_base` git step). The worker port holds the D28 retry of the submit.
 - Parallel: none. Fail-early: F1 for the check; F4 for a failed resolution submit.
 
 ### S15 `units.plan`
@@ -524,7 +852,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: tasks. Chains: implement.
 - Problem: run one Work, TaskRevision or CriterionRevision turn for the current unit.
 - Reads: `agent`, `revision`, `checkouts`, `affectedTests`, `setup`, `claim`; scope `UnitCtx`. Writes: none.
-- Work: LLM.
+- Work: LLM. The turn runs on `agent`, which is `input.agent`. The model calls the agent tools `evidence-upload` and `link_update_list` of the host capabilities (section 5.5). The step calls no port.
 - Stops: `provider_failed/*`, budget end.
 - Parallel: none.
 - Fail-early: F3.
@@ -535,10 +863,11 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Problem: check the turn for violations and commit it as the only author. In conflict mode, returns `next` with no git process and no `worker.gate` span when `openMerge` is null.
 - Reads: `checkouts`, `heads`, `gitPaths`, `openMerge` (conflict and checkpoint modes), `progress`; scope. Writes: `heads`, `openMerge`; scope (`commits`, `changed`). Conflict mode in the release_gate loop also writes `progress` (`unchangedTurns = 0`). Write mode writes no `progress`.
 - Work: git (section 5.3). Deadline: `cleanup` (section 2, rule 10). Conflict mode runs only after `markers.check` found no marker.
+- Port: `secrets.redact`, for the violation detail, before the log `turn violation` and before the stop.
 - Hygiene: after each gate with no violation, `removeRootEntries` removes each entry of the workspace root other than the checkouts and `.kanthord-scratch/` (several checkouts only).
 - Stops: `operation_failed/worker.turn.branch_changed`, `.../worker.turn.history_rewritten`, `.../worker.turn.foreign_merge`, `.../worker.turn.merge_missing`, `.../worker.turn.git_in_progress`, `operation_failed/worker.git.commit_failed`.
 - Logs: `turn violation`, `root entries removed`, `task committed` after each write-mode gate of a task unit or node unit.
-- Parallel: per checkout (D7), with a barrier: all checks end before the first restore or commit. On several violations, the lowest checkout index names the code, and the gate calls `run.stop` once.
+- Parallel: per checkout (D7), with a barrier: all checks end before the first restore or commit. On several violations, the lowest checkout index names the code, and the gate returns one stop.
 - Fail-early: F1, directly after each agent turn.
 
 ### S21 `verify.own` (loop step)
@@ -550,7 +879,8 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Before a pass, a failure, a stop or a budget-end exit, `verify.own` runs the restore sequence of section 5.3 to `heads` on each checkout, then `removeRootEntries`, under the cleanup deadline, as S11 states for `env.setup(live)`.
 - Stops: `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent`, `operation_failed` (restore invariant failure), `no_progress` (detail per D14; at a count of 2, or with rule `verdict_rule_unmet` when the verification fails after a verdict-rule waiver; the stop ends the `worker.task` span with the `kanthord.stop.*` attributes), budget end.
 - Logs: `verdict rule checked`, `verdict rule waived for review`, `task verified` (every unit), `root entries removed`.
-- Run state: calls `run.noteVerification(timed_out of the last result)`; the stop cause reads it.
+- Port: `secrets.redact`, for `agent_reason` of the `no_progress` detail (D14). A `null` answer gives a detail with no `agent_reason`.
+- Run state: sets `verificationTimedOut` of `TasksEnd` to `timed_out` of the last result. The host calls `run.noteVerification` with it; the stop cause reads it.
 - Parallel: commands serial.
 - Fail-early: F2.
 
@@ -559,8 +889,9 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: tasks. Chains: implement.
 - Problem: record that the unit passed at the commits of its run.
 - Reads: `claim`, `heads`, `plan`; scope (`commits`). Writes: `completedUnits`; scope.
-- Work: server (`worker.execution.unit_record.put`). It runs only for a task unit, or for the node unit of a node with no task (section 5.1). On each pass, it adds one to `completedUnits` when the unit is the verdict unit, or when a checkout head is in `commits` and `plan` holds no valid record of the unit. The put runs only for a task unit or for a unit of a node with no task. With no eligible head, it logs `unit record skipped`.
-- Stops: `revoked` only. Another failure logs `unit record failed`, and the unit counts as not recorded (D10).
+- Port: `unitRecords.put`. The worker port sends `worker.execution.unit_record.put`.
+- Work: port call. It runs only for a task unit, or for the node unit of a node with no task (section 5.1). On each pass, it adds one to `completedUnits` when the unit is the verdict unit, or when a checkout head is in `commits` and `plan` holds no valid record of the unit. The put runs only for a task unit or for a unit of a node with no task. With no eligible head, it logs `unit record skipped`.
+- Stops: `revoked` only, through the abort of `input.cancel` after an execution-end answer. The step checks `input.cancel` before the log: on an abort, it writes no log. Any other `failed` answer logs `unit record failed`, and the unit counts as not recorded (D10).
 - Logs: `unit recorded`, `unit record skipped`, `unit record failed` (replace `done recorded` and `done record skipped`).
 - Parallel: none.
 - Fail-early: F4.
@@ -569,8 +900,9 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: tasks release_gate loop. Chains: implement.
 - Problem: fetch `base_branch` and `upstream_branch` of each checkout before the release merge.
-- Reads: `checkouts`, `setup`, `sshAccess`. Writes: none.
-- Work: network git (`transport.fetchBase`), inside `worker.git` with the git step mark `fetch_base`, which gives the stop cause. Deadline: `work`; a thrown deadline with an exhausted budget gives the budget-end exit (rule 5).
+- Reads: `checkouts`, `setup`. Writes: none.
+- Port: `repository.fetchBase`. The worker port calls `transport.fetchBase`. The signer stays behind the port, and the step reads no `sshAccess`.
+- Work: network git in the port, inside `worker.git` with the git step mark `fetch_base`, which gives the stop cause. Deadline: `work`; a thrown deadline with an exhausted budget gives the budget-end exit (rule 5).
 - Stops: `operation_failed/repository.connector.git_failed`.
 - Parallel: per checkout (D7). One `git fetch --prune origin` per checkout, then one `git rev-parse origin/<branch>` for each merged branch.
 - Fail-early: F1.
@@ -580,9 +912,10 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: tasks release_gate loop. Chains: implement.
 - Problem: give each binding a clean Command tree at the head.
 - Reads: `checkouts`, `heads`. Writes: `commandTrees`.
-- Work: git (pool take or `clonePacked` from the live checkout). Deadline: `work`; a thrown deadline with an exhausted budget gives the budget-end exit (rule 5).
+- Port: `releaseTrees.take` and `releaseTrees.give`. The worker port does the pool take, `clonePacked` and the pool give.
+- Work: git in the port (pool take or `clonePacked` from the live checkout). Deadline: `work`; a thrown deadline with an exhausted budget gives the budget-end exit (rule 5).
 - Stops: `operation_failed` with no code.
-- Give: at the end of each `release_gate` loop frame, on a pass, a route, a budget-end exit and a stop, the loop frame `end` hook gives each release tree back to the Command pool and removes the release directory. The dispose stack holds the give only as the fallback. A leftover release tree goes back at the next `workspace.node` (S06).
+- Give: at the end of each `release_gate` loop frame, on a pass, a route, a budget-end exit and a stop, the loop frame `end` hook calls `releaseTrees.give` for each release tree. The worker port gives the tree back to the Command pool and removes the release directory. The dispose stack of the host holds the give only as the fallback. A leftover release tree goes back at the next `workspace.node` (S06).
 - Logs: `tree prepared`.
 - Parallel: per checkout.
 - Fail-early: F1.
@@ -595,7 +928,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Work: shell. Skipped after a setup failure in the release gate only; `verify.all(evaluation)` always runs. Each command runs with `childEnvironment` and with no SSH agent socket, so its output holds no credential of the execution.
 - Stops (release only): `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent`, budget end.
 - Logs: `verification flaky` (release only).
-- Run state: calls `run.noteVerification(timed_out of the last result)`; the stop cause reads it.
+- Run state: sets `verificationTimedOut` of `TasksEnd` to `timed_out` of the last result. The host calls `run.noteVerification` with it; the stop cause reads it.
 - Parallel: commands serial, in plan order (D11).
 - Fail-early: F2.
 
@@ -606,7 +939,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Reads: `claim`, `setup`, `revision`, `checkouts`, `heads`. Writes: `verification` (`VerificationRun | null`; null when no checkout exists). S39 reads `verification.verification`.
 - Work: shell. Only the node commands (`revision.content.verifications`), in the examine workspace directory. No flaky rerun, no copy, no baseline. The shared runner reruns an infrastructure-class command once; the second result goes into `verification`. The step skips the run when the workspace has no checkout (`tested_input` is null). Each command runs with `childEnvironment` and with no SSH agent socket, so its output holds no credential of the execution.
 - Stops: none extra. A failed, absent or timed-out command goes into `verification` and does not stop the examine. A command that the wall deadline ends, or that is not started at the wall deadline (class `budget_end`), gives `budget_end`; the step reads `outcome` of `runVerificationsWithOutput` and calls `budget.wallDeadlineReached()` first.
-- Run state: calls `run.noteVerification(timed_out of the last result)`; the stop cause reads it.
+- Run state: sets `verificationTimedOut` of `TasksEnd` to `timed_out` of the last result. The host calls `run.noteVerification` with it; the stop cause reads it.
 - Parallel: commands serial; sibling of `agent.open`.
 - Fail-early: F2.
 
@@ -636,7 +969,8 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: tasks, units loop, after S23. Chains: implement.
 - Problem: submit the report of one unit as soon as the unit passes, so a budget end loses no report (D29).
 - Reads: `currentUnit`, `agent` (`agent.lastText()`, the final agent text of the unit). Writes: none.
-- Work: server. Subject `Coder report of unit <unit id>`; the verdict unit uses `Coder report of unit <node id>`; body `## <unit id> <unit name>` and the final text. Skip when the final text is empty. Stops: through `run.call` (D28). Parallel: none. Fail-early: F4.
+- Port: `evidence.submit`, for the report.
+- Work: port call. Subject `Coder report of unit <unit id>`; the verdict unit uses `Coder report of unit <node id>`; body `## <unit id> <unit name>` and the final text. Skip when the final text is empty. Stops: `operation_failed/<server code>` on a `failed` answer; the worker port holds the D28 retry. Parallel: none. Fail-early: F4.
 
 ### S29 `checkpoint.gate`
 
@@ -671,7 +1005,8 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: tasks (evaluation). Chains: evaluation.
 - Problem: submit the verification evidence, the affected evidence and the round patch evidence.
 - Reads: `verification`, `affected`, `claim`, `placedAssets`, `reviewWorkspace`, `heads`. Writes: `evidenceIds`.
-- Work: server.
+- Port: `evidence.submit`, once for each evidence.
+- Work: port calls.
 - Stops: none extra.
 - Parallel: the submits run after `affected.run`, in parallel. The patch evidence goes out before the judgement. Kept: the verification evidence also goes out before a stop of `verify.all(evaluation)`; `verify.all(evaluation)` writes the stop class into `verification`, and `judgement` raises `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent` or `assessment_absent` after `evidence.publish`. New: a stop of `affected.run(evaluation)` submits no evidence. The affected submit runs only when `affected` holds a document. The order of `evidence_ids` stays verification, affected, patches, placed. The snapshot evidence is the first entry of the placed group.
 - Fail-early: F4.
@@ -680,8 +1015,9 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 
 - Phase: tasks. Chains: evaluation.
 - Problem: get the `kanthord-judgement:` JSON line; write `criterion-not-met` with no LLM on a setup, verification or affected failure.
-- Reads: `claim`, `setup`, `revision`, `verification`, `affected`, `setupFailure`, `placedAssets`, `reviewWorkspace`, `reviewRound`, `dependencies`, `credentials`. Writes: `judgement` (never null).
-- Work: LLM (`Evaluation`, then `Repair` when needed). Order: (1) the deferred stops of `verify.all(evaluation)` and the shortcut assessment, with an early return; (2) the agent open service with the evaluation tool set and `checkoutConfinement`, registered on `io.resources`; (3) the budget check; (4) the `Evaluation` turn and one `Repair` turn. After each turn, an exhausted budget gives the budget end before the step parses the reply.
+- Reads: `claim`, `setup`, `revision`, `verification`, `affected`, `setupFailure`, `placedAssets`, `reviewWorkspace`, `reviewRound`, `dependencies`. Writes: `judgement` (never null).
+- Port: `agent.open`. The step reads no credential. The step gives `reviewWorkspace`; the port computes the roots of `checkoutConfinement`.
+- Work: LLM (`Evaluation`, then `Repair` when needed). Order: (1) the deferred stops of `verify.all(evaluation)` and the shortcut assessment, with an early return; (2) `agent.open` with the evaluation tool set and `checkoutConfinement`; the port registers the close on the dispose stack of the host; (3) the budget check; (4) the `Evaluation` turn and one `Repair` turn. After each turn, an exhausted budget gives the budget end before the step parses the reply.
 - Result: in the examine intent, a judgement with proposals gives the result `Undetermined` (`evaluation.ts:282-299`). In the implement intent, the proposals are dropped.
 - Stops: `operation_failed/worker.verification.infrastructure_failed`, `environment_failed/verification_timeout`, `environment_failed/command_absent`, `assessment_absent`, `judgement_invalid`, `provider_failed/*`, `operation_failed` (agent open), budget end.
 - Logs: `node judged`.
@@ -701,7 +1037,8 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Phase: tasks. Chains: examine.
 - Problem: get the examine assessment text; submit the Markdown report evidence.
 - Reads: `agent`, `claim`, `setup`, `revision`, `checkouts`, `verification`, `dependencies`. Writes: none.
-- Work: LLM (`Examine`). After the turn, the step builds the report with `reportFacts` and submits the evidence with the subject `Report on current dependency outcomes`. The server call is bounded by `expired_at` through `run.call`, not by the wall deadline.
+- Work: LLM (`Examine`). After the turn, the step builds the report with `reportFacts` and submits the evidence with the subject `Report on current dependency outcomes`. The worker port bounds the server call by `expired_at` through `run.call`, not by the wall deadline.
+- Port: `evidence.submit`, for the report.
 - Stops: `report_absent` on an empty last text, `provider_failed/*`, budget end, `operation_failed/<server code>` on a submit failure.
 - Budget end: a budget end inside the turn exits with `budget_end`. New: a turn that completes with a nonempty last text keeps the report, also when the budget is exhausted after the turn; the chain continues to the final step and releases with `further_work` false. New: the step keeps the report only when the last assistant message has no tool call and no abort, and the last text is nonempty. With an exhausted budget and any other end, the step returns `budget_end`. `report_absent` applies only when the budget is not exhausted.
 - Budget checks: the turn call returns the budget end before the send (rule 5). A budget end in `prepare` is the stop `budget_end/wall_time`.
@@ -737,7 +1074,7 @@ Chain selection (`runNativeExecution`). `hostExecution` calls `credentials.hando
 | `steps`                                                 | `implement` | `implement`                                    |
 | none (`claude-code@1`, an external harness declaration) | any         | no chain; stop `operation_failed` with no code |
 
-Notation: `[LLM]` marks a model call. `[PAR]` marks a parallel group. Each child of a `[PAR]` line runs at the same time: a `branch` with its own steps, or one `step`. `loop` marks a frame that repeats. `exit` and `stop` name the short-circuit edges. `[cleanup]` marks a step with the cleanup deadline (section 2, rule 10). `host` marks a host function in `hostExecution`. The runner always runs the last `onStop` node, `execution.release(stop)`.
+Notation: `[LLM]` marks a model call. `[PAR]` marks a parallel group. Each child of a `[PAR]` line runs at the same time: a `branch` with its own steps, or one `step`. `loop` marks a frame that repeats. `exit` and `stop` name the short-circuit edges. `[cleanup]` marks a step with the cleanup deadline (section 2, rule 10). `host` marks a host function in `hostExecution`. The runner always runs the last `onStop` node, `execution.release(stop)`. `port:` names each engine port that a `TasksStep` calls (section 2). The host runs each `tasks` phase as one call of the `tasks` function of the chain.
 
 ```text
 chain implement
@@ -762,34 +1099,34 @@ chain implement
       loop conflict.revisions               only when the merge conflicts; until no marker is left (D23)
         step conflict.turn                  [LLM] Conflict; later turns list the files with markers
         step markers.check                  markers left -> next turn; counter at 2, or budget end with markers left -> resolution fails; budget end with no marker -> exit budget_end
-      step gate.g(conflict)                 no marker left; commits the merge; stop worker.turn.*
+      step gate.g(conflict)                 no marker left; commits the merge; stop worker.turn.*; port: secrets.redact
     [PAR] start.inputs
       step env.setup(live)                  on the merged heads; stop environment_failed/setup_failed; exit budget_end
       step units.plan                       [PAR] per checkout: unit record range, judged history, verdict rule
-  phase tasks
+  phase tasks                               one call: tasksImplement(input, host)
     loop release_rounds                     until route = passed or budget end
       loop units                            scope UnitCtx; planned round: pending units, then the verdict unit
         step unit.enter                     writes currentUnit; planned round resets the progress count
         loop revisions                      until passed
-          step unit.turn                    [LLM] Work | CriterionRevision | TaskRevision
-          step gate.g(write)                [PAR] per checkout; stop worker.turn.*
-          step verify.own                   verdict rule, progress rule, then shell commands; [PAR] per checkout restore on exit
-        step unit_record.put                on pass with a gate commit; a failure that is not revoked logs only
-        step report.coder                   on pass with non-empty final text; subject `Coder report of unit <unit id>` (D29)
+          step unit.turn                    [LLM] Work | CriterionRevision | TaskRevision; agent tools evidence-upload, link_update_list
+          step gate.g(write)                [PAR] per checkout; stop worker.turn.*; port: secrets.redact
+          step verify.own                   verdict rule, progress rule, then shell commands; [PAR] per checkout restore on exit; port: secrets.redact (D14)
+        step unit_record.put                port: unitRecords.put; on pass with a gate commit; a failure that is not revoked logs only
+        step report.coder                   port: evidence.submit; on pass with non-empty final text; subject `Coder report of unit <unit id>` (D29)
       loop release_gate                     id "release_gate"; one frame per round
-        step base.fetch                     [PAR] per checkout
+        step base.fetch                     port: repository.fetchBase; [PAR] per checkout
         loop base.refresh(release)          one frame per checkout and merged branch, in binding order
           step base.merge
           loop conflict.revisions           only when the merge conflicts; until no marker is left (D23)
             step conflict.turn              [LLM] Conflict; later turns list the files with markers
-            step markers.check              markers left -> next turn; counter at 2, or budget end with markers left -> resolution fails; budget end with no marker -> exit budget_end
-          step gate.g(conflict)             no marker left; commits the merge
-        step release_trees.prepare          [PAR] per checkout
+            step markers.check              markers left -> next turn; counter at 2, or budget end with markers left -> resolution fails, port: evidence.submit; budget end with no marker -> exit budget_end
+          step gate.g(conflict)             no marker left; commits the merge; port: secrets.redact
+        step release_trees.prepare          port: releaseTrees.take; [PAR] per checkout
         step env.setup(release)             node failure -> release.route; exit budget_end
         step verify.all(release)            plan order; skipped after a setup failure
         step affected.run(release)          only when verify.all passed; skipped after a setup failure
         step release.route                  passed -> leave release_rounds; routed -> owner unit, next round
-        frame end: give release trees       at frame end, on every outcome
+        frame end: give release trees       port: releaseTrees.give; at frame end, on every outcome
   phase finish
     step branch.push                        [PAR] per checkout; claim watch ends, stop revoked
     step evidence.head
@@ -819,12 +1156,12 @@ chain evaluation
         step env.setup(review)              budget end -> stop assessment_absent
       branch assets
         step assets.place                   at most 4 downloads at a time
-  phase tasks
+  phase tasks                               one call: tasksEvaluation(input, host)
     loop evaluation                         one frame; span worker.evaluation
       step verify.all(evaluation)           budget end -> stop assessment_absent
       step affected.run(evaluation)         implement intent, one checkout or more, verify.all passed, setup passed
-      step evidence.publish                 [PAR] verification, affected, round patches
-      step judgement                        [LLM] shortcut on failure -> criterion-not-met; then Evaluation, Repair once; stop judgement_invalid, assessment_absent
+      step evidence.publish                 port: evidence.submit; [PAR] verification, affected, round patches
+      step judgement                        [LLM] shortcut on failure -> criterion-not-met; then port: agent.open, Evaluation, Repair once; stop judgement_invalid, assessment_absent
   phase finish
     step assessment.submit                  [cleanup] outcome -> closed; node not Evaluating -> revoked; non-success -> stop operation_failed; success -> request actions, stop action_unsettled; then execution.release(false)
   onStop not revoked
@@ -844,11 +1181,11 @@ chain examine
         step workspace.review(base)         [PAR] per checkout
         step setup.entries
         step env.setup(examine)             stop environment_failed/setup_failed; budget end -> stop budget_end/wall_time
-  phase tasks
+  phase tasks                               one call: tasksExamine(input, host)
     [PAR] tasks.inputs
-      step agent.open
+      step agent.open                       port: agent.open
       step verify.node(examine)             node commands only; no flaky rerun, copy or baseline; infra rerun once; skipped with no checkout; exit budget_end
-    step examine.turn                       [LLM] Examine; stop report_absent; exit budget_end; kept report when complete, no tool call, no abort; submits report evidence
+    step examine.turn                       [LLM] Examine; stop report_absent; exit budget_end; kept report when complete, no tool call, no abort; port: evidence.submit for the report
   phase finish
     step execution.release                  [cleanup] further_work false
   onExit budget_end
@@ -883,7 +1220,7 @@ Write (`worker.execution.unit_record.put`, `PUT /api/worker/execution/:execution
 2. `unit_record.put` takes each checkout whose head is in the commit set of the gate of that unit run. With no such checkout, it logs `unit record skipped` and sends nothing, as `writeDoneRecord` does today.
 3. It sends `{ unit_id, content_digest, commits }`, with one entry per taken checkout.
 4. The server checks the execution proof, the claim, that `unit_id` is the node id or a task id of the pinned revision, and that each `binding_id` is in the repository binding set of the revision.
-5. The worker logs `unit recorded`. A failure that is not `revoked` logs `unit record failed` and ends nothing (D10). The put needs a call variant that returns the failure without `halt`, because `run.call` stores every failure as the stop and cancels `operationContext`.
+5. The worker logs `unit recorded`. A failure that is not `revoked` logs `unit record failed` and ends nothing (D10). The put uses the no-halt call: a variant of `run.call` that returns the failure, stores no stop and cancels nothing. `run.call` stores every failure as the stop and cancels `operationContext`. `evidence.submit` with `halt: false` uses the same no-halt call (section 2).
 
 Read on a later execution, on any instance:
 
@@ -914,15 +1251,15 @@ Removed code: `DONE_TRAILER`, `doneTrailerOf`, `amendTrailer`, `trailerValues`, 
 
 ### 5.2 Claim check replacement
 
-| Part           | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ClaimWatch`   | The watch starts when the runner starts. It fires 60 s from the start, then every 60 s (`CLAIM_WATCH_INTERVAL_MS = 60000`, the registration heartbeat interval).                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Proof          | One proof hook on the worker transport covers every call of an operation with `requiresExecution`: `run.call`, the host tools, the credential lease and report, `worker.ssh.sign`, and the telemetry writes. An execution-end answer of any such call calls `run.revoke()`, so a host-tool revoke also ends as `revoked`. The gateway answers such a call only for a claim with `ended_at` null and `expired_at` in the future, which is the `running` claim state. The execution-end answers are 403 `gateway.invocation.execution_proof_failed` and 409 `scheduler.execution.not_running`. |
-| Fire           | The timer sends `scheduler.claim.get`. A `running` state does nothing. Another state, or an execution-end answer, calls `run.revoke()`. A network error ends nothing; the next fire follows the interval.                                                                                                                                                                                                                                                                                                                                                                                    |
-| `run.revoke()` | Sets the `revoked` stop and cancels `operationContext`. `stopOnEnd` aborts the pi session; the verification runner kills its command. No throw happens on the timer.                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| End            | The watch ends at the start of `branch.push`, before `assessment.submit`, before `execution.release`, before `releaseStop`, and at any stop. A final step can end the claim, and the watch must not read that end as a revoke.                                                                                                                                                                                                                                                                                                                                                               |
-| Fence          | The fence logic runs inside `branch.push`. It does not use `run.call`. A completed answer with a `claim_state` other than `running`, or an execution-end answer, is a revoke answer. Every other answer and a thrown error let the push continue. The fence never raises `operation_failed`. In `onStop`, the fence uses `run.cleanupContext()`, because the stop already cancelled `operationContext`.                                                                                                                                                                                      |
-| Removed        | The `turnCheck` call in `finishTurn` (`native-agent.ts:172-176`), `checkClaim` at `steps-implement.ts:525` and `:598`. The budget guard `budget.exhaustedAfterTurn()` in `finishTurn` (`native-agent.ts:171`) stays: it ends the session before a turn past the turn budget.                                                                                                                                                                                                                                                                                                                 |
+| Part           | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ClaimWatch`   | The watch starts when the runner starts. It fires 60 s from the start, then every 60 s (`CLAIM_WATCH_INTERVAL_MS = 60000`, the registration heartbeat interval).                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Proof          | One proof hook on the worker transport covers every call of an operation with `requiresExecution`: `run.call`, the agent tools, the credential lease and report, `worker.ssh.sign`, and the telemetry writes. An execution-end answer of any such call calls `run.revoke()`, so an agent-tool revoke also ends as `revoked`. The gateway answers such a call only for a claim with `ended_at` null and `expired_at` in the future, which is the `running` claim state. The execution-end answers are 403 `gateway.invocation.execution_proof_failed` and 409 `scheduler.execution.not_running`. |
+| Fire           | The timer sends `scheduler.claim.get`. A `running` state does nothing. Another state, or an execution-end answer, calls `run.revoke()`. A network error ends nothing; the next fire follows the interval.                                                                                                                                                                                                                                                                                                                                                                                       |
+| `run.revoke()` | Sets the `revoked` stop and cancels `operationContext`. `stopOnEnd` aborts the pi session; the verification runner kills its command. No throw happens on the timer.                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| End            | The watch ends at the start of `branch.push`, before `assessment.submit`, before `execution.release`, before `releaseStop`, and at any stop. A final step can end the claim, and the watch must not read that end as a revoke.                                                                                                                                                                                                                                                                                                                                                                  |
+| Fence          | The fence logic runs inside `branch.push`. It does not use `run.call`. A completed answer with a `claim_state` other than `running`, or an execution-end answer, is a revoke answer. Every other answer and a thrown error let the push continue. The fence never raises `operation_failed`. In `onStop`, the fence uses `run.cleanupContext()`, because the stop already cancelled `operationContext`.                                                                                                                                                                                         |
+| Removed        | The `turnCheck` call in `finishTurn` (`native-agent.ts:172-176`), `checkClaim` at `steps-implement.ts:525` and `:598`. The budget guard `budget.exhaustedAfterTurn()` in `finishTurn` (`native-agent.ts:171`) stays: it ends the session before a turn past the turn budget.                                                                                                                                                                                                                                                                                                                    |
 
 Stop delay: at most 60 s plus one `scheduler.claim.get` round trip plus one abort.
 
@@ -1003,7 +1340,7 @@ Rules of the new gate:
 
    When `branch.oid` equals `before`, command 2 holds and command 3 lists nothing, so the gate skips both with no change of result.
 
-4. All checkouts run step 3 in parallel (D7). The gate waits for every checkout. On a violation, it restores every checkout to `before` and calls `run.stop` once with the code of the lowest checkout index. In `onStop`, it restores and returns.
+4. All checkouts run step 3 in parallel (D7). The gate waits for every checkout. On a violation, it restores every checkout to `before` and returns one stop with the code of the lowest checkout index. In `onStop`, it restores and returns.
 5. With no violation and `branch.oid` not `before`, command 4 resets.
 6. Command 6 lists the staged set. The `M` entries with the same regular mode are the conversion candidates for command 7. The staged set minus the conversion-only paths decides the commit, and gives the changed paths for the span. This replaces `diff --cached --quiet` and `diff --name-only`.
 7. Status 10 is invariant I: `branch.head` is the node branch, `branch.oid` is the new head, no `u` line, no entry with an index-side change (X is not `.`), no `?` line, and no operation path exists. It also gives the new `heads` value. A conversion-only path can show a worktree-side change (Y), as today, and does not fail the invariant.
@@ -1027,7 +1364,7 @@ Restore sequence after a live verification, per checkout: before 9 processes (`r
 
 ### 5.4 Credentials
 
-`hostExecution` (`apps/worker/execution.ts`) handles credentials before `runChain`. S43 and S44 run as host functions, then the host calls `runChain` with the seed `claim`, `setup`, `credentials` and `sshAccess`.
+`hostExecution` (`apps/worker/execution.ts`) handles credentials before `runChain`. S43 and S44 run as host functions, then the host calls `runChain` with the seed `claim`, `setup` and `sshAccess`. `hostExecution` holds the handover result of S43 as a local value. It gives that value only to `credential.store` (D32). `agentPort` gets the model runtime factory over that store and the known secrets.
 
 | Part                                        | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1040,18 +1377,131 @@ Restore sequence after a live verification, per checkout: before 9 processes (`r
 | Host end                                    | The host logs `execution ended` with the end kind, the reason, the code and the detail. The host removes `agent_reason` from the logged detail of a `no_progress` stop.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Dispose                                     | The host defers this entry first, so it runs last: `sshAccess.clear()`, `credentials.discard()`. The discard zeroes the handover key and the report key and empties the SSH identities. It runs at every end: after a final step, after a revoke, and after each end of S43 or S44 (a refusal, a `gateway.*` failure, an indeterminate answer and an execution end). The telemetry sink closes after the credential discard. `run.dispose()` runs after the agent session entry.                                                                                                                                                                                                                                                                                                                                                                               |
 
-Only `agent.open`, `judgement` (through the agent open service) and `credential.store` read `credentials`. Only git network steps read `sshAccess`: `workspace.node`, `workspace.review`, `base.fetch` and `branch.push`. No verification command and no affected command reads `credentials` or `sshAccess`.
+Only `credential.store` holds the handover result, and it is host code. The agent open service of the host (`agentPort`, section 5.5) gets the model runtime factory and the known secrets, and no credential. No step of any chain reads a credential, because no context key holds one. `sshAccess` stays a context key, because three steps of the host phases read it: `workspace.node`, `workspace.review` and `branch.push`. The worker port `repository.fetchBase` is its only other reader. No verification command and no affected command reads a credential or `sshAccess`.
+
+Credential rules of the tasks engine (D32):
+
+1. No step declares a credential in `reads`, because `ExecutionCtx` holds no credential key. No `TasksStep` declares `sshAccess`; `build()` rejects such a step (section 2, rule 2).
+2. No port answers a credential, a signer or a model runtime. `AgentSession` has no such method.
+3. The tasks engine gets `secrets.redact`, not the secret list.
+4. The tasks engine holds no credential and no handle of the credential store. pi asks the store behind `AgentSession` for a token. The lease and the report belong to `credential.store` (C1).
+5. After a refresh, the tasks engine sees a normal turn end or `provider_failed/*`. After `worker.credential.lease_mismatch`, it sees the abort of `input.cancel`.
+
+Credential rules of a capability (D32):
+
+1. A capability factory gets no handover result, no `sshAccess` and no model runtime. `agentPort` gives it nothing; the tasks host builds it.
+2. A capability that needs a secret gets the value from custody through the host. The host adds the value to the known secrets before the open, as S43 does.
+3. A capability secret never enters `process.env` or the environment of `bash`; `childEnvironment` stays. A stdio MCP server gets only the `childEnvironment` result and the `env` of its config (section 5.5).
+4. The CLI host takes a capability secret only through the standard-input object of section 5.7. No option, no environment variable and no file takes it.
+5. No tool result holds a credential. The redaction guard covers a result that echoes one.
+6. `re@1` stays without `bash`. Its declaration gets a new tool only with a `locations` entry and a D27 test for that tool.
 
 ### 5.5 Agent tooling
 
-| Part            | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tool set        | `agent.open` reads the declaration of the agent (`getAgentDeclaration`). `swe@1`: `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash`, plus the host tools `evidence-upload` and `link_update_list`. `re@1` and `env@1`: `read`, `grep`, `find`, `ls`.                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `bash`          | Wrapped by `tool-table.ts`: timeout `min(remaining budget, 600 s)`, refused below 1 s; `childEnvironment` strips the provider environment; `killGroupAtEnd` kills the process group; each call records the requested and applied timeout.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Host tools      | `evidence-upload` and `link_update_list` call the server through `hostToolsOf` with the execution context. The proof hook of the transport (section 5.2) covers each host tool call. An execution-end answer calls `run.revoke()`, in place of `state.revoked` and the cancel of the host context.                                                                                                                                                                                                                                                                                                                                                                                |
-| Hooks, in order | `homeRelativeCwd`, redaction restore, `pinnedLayers` (the work prompt as the first user message), redaction. The resource loader loads no extension, skill, prompt template, theme or context file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| Confinement     | `re@1` in the evaluation chain gets `checkoutConfinement` (D27). The hook resolves each `path` with the path function of pi (`resolveToCwd`: `@` prefix, `~`, `file://`, Unicode spaces), then follows symbolic links. The hook accepts the path when the result is inside one root. The hook refuses a path that it cannot resolve. A call with no `path` takes the agent root. With two checkouts the agent root is `review/checkouts`; the roots are the agent root and the `evidence` directory. A workspace with no checkout has the workspace directory as its root. `swe@1` stays unconfined, because `bash` reaches every path anyway. `toolApproval` stays with `env@1`. |
-| Revoke          | `ClaimWatch` cancels `operationContext`. `stopOnEnd` aborts the session, and `killGroupAtEnd` ends a running `bash` group.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Part            | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool set        | `agent.open` reads the declaration of the agent (`getAgentDeclaration`). `swe@1`: `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash`, plus the agent tools `evidence-upload` and `link_update_list`. `re@1` and `env@1`: `read`, `grep`, `find`, `ls`.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `bash`          | Wrapped by `tool-table.ts`: timeout `min(remaining budget, 600 s)`, refused below 1 s; `childEnvironment` strips the provider environment; `killGroupAtEnd` kills the process group; each call records the requested and applied timeout.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Agent tools     | `evidence-upload` and `link_update_list` are agent tools. Each tasks host registers them through a capability (D32, below). In the worker, they call the server through `hostToolsOf` with the execution context. The proof hook of the transport (section 5.2) covers each agent tool call. An execution-end answer calls `run.revoke()`, in place of `state.revoked` and the cancel of the host context.                                                                                                                                                                                                                                                                                                |
+| Hooks, in order | `homeRelativeCwd`, redaction restore, the guards, `pinnedLayers` (the work prompt as the first user message), the capabilities of the tasks host, redaction. The resource loader loads no extension, skill, prompt template, theme or context file.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Confinement     | `re@1` in the evaluation chain gets `checkoutConfinement` (D27). The hook resolves each `path` with the path function of pi (`resolveToCwd`: `@` prefix, `~`, `file://`, Unicode spaces), then follows symbolic links. The hook accepts the path when the result is inside one root. The hook refuses a path that it cannot resolve. A call with no `path` takes the agent root. With two checkouts the agent root is `review/checkouts`; the roots are the agent root and the `evidence` directory. A workspace with no checkout has the workspace directory as its root. `swe@1` stays unconfined, because `bash` reaches every path anyway. `toolApproval` stays a hook of the Workbench session only. |
+| Revoke          | `ClaimWatch` cancels `operationContext`. `stopOnEnd` aborts the session, and `killGroupAtEnd` ends a running `bash` group.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+**Host tools (D32)**
+
+A host tool is an agent tool or an engine port (section 2). Section 2 holds the engine ports.
+
+| Kind        | Caller                    | pi mechanism                                                                                                                              |
+| ----------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent tool  | The model, inside a turn  | A `ToolDefinition` that a capability registers with `pi.registerTool()`, or an MCP server that it registers with `pi.registerMcpServer()` |
+| Engine port | Step code, outside a turn | None; a typed interface of section 2                                                                                                      |
+
+pi owns the validation, the `tool_call` and `tool_result` pipeline, the parallel calls and the result message of an agent tool. An engine port is no pi tool, because pi runs a tool only for the model or from another tool (`ctx.executeTool()`). Step code decides on a port result, and a model must not call these writes.
+
+| Agent tool         | Worker host                                                                               | CLI host                                                                                                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `evidence-upload`  | Capability `executionEvidence(hostToolsOf(...))`: server upload with the execution proof. | Capability `executionEvidence(localHostTools(...))`: copies the file to `uploads/`, answers synthetic identities and `s3://local/<evidence_id>/<asset_id>`. |
+| `link_update_list` | Capability `linkUpdates(hostToolsOf(...))`: `execution.link_update.get`.                  | Capability `linkUpdates(localHostTools(...))`: pages over `link_updates` of the seed.                                                                       |
+
+**Composition (D32)**
+
+```ts
+declare function executionEvidence(tools: HostTools): InlineExtension;
+declare function linkUpdates(tools: HostTools): InlineExtension;
+
+declare function agentPort(input: {
+  capabilities: readonly InlineExtension[];
+  modelRuntimeFactory: ModelRuntimeFactory;
+  knownSecrets: KnownSecrets;
+  trace: SessionTraceFactory;
+  sessionRoot: string | null;
+  budget: ExecutionBudget;
+  env: Readonly<Record<string, string>>;
+  hostHome: string;
+}): AgentPort;
+```
+
+- A capability is one inline extension factory in the list that `openSession` gives to `DefaultResourceLoader`. The design adds no registry, no plugin format and no tool interface.
+- `executionEvidence` is `(pi) => pi.registerTool(evidenceUploadTool(tools))`. `evidenceUploadTool` and `linkUpdateListTool` keep their `ToolDefinition` and the `HostTools` interface.
+- Each capability tool declares `annotations.openWorldHint` explicitly. `evidence-upload` and `link_update_list` declare `openWorldHint: false`.
+- The two tools are not in the `customTools` list of `sessionTools`. The wrapped `bash` stays in `customTools`.
+- `agentPort` is shared code in `engine/src/agent/`. Both tasks hosts build `ports.agent` with it, and `input.agent` of implement comes from it.
+- The tasks host gives `agentPort` the model runtime factory, the known secrets, the budget, the host home and `env`. `env` is the same filtered environment as `input.env`. `agentPort` gets no credential.
+- `agentPort` calls `openSession` with the factory order of the table above. pi runs handlers in load order, so a guard sees each call before a capability handler.
+- `agentPort` calls `session.bindExtensions({})` after the session exists. pi emits `session_start` there, and an MCP capability connects its servers on that event.
+- `AgentSession.close()` ends the session through `AgentSessionRuntime.dispose()` of pi. That path emits `session_shutdown` and then calls `session.dispose()`. `session.dispose()` alone emits no `session_shutdown`, so `agentPort` builds each session through `AgentSessionRuntime`.
+- `agentPort` passes its own `modelRuntime`, an in-memory `settingsManager` and its `resourceLoader` as the services of the runtime. It never calls `createAgentSessionServices` with defaults, so pi writes no `auth.json` and no settings file.
+- `AgentSession.close()` runs under the cleanup deadline. A revoke thus does not wait on a `session_shutdown` handler or on the close of an MCP server.
+- `noExtensions`, `noSkills`, `noPromptTemplates`, `noThemes` and `noContextFiles` stay set. The session loads no pi package, no skill and no project resource. Only factories that the KanthorD build compiles in can load, because an extension runs inside the worker process.
+
+| Part                                          | Worker host                                                            | CLI host                                                                              |
+| --------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `capabilities`                                | `executionEvidence(hostToolsOf(...))`, `linkUpdates(hostToolsOf(...))` | `executionEvidence(localHostTools(...))`, `linkUpdates(localHostTools(...))`          |
+| `ports.agent`, and `input.agent` of implement | `agentPort` with the custody model runtime and the telemetry trace     | `agentPort` with the frozen store or the replay provider, and the `spans.jsonl` trace |
+| Other ports                                   | Section 2, worker column                                               | Section 2, CLI column                                                                 |
+
+**Guards (D32)**
+
+A guard is a pi extension factory that `agentPort` adds to each session that it opens. A tasks host cannot leave a guard out. The project environment agent and the Workbench call `openSession` with their own hooks and get no guard of `agentPort`.
+
+The `tools` option of `createAgentSession` is the first tool guard. `openSession` passes `tools` plus `host_tools` of the agent declaration. pi registers no tool that the list does not name, and it keeps an MCP tool that the list does not name inactive. The model thus sees no undeclared tool.
+
+Every model call of a tool passes the `tool_call` handlers. This holds for a registered tool, an MCP tool and a nested call through `ctx.executeTool()`. A `tool_call` handler that fails blocks the call. A guard thus needs no knowledge of a later tool.
+
+| Guard                      | pi mechanism                                                                                  | Rule for every tool                                                                                                                                                                                                                                                                                                                        |
+| -------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tool allowlist (new)       | `tool_call` handler that returns `block`                                                      | Second tool guard. The handler blocks each tool name that is not in `tools` or `host_tools` of the agent declaration.                                                                                                                                                                                                                      |
+| Checkout confinement (D27) | `tool_call` handler that returns `block` (`agent/hooks/checkout-confinement.ts`)              | A guard of a confined session only: each `re@1` session. The catalog entry of each tool declares `locations`: the input fields that hold a path or a URL. The handler checks each declared field with the resolution of D27. It blocks a tool with no catalog entry. A `file://` URL of a later tool thus gets the same check as a `path`. |
+| Sensitive-text redaction   | `context`, `message_end` and `tool_call` handlers (`agent/hooks/sensitive-text-redaction.ts`) | The redaction works on messages, not on tool names, so it redacts the result of each tool. The restore of a marker into a tool input stays limited to `RESTORE_TOOLS`. Another tool gets the marker, never the secret value.                                                                                                               |
+
+`agentPort` adds `checkoutConfinement` with the `locations` rule to each `re@1` session in one change (D27). The tasks engine gives `reviewWorkspace`; `agentPort` computes the roots. The tasks engine cannot open a `re@1` session without the hook.
+
+The project environment agent uses the same hook for `env@1`. The `locations` rule blocks a tool with no catalog entry, and the hook of today passes such a tool. Each session tool of the project environment agent thus gets a catalog entry with its `locations` in the same change.
+
+**A new capability (D32)**
+
+Example: a browser tool.
+
+1. Add `browser(deps): InlineExtension` in `engine/src/agent/capabilities/`. The factory calls `pi.registerTool()` with a `ToolDefinition` and its `annotations`, with an explicit `openWorldHint`.
+2. Start no process in the factory. Start the browser at the first call and stop it in `session_shutdown`.
+3. Add the tool name to the agent catalog (`engine/src/agent/catalog.ts`) with its parameters and its `locations`.
+4. Add the tool name to `host_tools` of each agent declaration that can use it (D26).
+5. Add `browser(...)` to `capabilities` of the worker host and of the CLI host.
+
+No `tasks` step, no port, no chain listing and no golden chain file changes. A step sends a turn; pi offers the tool.
+
+**MCP capability (D32)**
+
+An MCP server takes the same five steps, with `pi.registerMcpServer(name, config)` in the factory. The tasks host also adds `createMcpExtension(options)` to the factory list.
+
+- The server config uses `exposure: "direct"`. The model then sees each tool by its name `mcp__<server>__<tool>`, and the declaration and the allowlist name it.
+- The session gets no `codemode` extension and no `tool_search` extension.
+- `options.loadConfig` answers no server and no error. A server thus comes only from a factory, and the session reads no `mcp.json` of the agent directory or of a checkout.
+- `options.credentials` is a store that refuses each read and each write. The session writes no `mcp-auth.json`. The server config holds no `oauth` field.
+- The settings manager of the session sets `projectTrusted: false`.
+- `options.logPath` points into the state directory of the execution. Dispose deletes that directory, so no `mcp.log` stays in the pi agent directory.
+- `options.createTransport` builds each stdio transport with `inheritEnv: false`. The server gets the `childEnvironment` result and the `env` of its config, and no other variable of the worker process.
+- A confined agent (`re@1`) gets no stdio MCP capability. A stdio server is a child process with the permissions of the worker user, and the `tool_call` guard sees only the input of a call.
 
 ### 5.6 Telemetry
 
@@ -1077,36 +1527,34 @@ A reader finds the turns of a task as the `agent.turn` descendants of its `worke
 
 ### 5.7 Standalone tasks run
 
-`kanthord worker tasks run` runs the `tasks` phase of an `implement` execution on one machine with no server call during the phase. The command uses the production step code of `tasks` unchanged: no `tasks` step imports a transport constructor or a client constructor. All server calls flow through `MethodClients` and `HostTools` seams; placement lives only in the resources. `kanthord worker tasks compare` and `kanthord worker tasks seed` are companion commands. The only production behavior addition is the capture hook below.
+`kanthord worker tasks run` runs the `tasks` phase of an `implement` execution on one machine with no server call during the phase. The command uses the production step code of `tasks` unchanged: no `tasks` step imports a transport constructor or a client constructor. The command is the CLI host. It builds a `TasksHost<ImplementPorts>` and an `ImplementInput`, and it calls `tasksImplement(input, host)` (section 2). Each side effect flows through an engine port or an agent tool of the CLI host. `kanthord worker tasks compare` and `kanthord worker tasks seed` are companion commands. The command adds one production behavior: the capture hook below.
 
 **Seams**
 
-`runPhase` runs the nodes of one phase with the node walker and the loop rules. It shares the node walker and the loop rules with `runChain`.
+`runPhase` runs the nodes of `tasks_prepare` with the node walker and the loop rules. It shares the node walker and the loop rules with `runChain`. `tasksImplement` runs the `tasks` phase with the same walker.
 
-Before the first node, `runPhase` lists each key that a node of the phase reads before a writer inside the phase, and each key in `LoopFrame.reads` of each loop of the phase. Each listed key must be in `seed.keys`. A missing key fails with `cli.worker.tasks.seed_invalid`; the diagnostic names the missing keys. The seed check requires a `LoopFrame.reads` key only when no node of the phase writes it before the first read of the frame. A scope field is no key and needs no seed.
+Before the first node, `runPhase` lists each key that a node of the phase reads before a writer inside the phase, and each key in `LoopFrame.reads` of each loop of the phase. Each listed key must be in `seed.keys`. A missing key fails with `cli.worker.tasks.seed_invalid`; the diagnostic names the missing keys. The seed check requires a `LoopFrame.reads` key only when no node of the phase writes it before the first read of the frame. A scope field is no key and needs no seed. The command builds `ImplementInput` from the seed and from the context at the end of `tasks_prepare`. A missing input key fails with `cli.worker.tasks.seed_invalid`.
 
-With `until` set to `release_gate`, the walker ends with `completed` on entering the `release_gate` loop. After the end, the caller disposes `io.resources` and sends no server call. It runs no `onExit` node, no `onStop` node and no final step, so it makes no checkpoint commit and no push.
+With `input.until` set to `release_gate`, the walker ends with `completed` on entering the `release_gate` loop. After the end, the caller disposes the resources of the CLI host and sends no server call. It runs no `onExit` node, no `onStop` node and no final step, so it makes no checkpoint commit and no push.
 
-`MethodClients` holds every server call of a step of `tasks`. The local implementation `localMethodClients(outbox, seed)` records each write in call order and answers a synthetic identity whose ULID encodes the call position. Every read answers `operation_failed/cli.worker.tasks.read_not_seeded`, because no step of `tasks` makes a server read.
+The CLI host implements each engine port of `ImplementPorts` over the output folder and the local mirror. The CLI column of the port table in section 2 holds each implementation. The CLI ports `evidence.submit` and `unitRecords.put` record each write in call order in `outbox.json`. No port reads the server, so the CLI host has no read answer.
 
-`HostTools` holds the host tool calls. The local implementation `localHostTools(outbox, seed)` records each call and copies each uploaded file into `uploads/` of the output folder. `evidenceUpload` answers synthetic evidence identities and the URI `s3://local/<evidence_id>/<asset_id>`.
+`HostTools` holds the agent tool calls. The local implementation `localHostTools(outbox, seed)` records each call and copies each uploaded file into `uploads/` of the output folder. `evidenceUpload` answers synthetic evidence identities and the URI `s3://local/<evidence_id>/<asset_id>`. The CLI host gives the two agent tools as the capabilities `executionEvidence(localHostTools(...))` and `linkUpdates(localHostTools(...))` (section 5.5).
 
 **Seed and local resolution**
 
 The seed keeps every id of production unchanged. The local run adds a resolver and does not change the phase contract. No step of `tasks` reads data from the server by id; ids are keys that steps compare, log and send back. The command copies each tree source into a bare mirror `state/origin/<binding_id>.git` of the output folder. `origin` of the clone names the mirror. No tree holds the path of the source.
 
-| Input key                                   | Production source                              | Local source                                                                                                                          |
-| ------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `checkouts`, `heads`, `gitPaths`            | `workspace.node` on the instance data root     | `--tree <binding_id>=<path>` → a bare mirror at `state/origin/<binding_id>.git`; each clone sets `origin` to that mirror              |
-| `memo`                                      | runner default (rule 1)                        | new object under `state/` of the output folder                                                                                        |
-| `agent`                                     | `agent.open` with the custody credential store | `agent.open` with the frozen store, or the replay provider                                                                            |
-| `credentials` (by `credential_id`)          | `worker.handover`                              | the standard-input credential, bound to the same `credential_id`                                                                      |
-| `sshAccess`                                 | S44 from `setup`                               | the command builds one entry per binding of `setup.repositories`; each entry holds no key and a signer that refuses each sign request |
-| `setupEntries`, `baseHead`                  | `setup.entries` (S10) of `prepare` and `start` | `setup.entries` with a tree service that has no pool and puts the base tree under `state/base/`                                       |
-| `setupPending`, `setupInstruction`          | `env.setup(live)` of `prepare` and `start`     | `env.setup(live)` in `tasks_prepare`                                                                                                  |
-| `plan`, `affectedTests`                     | git steps of `prepare` and `start`             | `seed.json`, or the same steps in `tasks_prepare`                                                                                     |
-| ids of new records (evidence, unit records) | answers of the server                          | synthetic ids in the valid format, from the position of the call                                                                      |
-| `revision`, `setup`, `prior`, `claim`       | server reads                                   | `seed.json`, unchanged                                                                                                                |
+| Input key                                      | Production source                                               | Local source                                                                                                             |
+| ---------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `checkouts`, `heads`, `gitPaths`               | `workspace.node` on the instance data root                      | `--tree <binding_id>=<path>` → a bare mirror at `state/origin/<binding_id>.git`; each clone sets `origin` to that mirror |
+| `agent`                                        | `agent.open` through `agentPort` with the custody model runtime | `agent.open` through `agentPort` with the frozen store, or the replay provider                                           |
+| credential of the session (by `credential_id`) | `worker.handover`, held by `credential.store`                   | the standard-input credential, bound to the same `credential_id`, held by the frozen store                               |
+| `setupEntries`, `baseHead`                     | `setup.entries` (S10) of `prepare` and `start`                  | `setup.entries` with a tree service that has no pool and puts the base tree under `state/base/`                          |
+| `setupPending`, `setupInstruction`             | `env.setup(live)` of `prepare` and `start`                      | `env.setup(live)` in `tasks_prepare`                                                                                     |
+| `plan`, `affectedTests`                        | git steps of `prepare` and `start`                              | `seed.json`, or the same steps in `tasks_prepare`                                                                        |
+| ids of new records (evidence, unit records)    | answers of the server                                           | synthetic ids in the valid format, from the position of the call                                                         |
+| `revision`, `setup`, `prior`, `claim`          | server reads                                                    | `seed.json`, unchanged                                                                                                   |
 
 **Credentials**
 
@@ -1140,27 +1588,35 @@ OAuth refresh:
 
 Leak paths:
 
-| Path                                          | Rule                                                                                                                                                                    |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `turns.jsonl`                                 | The recorder writes the request after the redaction hook of the session. It never writes the stream options, so it holds no `apiKey`.                                   |
-| `spans.jsonl`, stop details                   | Each credential value joins the known secrets (`ExecutionRun.secrets`, `NativeAgentInput.knownSecrets`), so the session trace and `redactReason` redact it.             |
-| `outbox.json`                                 | `localMethodClients` and `localHostTools` hold no credential operation. The frozen store sends no report.                                                               |
-| `progress.json`, `outbox.json`, `uploads/`    | The writer redacts each known secret.                                                                                                                                   |
-| `result.json`, `context.json`, `metrics.json` | They record the mode, `provider_id` and the overrides. No override takes a credential. `context.json` omits `credentials`, `sshAccess`, `agent`, `baseHead` and `memo`. |
-| logs, diagnostics                             | No log field takes a credential. A diagnostic holds no embedded value.                                                                                                  |
-| child processes                               | The environment rule of "Calls outside the worker" applies.                                                                                                             |
-| seed, capture, export                         | No credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.                                             |
-| core dump                                     | The command page tells the developer to run `ulimit -c 0` first; `repository.impl.md` states the core-dump risk of a host install.                                      |
+| Path                                          | Rule                                                                                                                                                                                 |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `turns.jsonl`                                 | The recorder writes the request after the redaction hook of the session. It never writes the stream options, so it holds no `apiKey`.                                                |
+| `spans.jsonl`, stop details                   | Each credential value joins the known secrets of the CLI host: `knownSecrets` of `agentPort` and the port `secrets.redact`. The session trace and the stop detail thus redact it.    |
+| `outbox.json`                                 | The CLI ports and `localHostTools` hold no credential operation. The frozen store sends no report.                                                                                   |
+| `progress.json`, `outbox.json`, `uploads/`    | The writer redacts each known secret.                                                                                                                                                |
+| `result.json`, `context.json`, `metrics.json` | They record the mode, `provider_id` and the overrides. No override takes a credential. `context.json` omits `sshAccess`, `agent`, `baseHead` and `memo`, and it holds no credential. |
+| logs, diagnostics                             | No log field takes a credential. A diagnostic holds no embedded value.                                                                                                               |
+| child processes                               | The environment rule of "Calls outside the worker" applies.                                                                                                                          |
+| seed, capture, export                         | No credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.                                                          |
+| core dump                                     | The command page tells the developer to run `ulimit -c 0` first; `repository.impl.md` states the core-dump risk of a host install.                                                   |
 
 SSH:
 
 - The run needs no SSH. `base.fetch` fetches from `origin` of the prepared tree, which is the mirror at `state/origin/<binding_id>.git`.
 - The command takes no SSH option and reads no `SSH_AUTH_SOCK`. `isolatedGitEnvironment` removes `SSH_AUTH_SOCK` from every `git` child.
-- The resolver table row for `sshAccess` names the signer. The relay of each `ssh.access` entry refuses each sign request, so a git operation that reaches a remote fails with `repository.connector.git_failed`.
+- The tasks engine takes no `sshAccess`, so the command builds no `sshAccess` entry. The CLI port `repository.fetchBase` holds no signer.
 
 **Production behavior**
 
-The command adds no server call, no step and no log message outside the capture hook to the production execution. Code additions with no behavior change: `runPhase`, `LoopFrame.reads` and the chain id `tasks_prepare`. The only behavior addition is the capture hook; it runs only when the operator sets `KANTHORD_CAPTURE_TASKS=1` for the worker process. The command never writes to the workspace of a live execution.
+The command adds no server call, no step and no log message outside the capture hook to the production execution. Code additions with no behavior change: `runPhase`, `LoopFrame.reads` and the chain id `tasks_prepare`. The command adds one behavior: the capture hook. It runs only when the operator sets `KANTHORD_CAPTURE_TASKS=1` for the worker process. The command never writes to the workspace of a live execution.
+
+D32 changes these production behaviors of a worker session:
+
+- `agentPort` calls `session.bindExtensions({})`, so pi emits `session_start`.
+- `AgentSession.close()` emits `session_shutdown` before the dispose.
+- `evidence-upload` and `link_update_list` register through `pi.registerTool()` in a capability, not through `customTools`.
+- The tool allowlist guard blocks each call of a tool that the declaration does not name.
+- `checkoutConfinement` joins each `re@1` session, with the `locations` rule (D27). The same rule applies to the `env@1` session.
 
 **Seed format**
 
@@ -1174,18 +1630,16 @@ Each binding gets one tree source: `--tree <binding_id>=<path>`.
 
 The command runs a preparation chain `tasks_prepare` before `tasks` with `runPhase`. The chain holds one phase `prepare`. The chain builder builds it as `[PAR] affected.declaration, setup.entries, agent.open`, then `[PAR] env.setup(live), units.plan`. A step whose key the seed holds is not in the chain. `env.setup(live)` always runs, because its effect lives in the tree.
 
-| Key                                | Source                                                                                                                                |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `claim.created_at`                 | start of the run, minus `elapsed_ms` (default 0)                                                                                      |
-| `claim.expired_at`                 | new `created_at`, plus `expired_at` minus `created_at` of the seed                                                                    |
-| `checkouts`, `heads`, `gitPaths`   | prepared trees                                                                                                                        |
-| `memo`                             | a new `VerificationMemo`                                                                                                              |
-| `sshAccess`                        | the command builds one entry per binding of `setup.repositories`; each entry holds no key and a signer that refuses each sign request |
-| `setupEntries`, `baseHead`         | `setup.entries` with a tree service that has no pool and puts the base tree under `state/base/`, always                               |
-| `setupPending`, `setupInstruction` | `env.setup(live)` on the trees, always                                                                                                |
-| `agent`                            | `agent.open` with local resources, always                                                                                             |
-| `affectedTests`                    | `affected.declaration`, when the seed lacks the key                                                                                   |
-| `plan`                             | `units.plan`, when the seed lacks the key; reads `prior` (default: empty) and `refreshed` (default: no refresh)                       |
+| Key                                | Source                                                                                                          |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `claim.created_at`                 | start of the run, minus `elapsed_ms` (default 0)                                                                |
+| `claim.expired_at`                 | new `created_at`, plus `expired_at` minus `created_at` of the seed                                              |
+| `checkouts`, `heads`, `gitPaths`   | prepared trees                                                                                                  |
+| `setupEntries`, `baseHead`         | `setup.entries` with a tree service that has no pool and puts the base tree under `state/base/`, always         |
+| `setupPending`, `setupInstruction` | `env.setup(live)` on the trees, always                                                                          |
+| `agent`                            | `agent.open` with local resources, always                                                                       |
+| `affectedTests`                    | `affected.declaration`, when the seed lacks the key                                                             |
+| `plan`                             | `units.plan`, when the seed lacks the key; reads `prior` (default: empty) and `refreshed` (default: no refresh) |
 
 **Capture hook**
 
@@ -1224,7 +1678,22 @@ Overrides edit the seed before `tasks_prepare`. Replay mode refuses each overrid
 
 **Output**
 
-The command writes one output folder with mode `0700`. `result.json` records the `PhaseEnd` kind, the exit or stop, the step, the mode, `provider_id`, the overrides, the seed digest and the check results. `context.json` holds the context at phase end with no resource key, `credentials` or `sshAccess`. `progress.json` holds the last `progress` and the last `UnitCtx` of each unit. `metrics.json` holds unit metrics, step run times and phase totals. `outbox.json` holds each server call and host tool call with its operation, body, step and time. `turns.jsonl` holds each model request and answer in replay format with a version header. `spans.jsonl` holds the spans. `uploads/` holds the files of `evidence-upload`. `state/` holds the trees, the base tree and the pi directory. The local tree service removes each release tree at the phase end.
+The command writes one output folder with mode `0700`. `result.json` records the `TasksEnd` kind, the exit or stop, the step, the mode, `provider_id`, the overrides, the seed digest and the check results. `context.json` holds the input and the result of `TasksEnd` with no resource key and no `sshAccess`. `progress.json` holds the last `progress` and the last `UnitCtx` of each unit. `metrics.json` holds unit metrics, step run times and phase totals. `outbox.json` holds each engine port write and each agent tool call with its operation, body, step and time. `turns.jsonl` holds each model request and answer in replay format with a version header. It also holds the recorded tool results of the replay rule below. `spans.jsonl` holds the spans. `uploads/` holds the files of `evidence-upload`. `state/` holds the trees, the base tree and the pi directory. The CLI port `releaseTrees.give` removes each release tree at its frame end.
+
+Replay rule (D32): a replay runs each agent tool again, and the result of an open-world capability tool changes over time.
+
+- The rule covers only a tool that a capability registers. Each such tool declares `annotations.openWorldHint` explicitly (section 5.5).
+- The CLI host wraps `execute` of each capability tool with `openWorldHint: true`.
+- In live mode, the wrapper records the result of each call in `turns.jsonl`.
+- In replay mode, the wrapper answers the recorded result and does not call the tool.
+- pi registers an MCP tool itself, with the hints of its server, so the CLI host has no `execute` to wrap. The CLI host records and answers each call of an open-world MCP tool through `options.createTransport`. An MCP tool with no `openWorldHint` counts as open world.
+- A replay runs every other tool again: each pi built-in tool, `evidence-upload`, `link_update_list` and each capability tool with `openWorldHint: false`.
+
+End mapping of the CLI host:
+
+- `completed`, `budget_end` and `stop` keep their kind in `result.json`.
+- `cancelled` after SIGINT becomes the stop `worker_stopped`.
+- `failed` is an internal error. The command writes `result.json` with the end kind `failed`, prints the diagnostic `cli.worker.tasks.internal_error` and gives the internal-error exit code.
 
 With `--verify`, the command runs these checks and records each result in `result.json`:
 
@@ -1234,8 +1703,8 @@ With `--verify`, the command runs these checks and records each result in `resul
 4. Each commit of `git rev-list <seed head>..HEAD` of each tree is a commit of the run: `spans.jsonl` holds it as `kanthord.git.commit` of a `worker.gate` span, or of a `worker.git` span with the git step mark `merge_base`.
 5. With the end `completed`, each tree has a clean status: no index change, no untracked file and no operation path.
 6. With the end `completed`, the route is `passed`. With `--skip-release-gate`, the route is absent.
-7. A stop code is in the `stops` list of the step that `result.json` names, or it is `revoked`, `operation_failed/<server code>` or `provider_failed/*` (section 3), or it is a requested stop of rule 4a, or it is `read_not_seeded`.
-8. In replay mode, the outbox and the commits equal those of the recorded run in the folder of the `--replay` file. The comparison replaces each commit id with its tree id and its message.
+7. A stop code is in the `stops` list of the step that `result.json` names, or it is `revoked`, `operation_failed/<server code>` or `provider_failed/*` (section 3), or it is a requested stop of rule 4a.
+8. In replay mode, the outbox and the commits equal those of the recorded run in the folder of the `--replay` file. The comparison replaces each commit id with its tree id and its message. The replay rule gives each open-world capability tool call its recorded result.
 
 **Commands**
 
@@ -1244,8 +1713,8 @@ With `--verify`, the command runs these checks and records each result in `resul
 **Tests**
 
 1. Golden chain test prints `tasks_prepare`. Both chains use the production chain builder.
-2. Module test asserts that no step file of `tasks` imports a transport or a client constructor.
-3. Each server step of `tasks` runs once with `localMethodClients` and once with a fake transport behind `MethodClients`. Both runs make the same operation and body.
+2. Module test asserts rule 1 of the tasks engine (section 2): no file of the tasks engine imports a transport, a client constructor, `MethodClients`, `ExecutionRun`, the credential store, the custody contract, the tree pool or `hostToolsOf`.
+3. Each port runs once with the worker implementation over a fake transport and once with the CLI implementation, with the same draft. Both runs make the same operation and body.
 4. A live run with a scripted provider writes a capture. A replay of that capture passes check 8 with `--verify`.
 5. A replay of `turns.jsonl` from test 4 with a changed tool set stops with `replay_diverged`.
 6. A capture contains no credential, no SSH identity, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.
@@ -1253,11 +1722,12 @@ With `--verify`, the command runs these checks and records each result in `resul
 8. A minimal seed fills every `tasks_prepare` default.
 9. `--tree` leaves the source repository unchanged; an agent `git push origin` fails.
 10. `compare` shows each section of difference and refuses two seeds with different digests.
-11. Canary test: a live run with a canary credential, one `--pass-env` canary value and a scripted provider searches every output file, including `context.json`, and both standard streams for each canary value and expects no match. A test asserts that `context.json` holds no `credentials` key and no `sshAccess` key.
+11. Canary test: a live run with a canary credential, one `--pass-env` canary value and a scripted provider searches every output file, including `context.json`, and both standard streams for each canary value and expects no match. A test asserts that `context.json` holds no `credentials` key and no `sshAccess` key. The test also searches each serialized input and each `TasksEnd`.
 12. Credential test proves each refusal, the empty `auth.json` path under the pi directory and the frozen store.
 13. Replay mode reads no standard input and calls no provider.
 14. Route test of `worker.execution.seed.get`.
 15. Hand-written seed with `--system-prompt` and `--templates`.
+16. Replay test (D32): a replay answers the recorded result of a capability tool with `openWorldHint: true` and does not call the tool. It runs `bash`, `edit`, `write` and a capability tool with `openWorldHint: false` again.
 
 ### 5.8 Progress rule
 
@@ -1303,7 +1773,7 @@ Steps S16a, S18, S21 and S27 apply these rules. The runner seeds `progress` with
 4. **Later server shape. DECIDED 2026-11-14 by Ulrich: client-side parallel reads only, no API change.**
 5. **Partial conflict resolution. DECIDED 2026-11-14 by Ulrich: a programmatic marker check follows each conflict turn; markers left send `swe@1` another conflict turn until no marker is left (D23).**
 6. **Scope of the trademark concern. DECIDED 2026-11-14 by Ulrich: branches and commits carry no id. A branch gets a semantic name and a commit a semantic message (D24). The branch rule is approved.**
-7. **Credential placement. DECIDED 2026-11-16 by Ulrich: S43 and S44 run as host functions in `hostExecution` before `runChain`. The host passes `claim`, `setup`, `credentials` and `sshAccess` as the seed.**
+7. **Credential placement. DECIDED 2026-11-16 by Ulrich: S43 and S44 run as host functions in `hostExecution` before `runChain`. The host passes `claim`, `setup` and `sshAccess` as the seed, and it gives the handover result only to `credential.store` (D32).**
 8. **Claim watch interval. DECIDED 2026-11-16 by Ulrich: `ClaimWatch` fires at a fixed 60 s interval from the start.**
 
 ## Pages that record the rulings
@@ -1319,3 +1789,4 @@ Steps S16a, S18, S21 and S27 apply these rules. The runner seeds `progress` with
 - `agent.impl.md`: `checkoutConfinement` (D27).
 - Open in HANDOFF (Architecture): `docs/reference/erd/` (`worker_unit_record`), `engine/docs/cli/` worker page (new operation, error codes, section 5.7 commands).
 - `HANDOFF.md`: the D22 item, the two section 5.7 items and the Architecture documents item under the Worker Service.
+- D32: `worker-service.vocabulary.md` holds the terms tasks engine, tasks host, host tool, agent tool, engine port, capability, guard and host resource. `worker-service.impl.md` holds the `tasks` engine and its build order. `HANDOFF.md` holds the build item with its checks and the open items under the Worker Service.
