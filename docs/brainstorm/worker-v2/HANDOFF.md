@@ -7,9 +7,10 @@ Update a step when its state changes. Record the pull request of each step.
 ## Phase A: build
 
 - [x] A1. Chain runner (D21 layer 4). Implementer: Fable 5.2. Reviewer: Opus 5.5.
-- [ ] A2. Implement ports in the worker (D32 layer 1). Implementer: Opus 5.5. Reviewer: Fable 5.2.
+- [x] A2. Implement ports in the worker (D32 layer 1). Implementer: Opus 5.5. Reviewer: Fable 5.2.
 - [ ] A3. Evaluation and examine ports (D32 layer 2). Implementer: Opus 5.5. Reviewer: Fable 5.2.
 - [ ] A4. Stops as values (D32 layer 3). Implementer: Fable 5.2. Reviewer: Opus 5.5.
+  - Add an optional stop detail to the `failed` variant of `PortResult`. Remove the `run.stopOf` call from the worker ports. The step builds its stop from the answer. Ruled 2026-11-17 by Aelita as owner.
 - [ ] A5. Boundary of the Foundry (D32 layer 4). Implementer: Opus 5.5. Reviewer: Fable 5.2.
 - [ ] A6. Capabilities and guards (D32 layer 5). Implementer: Fable 5.2. Reviewer: Opus 5.5 and `/security-review`.
 - [ ] A7. CLI host and `worker tasks run` (D32 layer 6). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`.
@@ -27,6 +28,20 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - The `examine` chain holds only `workspace.review(base)` in `prepare`, so that each later budget end releases with `further_work: true`, as today.
 - The phase spans of `implement` are one-frame loops. The runner opens no `worker.step` span. C5 adds it.
 - Accepted change: the dispose stack releases the node workspace after a failed give of the base tree. The stop keeps the code of the first error.
+
+### A2 deviations
+
+- A worker port turns a thrown error into a stored stop with `run.stopOf`, then answers `failed`. The stored stop keeps the git output and the cause of today. A4 removes this.
+- The release tree port cleans the release directory before the first take and removes it after the last give. It counts the trees that it holds.
+- On a failed take, a half-built tree goes back to the pool before the trees that were already taken.
+- The give of the release trees stays in the `finally` of `verifyInReleaseClones`, not at the frame end of `release_gate`.
+- `evidence.submit` of the worker ignores its context argument, because `run.call` uses `operationContext`.
+- `giveLeftoverTrees` and `giveBack` of `BaseHead` call the pool directly. A5 moves them to the port.
+- The `evaluation` chain and the `examine` chain get the port set of `implement`. A3 gives them their own port sets.
+- The `port:` marks of the golden file are notes of the step. A5 adds the `ports` field of a step.
+- A port halts inside the call. When a take fails and the later give also fails, the stop names the first error, not the last.
+- `BaseHead` computes the base tree directory itself, and the port computes it again. A `give` of a base tree with no release tree removes the release directory. A5 makes `BaseHead` read each path from the port answer and gives base trees their own give.
+- The modules `step-base-fetch.ts`, `base-refresh.ts`, `steps-implement.ts` and `chain-implement.ts` import each other in a cycle. A test that imports `step-base-fetch.ts` first fails with a `ReferenceError`. A5 moves `repositoryOf` and `mergedBranchesOf` to a leaf module.
 
 ## Phase B: eval set baseline
 
@@ -48,12 +63,11 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 ## Open items
 
 - [ ] S1, open, before A8. Let the seed export serve an execution of a closed node, so that a past execution becomes an eval seed. A close deletes the unit records of the node, and `setup` holds them. The route answers the latest confirmed heads, not the heads at the claim. Design a closed-node seed with the heads at the claim and a rule for a node with no unit records.
-- [ ] G5, open, at A2. Confirm whether the node-failure fallback of `env.setup` takes the base tree inside `tasks`. The main [HANDOFF](../HANDOFF.md) holds the item.
 - [ ] Open, outside Worker V2. The case `footprint.measure.run` of `src/apps/server/adapter-conformance.test.ts` fails on the local machine of Ulrich at `engine` `ea454eab`, and passes in CI. The direct adapter answers the alert state `pending` and the HTTP adapter answers `firing`. A local gate of Worker V2 accepts this one failure.
-- [ ] G6, open, at A2. Check the asset fields of `EvidenceDraft` against `engine/src/mission/contract.ts`. The main [HANDOFF](../HANDOFF.md) holds the item.
 
 ## Pull requests
 
 | Step | Repository | Pull request                                                    | Merge commit |
 | ---- | ---------- | --------------------------------------------------------------- | ------------ |
 | A1   | `engine`   | [#623](https://github.com/kanthorlabs/kanthord-engine/pull/623) | `03531d79`   |
+| A2   | `engine`   | [#624](https://github.com/kanthorlabs/kanthord-engine/pull/624) | `2e4295aa`   |
