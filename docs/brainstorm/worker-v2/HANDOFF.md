@@ -14,7 +14,7 @@ Update a step when its state changes. Record the pull request of each step.
   - Give a budget end of a port call its own answer. The worker `agent.open` and the step then decide the budget end once, not twice.
 - [x] A5. Boundary of the Foundry (D32 layer 4). Implementer: Opus 5.5. Reviewer: Fable 5.2.
   - Add the worker-only port `dependencies.read` and make `inputs.read(dependencies)` a `FoundryStep`. Replace the context key `env` with `input.env`.
-- [ ] A6. Capabilities and guards (D32 layer 5). Implementer: Fable 5.2. Reviewer: Opus 5.5 and `/security-review`.
+- [x] A6. Capabilities and guards (D32 layer 5). Implementer: Fable 5.2. Reviewer: Opus 5.5 and `/security-review`.
   - Build D27: `checkoutConfinement` with the `locations` rule in each `re@1` session, with the D27 test.
 - [ ] A7. CLI host and `worker tasks run` (D32 layer 6). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`.
 - [ ] A8. `worker tasks seed` and `worker tasks compare` (D31). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`.
@@ -80,6 +80,13 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - `BaseHead.giveBack` gives only the trees that it took. Leftover trees under `base/` stay until the next first `takeBase`, which gives them with the address check.
 - `inputs.read(dependencies)` of `evaluation` maps a `budget_end` answer of `dependencies.read` to a budget end. Today `readDependencies` never answers it.
 
+### A6 deviations
+
+- The `AgentSession` of the Foundry stays `NativeAgent`, with `close(): Promise<void>` in place of `dispose()`. Phase C moves it to `turn` and `close` when no step reads `prompt`, `instruct`, `abort` or `budget` of the session.
+- `ChainIo.capabilities` is optional, because `runEvaluation`, `runStepsExamine` and the test harnesses pass none. A7 makes it required.
+- A6 builds no MCP capability, because the engine has no pi MCP package. The MCP rules and tests of section 5.5 come with the first MCP capability.
+- `agent-port.test.ts` and `tool-table.test.ts` stay in `src/worker/unit/`, because they use the worker test support.
+
 ## Phase B: eval set baseline
 
 - [ ] B1. Select 8 to 12 executions. Ulrich selects. Aelita proposes candidates from the traces.
@@ -104,6 +111,8 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - [ ] Open, before a CLI command for `evaluation`. The `BaseHead` of `evaluation` clones base trees with `cloneLocal` inside `foundryEvaluation`. Add `releaseTrees.takeBase` and `releaseTrees.giveBase` to `EvaluationPorts`, so that the Foundry constructs no tree (rule 1). Ruled 2026-11-17 by Aelita as owner.
 
+- [ ] Open, at each pi upgrade. `src/agent/hooks/checkout-confinement.ts` holds a copy of the path rules of pi (`normalizePath`, `resolvePath` and the `read` spelling variants of pi 1.1.0). Compare the copy with the new pi version before the upgrade lands.
+
 ## Pull requests
 
 | Step | Repository | Pull request                                                    | Merge commit |
@@ -113,3 +122,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | A3   | `engine`   | [#625](https://github.com/kanthorlabs/kanthord-engine/pull/625) | `fcf92d88`   |
 | A4   | `engine`   | [#626](https://github.com/kanthorlabs/kanthord-engine/pull/626) | `03dd90de`   |
 | A5   | `engine`   | [#627](https://github.com/kanthorlabs/kanthord-engine/pull/627) | `cd6397e7`   |
+| A6   | `engine`   | [#628](https://github.com/kanthorlabs/kanthord-engine/pull/628) | `caffd816`   |
