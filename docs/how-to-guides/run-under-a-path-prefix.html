@@ -137,6 +137,10 @@
               once.
             </li>
             <li>Allow a response time of at least 300 seconds.</li>
+            <li>
+              Keep the idle read timeout of the proxy above 15 seconds, so that
+              the keepalive keeps a stream open.
+            </li>
           </ul>
           <p>
             The daemon answers <code>/s/kanthord</code> with a 301 to
@@ -361,8 +365,14 @@ curl -H 'Host: homelab.example.com' http://127.0.0.1/s/kanthord/api/liveness</co
             <code>homelab.example.com</code>, and it terminates HTTPS.
           </p>
           <h3 id="4-protect-the-host-with-cloudflare-access">
-            4. Protect the host with Cloudflare Access
+            4. Protect the host with Cloudflare Access (optional)
           </h3>
+          <p>
+            This step is optional. A guest of a shared Workbench conversation
+            opens an invite link on this host. A policy that covers the host
+            asks that guest for a Cloudflare sign-in. Skip this step to let the
+            invite link be the only gate.
+          </p>
           <ol>
             <li>
               Go to <strong>Zero Trust</strong> &gt;
@@ -383,8 +393,8 @@ curl -H 'Host: homelab.example.com' http://127.0.0.1/s/kanthord/api/liveness</co
           <h3 id="5-sign-in">5. Sign in</h3>
           <p>
             Do step 5 of the <a href="#generic-setup">generic setup</a> with
-            <code>https://homelab.example.com/s/kanthord/</code>. Sign in to
-            Cloudflare Access before the dashboard opens.
+            <code>https://homelab.example.com/s/kanthord/</code>. When you did
+            step 4, sign in to Cloudflare Access before the dashboard opens.
           </p>
           <h3 id="troubleshooting-1">Troubleshooting</h3>
           <div class="table-wrap">

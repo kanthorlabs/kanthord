@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Share a Workbench conversation · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/guide.css" />
+  </head>
+  <body class="guide">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html" aria-current="true"
+          >How-to guides</a
+        >
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../how-to-guides/index.html">How-to guides</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#before-you-start">Before you start</a></li>
+          <li><a href="#1-create-an-invite">1. Create an invite</a></li>
+          <li><a href="#2-send-the-link">2. Send the link</a></li>
+          <li>
+            <a href="#3-allow-an-evidence-read">3. Allow an evidence read</a>
+          </li>
+          <li><a href="#4-revoke-an-invite">4. Revoke an invite</a></li>
+          <li><a href="#result">Result</a></li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="share-a-workbench-conversation">
+            Share a Workbench conversation
+          </h1>
+          <p>
+            Share one conversation of the Workbench with a guest. The guest
+            needs no account. The guest opens a link, types a name, reads the
+            conversation and writes notes. A guest never starts a run.
+          </p>
+          <h2 id="before-you-start">Before you start</h2>
+          <ul>
+            <li>
+              A running server, a signed-in dashboard and a conversation in the
+              Workbench.
+            </li>
+            <li>
+              A guest must reach the server. Put the public host name of the
+              link in <code>gateway.allowed_hosts</code>. When a reverse proxy
+              serves the link, follow
+              <a
+                href="run-under-a-path-prefix.html#4-configure-the-reverse-proxy"
+                >step 4 of the path prefix guide</a
+              >.
+            </li>
+            <li>
+              Keep the idle read timeout of the proxy above 15 seconds. The
+              guest stream sends a keepalive every 15 seconds.
+            </li>
+          </ul>
+          <h2 id="1-create-an-invite">1. Create an invite</h2>
+          <ol>
+            <li>Open the conversation and select <strong>Share</strong>.</li>
+            <li>
+              Under <strong>Invite for (required)</strong>, type the name of the
+              invitee. The name is a label of 1 to 64 characters.
+            </li>
+            <li>Select <strong>Create link</strong>.</li>
+            <li>
+              Select <strong>Copy link</strong>. The dialog shows the link once.
+              After you close the dialog, no page shows it again.
+            </li>
+          </ol>
+          <p>
+            The link has the form
+            <code
+              >https://&lt;host&gt;/&lt;base
+              path&gt;/join/&lt;token&gt;#name=&lt;name&gt;</code
+            >. The fragment after <code>#</code> never reaches the server.
+          </p>
+          <h2 id="2-send-the-link">2. Send the link</h2>
+          <p>
+            Send the link only to the invitee. The link is the only gate. Anyone
+            who holds it joins until it expires or you revoke it. The link
+            expires in 7 days.
+          </p>
+          <p>The guest does these steps:</p>
+          <ol>
+            <li>Open the link. The page prefills the name.</li>
+            <li>
+              Change the name when needed, then select <strong>Join</strong>.
+            </li>
+          </ol>
+          <p>What the guest sees and does:</p>
+          <ul>
+            <li>
+              Guests see the whole history of the conversation, also the part
+              from before the invite. The share dialog states this.
+            </li>
+            <li>
+              Guests of a fork see its summary. The share dialog of a fork reads
+              &ldquo;This conversation carries a summary of &lt;title&gt;.
+              Guests see the summary.&rdquo;
+            </li>
+            <li>
+              Guests see the answers of the agents and the names of the tools
+              that they call. They see no tool result, no tool input and no
+              evidence content.
+            </li>
+            <li>
+              A guest writes notes. A note starts no run, also when it starts
+              with a mention.
+            </li>
+            <li>
+              A guest sees an action card with no button. Only you run the act.
+            </li>
+          </ul>
+          <p>
+            In a shared conversation, your own message is also a note. Start a
+            message with <code>@&lt;display name&gt;</code> to ask an agent.
+          </p>
+          <h2 id="3-allow-an-evidence-read">3. Allow an evidence read</h2>
+          <p>
+            An evidence read in a shared conversation needs the typed node name.
+            Guests see what the agent quotes, so the dashboard asks for more
+            than a click.
+          </p>
+          <ol>
+            <li>
+              Read the card
+              <strong>Evidence read in a shared conversation</strong>.
+            </li>
+            <li>Type the exact name of the node in the field.</li>
+            <li>
+              Select <strong>Allow</strong>, or select <strong>Reject</strong>.
+            </li>
+          </ol>
+          <p>
+            A new invite clears every earlier grant of the conversation. The
+            agent then asks again.
+          </p>
+          <h2 id="4-revoke-an-invite">4. Revoke an invite</h2>
+          <ol>
+            <li>Select <strong>Share</strong>.</li>
+            <li>
+              Select <strong>Revoke</strong> beside the name of the invitee.
+            </li>
+            <li>Select <strong>Revoke invite</strong>.</li>
+          </ol>
+          <p>
+            The guest loses access at once, and the link stops working. A revoke
+            deletes the invite.
+          </p>
+          <h2 id="result">Result</h2>
+          <p>
+            The invitee reads the conversation and writes notes for up to 7
+            days, or until you revoke the invite. The list of the share dialog
+            shows each live invite with its name and expiry.
+          </p>
+          <h2 id="troubleshooting">Troubleshooting</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Symptom</th>
+                  <th>Cause and fix</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>workbench.invite.not_found</code> at join</td>
+                  <td>
+                    The invite expired or you revoked it. Create a new invite.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.jwt.invite_ended</code> in a guest chat</td>
+                  <td>
+                    The invite ended while the guest was in the chat. Create a
+                    new invite.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>workbench.invite.name_invalid</code></td>
+                  <td>The name is blank or holds more than 64 characters.</td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Allow</strong> stays disabled, or
+                    <code>workbench.evidence.name_mismatch</code>
+                  </td>
+                  <td>
+                    The typed text differs from the node name. Type the exact
+                    name.
+                  </td>
+                </tr>
+                <tr>
+                  <td>The guest chat stops updating</td>
+                  <td>
+                    The proxy closed the stream. Raise its idle read timeout
+                    above 15 seconds and turn off response buffering.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+  </body>
+</html>

@@ -117,6 +117,11 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
 - [ ] Added 2026-11-14 from the evidence read. Give evidence images to an agent. Define a dimension check for each provider and a context cost rule. `evidence_read` refuses an image today.
 - [ ] Added 2026-11-14. In a guest-started run (layer L8), a call can wait on a card when its invite ends. The call fails as a tool error at the execute scope check, and the run does not end. Decide the rule in L8.
 - [ ] A setup card for the agent provider list and the fallback chain of an agent enablement. The A2 agent card opens only the default configuration sheet.
+- [ ] Added 2026-11-18 from layer L7 (C13). The `state` frame of the guest stream carries the whole streaming message at each tick. Add added-text frames for it when a measurement shows more than 2 MB per guest per run.
+- [ ] Added 2026-11-18 from layer L7. `entries` of `engine/src/workbench/service.ts` (`:987-989`) clones the whole history of a member, and `changes` (`:1664-1677`) merges it before the merge slices at the cursor. The guest feed reads the same clone at each tick. Clone only the slice when a profile shows the cost.
+- [ ] Added 2026-11-18 from the L7 end-to-end checks. An untagged message that waits in the queue before `invite.create` still runs by D8 when it starts. The rule of a note applies at the arrival of a message, not at the start of a queued item. Confirm this rule or move it to the start of the item.
+- [ ] Added 2026-11-18 from the L7 apps review. The engine counts the length of a name in UTF-16 units, and `apps` counts code points. A name with characters outside the Basic Multilingual Plane can pass the dashboard and fail the engine with 400 `workbench.invite.name_invalid`. Rule one unit for both.
+- [ ] Added 2026-11-18 from the L7 apps review. Four UI follow-ups remain: a visible label of the invite link field, the lines of the evidence danger card per the L7 design, the trim and NFC name rule in the mock daemon, and the streaming member shown by display name.
 
 ### Worker Service
 
@@ -162,6 +167,7 @@ After the first native-agent worker runs the acceptance path.
 
 - [ ] RULED 2026-11-03 by Ulrich (SR-Q4). The request body limit is one value, 32 MiB, for every operation, the auth path included. The per-operation overrides, the 40 KiB auth branch and the 50 MiB delivery branch go. A configuration splits only when one value cannot serve every case. [gateway-service.impl.md](gateway-service.impl.md#delivery-bytes-and-body-limits) holds the rule. Delete the item when the engine and the reference pages hold the change.
 - [ ] POSTPONED 2026-09-28 by Ulrich until Ulrich rules it. Decide whether `kanthord auth jwt inspect` verifies the signature, the header and the closed claim set with the server configuration.
+- [ ] Added 2026-11-18 from layer L7. Send the header `Content-Security-Policy: default-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'` on `index.html` of the embedded dashboard. A guest page opens from a link that an outside party can send, so the dashboard needs the policy. Check that the dashboard and its hashed assets load under it.
 
 ### Tracking Service
 
@@ -252,6 +258,7 @@ Added 2026-11-04 from the storage growth design. [footprint-service.md](footprin
     - Old C-S15, the one-step import.
 
 - [ ] Added 2026-10-23 from the coder redesign, engine #187–#196. These PRs closed the coder blockers of the Tracking Service dogfood run: #187, #191 and #194 commit after every agent turn through gate G and replace the judgements with done records; #188 runs every worker git command with no repository hook; #196 names commits and pull requests `<commit_type>: <subject>`; #190 keeps the redacted cause of an uncoded error as the stop `detail`; #189 classifies an infrastructure failure of a verification, reruns it once and stops with `worker.verification.infrastructure_failed` after a second one. Ship these notes with the next release. Reset an existing `kanthord.db` and `tracking.db` under [reset a pre-release database](../reference/upgrade.html#reset-a-pre-release-database), because engine #196 edits the squashed migration of the Mission Service in place. Change the engine version from `28.0.1` at that release, so that the version check of the worker and the server refuses an old worker against a new server and a new worker against an old server. A user override `prompts/task-judgement.md` or `prompts/task-choice.md` in an agent directory becomes unused with no warning. A node branch from before engine #194 holds no done record, so each task of an in-flight node runs one more work turn.
+- [ ] Added 2026-11-18 from layer L7. Edit `platforms/homelab/README.md` (`:11`, `:39`) in the homelab submodule. State that the Cloudflare Access application in front of `/s/kanthord/` is optional (ruling C1), as [run under a path prefix](../how-to-guides/run-under-a-path-prefix.html) states. No L7 binding covers that submodule.
 
 ### End-to-end run harness-1
 

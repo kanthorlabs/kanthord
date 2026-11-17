@@ -186,7 +186,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - Each service holds an ordered list of migrations, numbered from 1 with no gap. A migration is a function that receives the open connection and runs its statements.
 - From the first tag, a published migration is immutable. A correction appends a migration, and it never edits a migration that a database recorded. Two divergent histories share no data directory.
 - RULED 2026-10-07 by Ulrich. The snake_case rename resets the migration history once. Each table has one `CREATE TABLE` with its current columns, and no migration copies or alters data of an earlier schema. A data directory from before the reset is not supported: wipe it.
-- RULED 2026-10-18 by Ulrich. Before the first tag, no migration is published. Each service that owns tables holds exactly one migration, version 1, that creates its final schema. `gateway` and `workbench` hold no migration and record no row. A schema change edits that migration in place. No upgrade path exists for the data of a pre-release build: the reset below replaces it.
+- RULED 2026-10-18 by Ulrich. Before the first tag, no migration is published. Each service that owns tables holds exactly one migration, version 1, that creates its final schema. `gateway` holds no migration and records no row. A schema change edits that migration in place. No upgrade path exists for the data of a pre-release build: the reset below replaces it.
 - The runner validates the whole recorded history of every participating database before it applies any migration and before it checks the live schema. It rejects a service that the binary does not know, a duplicate version, a gap in the recorded versions, and a recorded version above the highest version that the binary holds.
 - After the history passes, the runner checks the live schema. For each recorded service, it runs the migrations in an empty in-memory database. It stops at the recorded version. It compares the `type`, `name`, `tbl_name` and `CREATE` text of each `sqlite_master` object of the service with the live database. A difference stops the runner with `system.database.migration.schema_mismatch` and the fields `path`, `service` and `object`. The field `object` names the first differing object in the order of type, then name.
 - The objects of a service are the objects that its migrations create and the indexes and triggers of its tables. Each object with the name prefix `<service>_` also belongs to the service. The compare skips `sqlite_` objects and tables of no service. It skips a service with no recorded row.
@@ -1126,8 +1126,8 @@ The kernel holds shared contracts and runtime components.
 - It also holds `OperationRegistry`, `ServiceClient`, `ClientOptions`, `OperationResult` and `OperationResultType`.
 - `OperationRegistry` performs structural validation only.
 - The Gateway emitter validates the OpenAPI scope of each registry entry.
-- `caller.ts` holds `HumanIdentity`, `MachineIdentity`, `ServiceIdentity`, module-private `WeakSet`s, `isHumanIdentity`, `isMachineIdentity` and `isServiceIdentity`.
-- `caller-mint.ts` holds the human and the machine identity factory, and `service-mint.ts` holds the service identity factory.
+- `caller.ts` holds `HumanIdentity`, `MachineIdentity`, `GuestIdentity`, `ServiceIdentity`, module-private `WeakSet`s, `isHumanIdentity`, `isMachineIdentity`, `isGuestIdentity` and `isServiceIdentity`.
+- `caller-mint.ts` holds the human, the machine and the guest identity factory (`mintGuestIdentity`), and `service-mint.ts` holds the service identity factory.
 - Only `src/gateway/` and `src/kernel/test-identity.ts` import `src/kernel/caller-mint.ts`, and only `src/apps/server/` imports `src/kernel/service-mint.ts`.
 - `test-identity.ts` holds the test factory of a minted human identity. Only a `*.test.ts` file imports it, so a service test needs no import exception.
 

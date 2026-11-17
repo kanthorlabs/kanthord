@@ -119,7 +119,8 @@
           <ul>
             <li>
               The Gateway Service owns no table. It holds idempotency records in
-              memory. It stores no human account and no client identity. A human
+              memory. It stores no human account, no client identity and no
+              guest. A human
               <code>sub</code> and a
               <code>client_identity_&lt;ulid&gt;</code> appear only as values
               inside an <code>actor</code> column.
@@ -292,6 +293,16 @@ erDiagram
         integer acknowledged_until "bytes, end of the acknowledgement, or null"
     }
 
+    workbench_invite {
+        text id PK "workbench_invite_ + ULID, one invite"
+        text session_id "host Workbench session, read by join, list, resolve and isShared"
+        text token_hash UK "SHA-256 hex of the link token, read by join only"
+        text invited_by "owner account id, read by resolve"
+        text invited_by_name "owner display name, read by guest.get as owner_name"
+        integer expires_at "Unix ms, 7 days after the create, read by join, list, resolve and the stream"
+        text invitee_name "label of 1-64 characters, read by list and the share dialog"
+    }
+
     project_project ||..o{ project_binding : "FK project_id"
     project_binding }o..o| credential : "ref in config JSON, no FK"
     project_binding }o..o{ agent_enablement : "ref via catalog agents of config.worker, and entry agent_provider, no FK"
@@ -325,6 +336,7 @@ erDiagram
     classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
     classDef scheduler fill:#d6eaf8,stroke:#1f618d,color:#212529
     classDef footprint fill:#f0f4c3,stroke:#827717,color:#212529
+    classDef workbench fill:#dfe3f7,stroke:#3949ab,color:#212529
 
     class credential custody
     class repository_host_key repository
@@ -334,6 +346,7 @@ erDiagram
     class mission_mission,mission_node,mission_node_revision,mission_dependency mission
     class scheduler_job,scheduler_queue_place scheduler
     class footprint_cleanup,footprint_alert footprint
+    class workbench_invite workbench
 </pre>
           <h2 id="tables">Tables</h2>
           <p>
@@ -523,6 +536,17 @@ erDiagram
                     <a
                       href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/footprint-service.impl.md#the-store"
                       >the store</a
+                    >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>workbench_invite</code></td>
+                  <td>Workbench Service</td>
+                  <td>
+                    Ruled:
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/workbench-service.impl.md#invite-table"
+                      >the invite table</a
                     >.
                   </td>
                 </tr>
@@ -1433,6 +1457,59 @@ erDiagram
               No table holds a measurement, and no column holds the state
               <code>pending</code> or <code>recovering</code>. The service
               computes both from the next measurement.
+            </li>
+          </ul>
+          <h3 id="workbench-service">Workbench Service</h3>
+          <ul>
+            <li>
+              <code>workbench_invite</code> holds one row for each invite.
+              <code>id</code> is the primary key. <code>token_hash</code> has a
+              unique index. No <code>CHECK</code> and no other index exists.
+            </li>
+            <li>
+              The table has no <code>created_at</code> and no
+              <code>revoked_at</code>. A revoke deletes the row. No guest table
+              exists, because the guest identity comes from the guest JWT.
+            </li>
+            <li>
+              <code>workbench.invite.list</code>, the path of
+              <code>workbench.invite.revoke</code> and
+              <code>resolveInvite</code> read <code>id</code>. The claim
+              <code>invite_id</code> of a guest JWT names it.
+            </li>
+            <li>
+              <code>session_id</code> names a host Workbench session. The
+              session lives in a pi session file, so no foreign key exists.
+              <code>workbench.invite.join</code>,
+              <code>workbench.invite.list</code>, <code>resolveInvite</code> and
+              <code>isShared</code> read it.
+            </li>
+            <li>
+              <code>token_hash</code> holds the SHA-256 of the UUIDv4 link token
+              in hex. The store never holds the token.
+              <code>workbench.invite.join</code> is its only reader.
+            </li>
+            <li>
+              <code>invited_by</code> is the account id of the owner.
+              <code>resolveInvite</code> reads it into the guest identity.
+              <code>invited_by_name</code> is the display name of the owner.
+              <code>workbench.guest.get</code> answers it as
+              <code>owner_name</code>.
+            </li>
+            <li>
+              <code>expires_at</code> is the create time plus 7 days. A row is
+              live while <code>expires_at</code> is after the current time.
+              <code>workbench.invite.join</code> reads it as the
+              <code>exp</code> of the guest JWT.
+              <code>workbench.invite.list</code>, <code>resolveInvite</code> and
+              the guest stream read it too.
+              <code>workbench.invite.create</code> deletes the expired rows of
+              its own session.
+            </li>
+            <li>
+              <code>invitee_name</code> is the label that the owner types, from
+              1 to 64 characters. <code>workbench.invite.list</code> reads it,
+              and the share dialog shows it.
             </li>
           </ul>
           <h2 id="cross-group-references">Cross-group references</h2>

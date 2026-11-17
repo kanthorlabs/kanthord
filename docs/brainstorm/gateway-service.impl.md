@@ -54,8 +54,9 @@ After the listener opens, the Gateway Service writes one log record at level `in
 
 ## Access policy
 
-Every registered operation declares one access policy value: `human`, `client`, `worker`, `human_or_worker`, `human_or_service`, `public`, `delivery` or `service`.
-A `worker` operation accepts only a [worker token](gateway-service.vocabulary.md#worker-token). A `human_or_worker` operation accepts a human JWT or a worker token, and its handler reads the kind of the caller identity.
+Every registered operation declares one access policy value: `human`, `client`, `worker`, `guest`, `human_or_worker`, `human_or_service`, `public`, `delivery` or `service`.
+A `worker` operation accepts only a [worker token](gateway-service.vocabulary.md#worker-token).
+A `guest` operation accepts only a guest JWT. The policy check accepts a `GuestIdentity` for `guest` only. Every `human` route refuses it with 401, and a `guest` route refuses a human identity with 401. A `human_or_worker` operation accepts a human JWT or a worker token, and its handler reads the kind of the caller identity.
 A `human_or_service` operation declares `services`, a non-empty list of service names. Every other policy declares no `services`, and registration throws otherwise.
 The route of a `human_or_service` operation accepts a human JWT. The direct adapter accepts a human identity or the [service identity](project-service.vocabulary.md#service-identity) of a listed service.
 The direct adapter refuses every other service identity with 403 `gateway.access.service_refused`. The handler reads the kind of the caller identity.
@@ -68,7 +69,7 @@ The policy value lives in the operation registry, so one declaration drives the 
 ## Identity on the wire
 
 One `Authorization` header carries one scheme.
-`Bearer` carries the JWT of a human and the JWT of a machine. The `kind` claim of the token states which one: `human`, `client` or `worker`.
+`Bearer` carries the JWT of a human and the JWT of a machine. The `kind` claim of the token states which one: `human`, `client`, `worker` or `guest`.
 A machine presents its JWT on every request, including the registration route, and no request presents another credential.
 
 ## Human authentication
@@ -112,6 +113,7 @@ The route answers with the runtime identity of the registration, the resource id
 - Any other `alg`, any other `typ` and any `crit` header reject the token.
 - `gateway.auth.token_lifetime` gives the lifetime of a human token and of the token of an external harness, and it defaults to one year.
 - A worker token and each `client` JWT of a connection answer live `WORKER_TOKEN_LIFETIME`, 3600 s. No configuration key changes it.
+- A `guest` JWT has no configured lifetime. Its `exp` is the `expires_at` of its invite in seconds.
 - Each issuance generates a fresh ULID `jti`.
 - A restart or another issuance revokes no earlier JWT.
 - It remains valid until expiry, an increment of `gateway.auth.version` or replacement of `master_key`.
@@ -122,10 +124,10 @@ The route answers with the runtime identity of the registration, the resource id
 - An external harness receives a fresh token with a fresh client identity and registers again.
 - A worker instance at the `worker` placement renews its tokens through the [instance exchange](worker-service.impl.md#the-instance-exchange).
 
-The claim set is closed, and the matrix below holds for the three kinds `human`, `client` and `worker`.
+The claim set is closed, and the matrix below holds for the four kinds `human`, `client`, `worker` and `guest`.
 
 - Every kind requires `sub`, a string of 1 to 64 nonblank characters.
-- For `human`, `sub` is the username. For `client`, it is a client identity: `client_identity_<ulid>` from local issuance, or the derived client identity of an instance for one binding. For `worker`, it is the id `worker_instance_<ulid>` of one instance revision.
+- For `human`, `sub` is the username. For `client`, it is a client identity: `client_identity_<ulid>` from local issuance, or the derived client identity of an instance for one binding. For `worker`, it is the id `worker_instance_<ulid>` of one instance revision. For `guest`, it is `guest_id`, 64 hex characters.
 - For `human`, issuance and verification use the same username validation and preserve its exact value.
 - Reissuance preserves that subject.
 - The process-local caller identity stores it as `accountId`; this internal field is not a JWT claim or verification-response property.
@@ -135,17 +137,20 @@ The claim set is closed, and the matrix below holds for the three kinds `human`,
 - Every kind requires `name`, a string of 1 to 64 nonblank characters.
 - It is a display name that groups nothing and authorizes nothing.
 - Issuance defaults it to the username of a human and to the client identity of a `client` JWT. A worker token holds the instance name.
-- Every kind requires `kind`, with the value `human`, `client` or `worker`.
+- Every kind requires `kind`, with the value `human`, `client`, `worker` or `guest`.
 - Every kind requires `iat` and `exp`, integers of JWT Unix seconds inside the safe NumericDate range.
 - `iat` is not after the verification time, and `exp` is after it, with no clock-skew tolerance.
 - Every kind requires `jti`, a canonical ULID.
-- `client` requires `project_id`, a `project_<ulid>` identity, and `resource_identity`, the resource identity `worker:kanthord:<binding name>` of a worker binding of that project; `human` and `worker` forbid both.
-- `client` takes the optional claims `instance_id`, the instance revision id, and `connection_id`, a `connection_<ulid>` identity. A binding of a hosted worker requires `instance_id`. An instance at the `worker` placement also requires `connection_id`. An instance at the `server` or the `container` placement and a binding of an external harness answer 401 `gateway.jwt.forbidden_claim` for `connection_id`. A binding of an external harness answers the same code for `instance_id`. `human` and `worker` forbid both.
+- `client` requires `project_id`, a `project_<ulid>` identity, and `resource_identity`, the resource identity `worker:kanthord:<binding name>` of a worker binding of that project; `human`, `worker` and `guest` forbid both.
+- `client` takes the optional claims `instance_id`, the instance revision id, and `connection_id`, a `connection_<ulid>` identity. A binding of a hosted worker requires `instance_id`. An instance at the `worker` placement also requires `connection_id`. An instance at the `server` or the `container` placement and a binding of an external harness answer 401 `gateway.jwt.forbidden_claim` for `connection_id`. A binding of an external harness answers the same code for `instance_id`. `human`, `worker` and `guest` forbid both.
+- `guest` requires `invite_id`, a `workbench_invite_<ulid>` identity. `human`, `client` and `worker` forbid it. A `guest` token without it answers 401 `gateway.jwt.missing_claim`.
+- `reg` is no claim of any kind, so a token that holds it answers 401 `gateway.jwt.unknown_claim`.
 - The two claims name a binding group, not a revision. A token supplies no configuration.
 - Every kind forbids `iss`, `aud` and `nbf`.
 - A claim outside this set, a claim of another type, a missing required claim and a present forbidden claim each reject the token with 401.
 - Each cause has one error code under `gateway.jwt.<cause>`.
 - The codes include `gateway.jwt.unknown_claim`, `gateway.jwt.missing_claim`, `gateway.jwt.forbidden_claim`, `gateway.jwt.invalid_type`, `gateway.jwt.expired` and `gateway.jwt.not_yet_issued`.
+- The cause `invite_ended` gives `gateway.jwt.invite_ended`.
 - Verification accepts the absence of a claim that a later version adds as optional, so an earlier token stays valid.
 
 Verification runs in this order.
@@ -156,6 +161,7 @@ Verification runs in this order.
 - `exp` and `iat`.
 - `kind`.
 - The per-kind rules.
+- For `guest`, the verification calls `resolveInvite(invite_id)` of the Workbench Service. A deleted invite, or one whose `expires_at` is not after the verification time, answers 401 `gateway.jwt.invite_ended` (`JwtCause.InviteEnded`). The row gives `session_id` and `invited_by` to the guest identity.
 - For `worker`, the Worker Service answers whether `sub` names a live instance revision. An ended or archived revision answers 401 `gateway.jwt.instance_ended`.
 - For `client`, the Project Service answers three checks. The group `(project_id, resource_identity)` exists. Its latest row is no tombstone. An external-harness row holds an instance count of 1 or more. A native row with `worker_instances: []` passes only for a client identity that holds a live registration of the group. `iat` × 1000 is not before the `created_at` of the latest tombstone of the group.
 - A group whose latest row is a tombstone, whose external-harness row holds `instance_count: 0`, or that has a tombstone newer than `iat` is an ended group. A native row with `worker_instances: []` ends no group, because each removed instance drains. An operation that declares an ended group answer replaces the 401 with that answer. Only `worker.registration.deregister` declares one.
@@ -221,6 +227,12 @@ A token that is not three base64url segments with a JSON header and a JSON objec
 The claim list is one `<claim>: <value>` line per claim, in signed order, between two `---` lines.
 `iat` and `exp` print their Unix seconds with the UTC time as a YAML comment, for example `exp: 1822040100 # 2027-09-28T10:15:00Z`.
 
+The daemon signs one more kind, `guest`, with the same signing key. It signs it at `workbench.invite.join`, never through `kanthord auth jwt generate`.
+
+- The claims are `{ sub: guest_id, name, kind: "guest", invite_id }`, with `iat` and a fresh `jti`.
+- `exp` is `floor(expires_at / 1000)` of the invite, so the token ends with its invite.
+- The daemon stores no guest JWT. `workbench.invite.join` is no mutation, so no idempotency record holds the token.
+
 ## The client secret
 
 Each machine JWT has one client secret, and a human JWT has none.
@@ -249,6 +261,9 @@ It passes the exact bytes and headers to the Intake Service.
 A re-serialized body breaks the signature of the platform.
 It parses no JSON and validates no schema.
 The `hono/body-limit` middleware permits 32 MiB on every operation.
+No operation has a body limit of its own. Every route keeps `REQUEST_BODY_MAX_BYTES`.
+A field bound sits in the `zod` schema of the operation. The schema of `text` of `workbench.guest.message` refines at most 16384 UTF-8 bytes.
+A longer `text` answers 400 `gateway.request.validation_failed` with `details` path `body.text`.
 
 ## The forwarding contract
 
@@ -276,6 +291,9 @@ It logs one record at entry and one at exit with the status and the latency.
 A failure that is no `OperationError` answers 500 `gateway.invocation.unknown`. The Gateway logs it once at level 50 as `Request failed`, with `err`, `request_id` and the operation identity. The HTTP routes, the port adapter and `app.onError` log it.
 A cancellation error of the request context answers 503 `gateway.invocation.cancelled` and logs no failure. This also applies when the error comes from the authentication of the request.
 `pino` redacts an enumerated list of paths, and a test asserts each path.
+
+- A deleted or expired invite answers 401 `gateway.jwt.invite_ended` (`JwtCause.InviteEnded`) at authentication, at recheck and in each guest operation.
+- kanthord logs the route pattern only, for example `/api/workbench/invite/join`. No log line holds an invite token.
 
 ## The operation registry
 
@@ -340,6 +358,7 @@ The single binary serves the dashboard of the `apps` repository from the origin 
 
 - The Gateway answers a `GET` or `HEAD` request outside `/api` with the embedded dashboard asset at that path, and it requires no authentication.
 - A path with no embedded asset answers `index.html`, because the dashboard routes with `BrowserRouter`.
+- The Gateway adds the header `Referrer-Policy: no-referrer` to the answer for a path under `/join/`. The invite link never leaves in a `Referer` header.
 - `index.html` carries `Cache-Control: no-cache`, so a new binary replaces the hashed asset names at once.
 - An unknown path under `/api` keeps the 404 `gateway.routing.not_found`.
 - The `Host` check and the readiness check run before the dashboard answers.
@@ -364,6 +383,9 @@ The single binary serves the dashboard of the `apps` repository from the origin 
 - The Gateway owns the connection.
 - The owning service owns the session under a stream.
 - A close of the connection is no domain cancellation.
+- The first `stream` operation is guest-facing: `workbench.guest.stream`.
+- The route timeout bounds the time to the response head only. It never bounds the open stream.
+- The owning service closes a stream when it revokes its grant. The Workbench Service closes the streams of an invite at its revoke and at its expiry.
 
 The Gateway Service builds one `CancellationContext` for each request under its shutdown context, following [architecture.impl.md](architecture.impl.md#the-service-lifecycle-and-context).
 It cancels that context on a client disconnect or process shutdown and releases it when the response ends.
@@ -535,7 +557,7 @@ The [Project Service](project-service.impl.md#the-resource-healthcheck), the [LL
 - A restart empties the component.
 - A retry after a restart runs the handler again.
 - Every mutation handler is idempotent by a natural key of its own, for example a registration by its client identity, except an evidence submission of the Mission Service and an inbound create of the Intake Service, whose repeat after a restart creates a second record.
-- The `caller` field holds the account of a human or the client identity of a machine.
+- The `caller` field holds the account of a human or the client identity of a machine. For a guest, it holds the key `guest:<guest_id>`.
 - The component compares the verified caller with that field before it replays.
 - A repeat under another caller reserves its own record and runs the handler.
 - The registration route replays a recorded answer only while its registration is live.
@@ -620,6 +642,8 @@ These routes are `POST /api/llm/credential` of `create`, `POST /api/llm/credenti
 They also include `POST /api/llm/credential/:credential_name/report` of `report` and `POST /api/llm/credential/login/:session_id/report` of `login_report`.
 It forwards the registered work-pull, claim inspection, release and MCP paths for an instance outside the host of the server.
 It forwards `GET /api/openapi.yaml`, because the worker unit reads the server package version there at its start, at every placement.
+It forwards the dashboard, `POST /api/workbench/invite/join` and `/api/workbench/guest/*` for a guest. The invite token is their only gate.
+A stream needs an unbuffered proxy and an idle read timeout above 15 s, the interval of the keepalive.
 It forwards no other path.
 A delivery needs no confidentiality of the ingress, because the signature of the platform over the exact bytes proves it.
 An instance presents a JWT on every request, so the ingress provides confidentiality for registration, heartbeat, work-pull and MCP traffic.
@@ -633,7 +657,7 @@ The path restriction therefore lives in the configuration of the ingress.
 The ingress is an untrusted transport.
 The signature of the platform over the exact bytes is the only proof of authenticity of a delivery.
 The Gateway Service reads no `Forwarded` header, no `X-Forwarded-*` header and no client-address header for a decision.
-The operator adds the public hostname of the ingress to the host allowlist for the human routes. A `client`, `worker` or `public` route needs no entry, under [Host and origin](#host-and-origin).
+The operator adds the public hostname of the ingress to the host allowlist for the human routes and the `guest` routes. A `client`, `worker` or `public` route needs no entry, under [Host and origin](#host-and-origin).
 
 ## Entry paths
 

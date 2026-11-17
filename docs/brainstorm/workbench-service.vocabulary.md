@@ -36,7 +36,7 @@ Ulrich writes "@RE check this plan" in a conversation with `swe@1`. The server c
 
 A leading `@<display name>` in a human message. It names the member that runs the message and matches case-insensitively.
 The term names no closed set.
-Ulrich writes "@yumi Report the system status". Yumi runs the message. A message with no leading mention goes to the member that answered last.
+Ulrich writes "@yumi Report the system status". Yumi runs the message. Outside a [shared conversation](#shared-conversation), a message with no leading mention goes to the member that answered last.
 
 ## run
 
@@ -85,6 +85,42 @@ Ulrich writes "/new Continue with the billing nodes" in a conversation with `swe
 The one text that a [fork](#fork) carries from its source. One model call writes it under fixed headings, and `guard@1` checks it for orders and secrets before the fork exists.
 The term names no closed set.
 The summary of Ulrich's conversation states "Open in the earlier conversation: node_9 is still blocked; no decision was made." `guard@1` passes it. A summary that says "Discard node_9 now" is refused, and no fork exists.
+
+## invite
+
+The right that the owner gives to one named person to join a [shared conversation](#shared-conversation). It holds a secret link token, an invitee name and an expiry 7 days after its creation. A revoke deletes it.
+The term names no closed set.
+Ulrich invites "Mai" to his conversation with `swe@1`. The server answers the link once. Mai joins with it for 7 days, or until Ulrich revokes the invite.
+
+## guest
+
+A person that joins a [shared conversation](#shared-conversation) through an [invite](#invite) with a name. A guest holds no account.
+The term names no closed set.
+Mai opens her link, confirms the name "Mai" and reads the conversation. She writes "Is node_9 still blocked?" as a note, and no run starts.
+
+## shared conversation
+
+A conversation that holds at least one live [invite](#invite). It ends when the last invite ends.
+The term names no closed set.
+Ulrich creates the invite for Mai, and his conversation is a shared conversation. Mai's invite expires, and the conversation is private again.
+
+## note
+
+A message of a [shared conversation](#shared-conversation) that starts no run. It shows its author, the owner or a [guest](#guest). An untagged message of the owner is a note, and every message of a guest is a note.
+The term names no closed set.
+Ulrich writes "We wait for the review" in a shared conversation. The message is a note, and no agent answers. He writes "@SWE check node_9", and `swe@1` runs the message.
+
+## guest stream
+
+The `workbench.guest.stream` connection through which a [guest](#guest) reads new entries and the state of the run as server-sent events. It ends when the invite of the guest ends.
+The closed set of events is `entries` and `state`.
+Mai opens the guest stream. The first frames carry the entries after her cursor and the state. A frame `entries` follows each new answer of `swe@1`.
+
+## evidence danger card
+
+The card of an `evidence_read` call in a [shared conversation](#shared-conversation). The owner types the exact name of the node to allow the read, and the card warns that guests see what the agent quotes.
+The term names no closed set.
+`swe@1` reads the log of "Add password reset" in a shared conversation. Ulrich types "Add password reset" in the card, and the read goes on.
 
 ## approval wait
 

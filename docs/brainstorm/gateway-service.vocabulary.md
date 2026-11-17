@@ -46,6 +46,12 @@ The Gateway Service verifies that JWT and establishes the machine identity, whic
 The Project Service receives that value, and it takes no association from the caller.
 The worker instance `box-coder` presents a [worker token](#worker-token). The Gateway Service establishes a machine identity of kind `worker` that names the instance revision and the instance name `box-coder`.
 
+## guest identity
+
+What the Gateway Service establishes from a guest JWT, and what it passes to the Workbench Service. It names the guest, the invite and the conversation of the invite. It carries no human authority.
+The term names no closed set.
+Mai joins the conversation of Ulrich with a link and the name "Mai". The Gateway Service verifies her JWT, reads the invite row and establishes the guest identity. A request for a human operation with that JWT answers 401.
+
 ## client secret
 
 The secret that the server derives for one `client` JWT. A worker instance at the `worker` placement receives it sealed in the connection answer and holds it in memory only.
