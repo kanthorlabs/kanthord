@@ -8,11 +8,13 @@ Update a step when its state changes. Record the pull request of each step.
 
 - [x] A1. Chain runner (D21 layer 4). Implementer: Fable 5.2. Reviewer: Opus 5.5.
 - [x] A2. Implement ports in the worker (D32 layer 1). Implementer: Opus 5.5. Reviewer: Fable 5.2.
-- [ ] A3. Evaluation and examine ports (D32 layer 2). Implementer: Opus 5.5. Reviewer: Fable 5.2.
+- [x] A3. Evaluation and examine ports (D32 layer 2). Implementer: Opus 5.5. Reviewer: Fable 5.2.
 - [ ] A4. Stops as values (D32 layer 3). Implementer: Fable 5.2. Reviewer: Opus 5.5.
   - Add an optional stop detail to the `failed` variant of `PortResult`. Remove the `run.stopOf` call from the worker ports. The step builds its stop from the answer. Ruled 2026-11-17 by Aelita as owner.
+  - Give a budget end of a port call its own answer. The worker `agent.open` and the step then decide the budget end once, not twice.
 - [ ] A5. Boundary of the Foundry (D32 layer 4). Implementer: Opus 5.5. Reviewer: Fable 5.2.
 - [ ] A6. Capabilities and guards (D32 layer 5). Implementer: Fable 5.2. Reviewer: Opus 5.5 and `/security-review`.
+  - Build D27: `checkoutConfinement` with the `locations` rule in each `re@1` session, with the D27 test.
 - [ ] A7. CLI host and `worker tasks run` (D32 layer 6). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`.
 - [ ] A8. `worker tasks seed` and `worker tasks compare` (D31). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`.
 - [ ] A9. Pages `agent.impl.md` and `engine/docs/cli/worker.md`. Writer: Sonnet 5.5. Check: `crucible`.
@@ -43,6 +45,15 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - `BaseHead` computes the base tree directory itself, and the port computes it again. A `give` of a base tree with no release tree removes the release directory. A5 makes `BaseHead` read each path from the port answer and gives base trees their own give.
 - The modules `step-base-fetch.ts`, `base-refresh.ts`, `steps-implement.ts` and `chain-implement.ts` import each other in a cycle. A test that imports `step-base-fetch.ts` first fails with a `ReferenceError`. A5 moves `repositoryOf` and `mergedBranchesOf` to a leaf module.
 
+### A3 deviations
+
+- `AgentSession` is `NativeAgent`. The steps call `instruct`, `lastText` and `budget.exhausted()`, and the host closes the session. A6 moves the session to `turn` and `close`.
+- The worker `agent.open` reads the budget. It answers a budget end during the open as `failed` with no code and no halt. The step tells a budget end from a stop by `operationContext`. A4 gives the budget end its own answer.
+- The worker `agent.open` ignores its context argument and reads only `reviewWorkspace.directory` of the request. It refuses a request with no review workspace.
+- The `implement` chain opens its agent through `StepHost.openAgent`, not through the port. A5 moves it.
+- `Chain` and `ChainIo.ports` have the type `CommonPorts`. `hostedChainOf` pairs each chain with its port set. A5 types the pair.
+- D27, the checkout confinement of the judgement session, moves to A6. Ruled 2026-11-17 by Aelita as owner, because it changes behavior.
+
 ## Phase B: eval set baseline
 
 - [ ] B1. Select 8 to 12 executions. Ulrich selects. Aelita proposes candidates from the traces.
@@ -71,3 +82,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | ---- | ---------- | --------------------------------------------------------------- | ------------ |
 | A1   | `engine`   | [#623](https://github.com/kanthorlabs/kanthord-engine/pull/623) | `03531d79`   |
 | A2   | `engine`   | [#624](https://github.com/kanthorlabs/kanthord-engine/pull/624) | `2e4295aa`   |
+| A3   | `engine`   | [#625](https://github.com/kanthorlabs/kanthord-engine/pull/625) | `fcf92d88`   |
