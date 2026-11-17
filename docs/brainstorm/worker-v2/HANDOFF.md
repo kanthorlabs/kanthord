@@ -12,7 +12,7 @@ Update a step when its state changes. Record the pull request of each step.
 - [x] A4. Stops as values (D32 layer 3). Implementer: Fable 5.2. Reviewer: Opus 5.5.
   - Add an optional stop detail to the `failed` variant of `PortResult`. Remove the `run.stopOf` call from the worker ports. The step builds its stop from the answer. Ruled 2026-11-17 by Aelita as owner.
   - Give a budget end of a port call its own answer. The worker `agent.open` and the step then decide the budget end once, not twice.
-- [ ] A5. Boundary of the Foundry (D32 layer 4). Implementer: Opus 5.5. Reviewer: Fable 5.2.
+- [x] A5. Boundary of the Foundry (D32 layer 4). Implementer: Opus 5.5. Reviewer: Fable 5.2.
   - Add the worker-only port `dependencies.read` and make `inputs.read(dependencies)` a `FoundryStep`. Replace the context key `env` with `input.env`.
 - [ ] A6. Capabilities and guards (D32 layer 5). Implementer: Fable 5.2. Reviewer: Opus 5.5 and `/security-review`.
   - Build D27: `checkoutConfinement` with the `locations` rule in each `re@1` session, with the D27 test.
@@ -66,6 +66,20 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - Only `agent.open` answers `budget_end`.
 - The test helper `stoppingRunner` of `steps-implement-release.test.ts` throws an `ExecutionStop` in place of `state.run.stop`, because `StepsState` holds no `run`. The stop-reason cases now test a stop that the step returns.
 
+### A5 deviations
+
+- `ImplementInput` adds `root` and `workspaceKey` and has no `gitPaths`. `ImplementResult` holds `completedUnits` as a set of unit ids, adds `reports` and has no `openMerge`. C6 adds `openMerge` with D23.
+- `EvaluationInput` holds the context keys that the steps read today: `reviewWorkspace`, `testedInput`, `baseHead`, `setupFailure`, `placed` and `reviewRound`. `EvaluationResult` holds the three evidence keys and `dependencies`, not `evidenceIds`.
+- `ExamineResult` holds `nodeVerification`. `ExamineInput` has no `dependencies`, because the step reads them in `tasks`.
+- A result holds each key that the walk reached. The host merges it before it maps the end.
+- The ports add `releaseTrees.giveBase`, `claim.check` (C3 deletes it) and `dependencies.read` (C4 deletes it). The implement host phase gets `agent.open`. `foundryImplement` does not.
+- The module test forbids the directories `src/custody/`, `src/gateway/`, `src/apps/` and `src/repository/` (except `contract.ts`), a list of host modules, the secret-handling modules `src/kernel/hpke.ts`, `src/kernel/handover.ts` and `src/kernel/key-derivation.ts`, the package `@hpke/core`, and the names `RepositoryTransport`, `MethodClients`, `ExecutionRun`, `hostToolsOf`, `hkdf`, `hkdfSync`, `createCipheriv`, `createDecipheriv` and `createPrivateKey`. It follows the imports of each `contract.ts`, and it fails on a relative import that does not resolve.
+- To keep secret handling out of the Foundry closure, the credential shapes moved from `src/custody/contract.ts` to `src/kernel/credential-shapes.ts`, the sealed object shape from `hpke.ts` to `src/kernel/sealed-object.ts`, the handover envelope shape from `handover.ts` to `src/kernel/handover-envelope.ts`, and `deriveKey` from `json.ts` to `src/kernel/key-derivation.ts`. Ruled 2026-11-17 by Aelita as owner, under the credential rule of Ulrich.
+- The host steps `report.coder`, `evidence.head` and `env.setup(live)` have no `ports` field, so the golden file prints no `port:` mark for them. Phase C moves them into `tasks`.
+- A timeout of the leftover give inside the first `takeBase` maps to `operation_failed`, as the take does.
+- `BaseHead.giveBack` gives only the trees that it took. Leftover trees under `base/` stay until the next first `takeBase`, which gives them with the address check.
+- `inputs.read(dependencies)` of `evaluation` maps a `budget_end` answer of `dependencies.read` to a budget end. Today `readDependencies` never answers it.
+
 ## Phase B: eval set baseline
 
 - [ ] B1. Select 8 to 12 executions. Ulrich selects. Aelita proposes candidates from the traces.
@@ -88,6 +102,8 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - [ ] S1, open, before A8. Let the seed export serve an execution of a closed node, so that a past execution becomes an eval seed. A close deletes the unit records of the node, and `setup` holds them. The route answers the latest confirmed heads, not the heads at the claim. Design a closed-node seed with the heads at the claim and a rule for a node with no unit records.
 - [ ] Open, outside Worker V2. The case `footprint.measure.run` of `src/apps/server/adapter-conformance.test.ts` fails on the local machine of Ulrich at `engine` `ea454eab`, and passes in CI. The direct adapter answers the alert state `pending` and the HTTP adapter answers `firing`. A local gate of Worker V2 accepts this one failure.
 
+- [ ] Open, before a CLI command for `evaluation`. The `BaseHead` of `evaluation` clones base trees with `cloneLocal` inside `foundryEvaluation`. Add `releaseTrees.takeBase` and `releaseTrees.giveBase` to `EvaluationPorts`, so that the Foundry constructs no tree (rule 1). Ruled 2026-11-17 by Aelita as owner.
+
 ## Pull requests
 
 | Step | Repository | Pull request                                                    | Merge commit |
@@ -96,3 +112,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | A2   | `engine`   | [#624](https://github.com/kanthorlabs/kanthord-engine/pull/624) | `2e4295aa`   |
 | A3   | `engine`   | [#625](https://github.com/kanthorlabs/kanthord-engine/pull/625) | `fcf92d88`   |
 | A4   | `engine`   | [#626](https://github.com/kanthorlabs/kanthord-engine/pull/626) | `03dd90de`   |
+| A5   | `engine`   | [#627](https://github.com/kanthorlabs/kanthord-engine/pull/627) | `cd6397e7`   |
