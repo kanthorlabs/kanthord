@@ -142,6 +142,15 @@
             filesystem names are not entity identities.
           </p>
           <p>
+            A <code>guest_id</code> is derived, not a ULID. It equals
+            <code
+              >hex(sha256(invite_token + &quot;\n&quot; +
+              nfc(trim(name))))</code
+            >, 64 hexadecimal characters. It is the <code>sub</code> of a
+            <a href="auth/jwt.html#guest-token">guest token</a>. The same token
+            and the same name give the same <code>guest_id</code>.
+          </p>
+          <p>
             A ULID does not establish causal order. Use the owning service&#39;s
             revision or ordering contract when causal order is required.
           </p>

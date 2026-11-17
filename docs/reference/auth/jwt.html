@@ -54,7 +54,8 @@
             <code>kanthord auth jwt inspect</code> decodes a JWT locally and
             prints its claims. <code>auth jwt generate</code> is the only
             token-issuance command; server startup and worker registration issue
-            no token, and there is no human login flow.
+            no token, and there is no human login flow. The daemon alone issues
+            a <a href="#guest-token">guest token</a>, at an invite join.
           </p>
           <p>
             Human mode preserves the supplied username as <code>sub</code>;
@@ -188,6 +189,71 @@ jti: 01M3KMA9EGF0NY6W2TNP4BTTQ5
             <code>cli.auth.jwt.inspect.token_required</code>. A malformed token
             fails with <code>cli.auth.jwt.inspect.malformed_token</code>, and
             the diagnostic never prints the token.
+          </p>
+          <h3 id="guest-token">Guest token</h3>
+          <p>
+            The daemon issues one more kind, <code>guest</code>, only at
+            <code>workbench.invite.join</code>. No command issues it. The daemon
+            signs it with the same signing key (HS256) and stores it nowhere. A
+            guest token reaches only the <code>guest</code> operations of its
+            own conversation. Every <code>human</code> route answers 401 to it.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Type</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>sub</code></td>
+                  <td>string</td>
+                  <td>
+                    The <code>guest_id</code>: 64 hex characters, derived from
+                    the invite token and the name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>name</code></td>
+                  <td>string</td>
+                  <td>
+                    The name that the guest typed. It grants no authority.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>kind</code></td>
+                  <td><code>&quot;guest&quot;</code></td>
+                  <td>Distinguishes a guest from every other identity.</td>
+                </tr>
+                <tr>
+                  <td><code>invite_id</code></td>
+                  <td>string</td>
+                  <td>
+                    The <code>workbench_invite_&lt;ulid&gt;</code> of the
+                    invite. Only a guest token holds it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>exp</code></td>
+                  <td>integer</td>
+                  <td>
+                    The expiry of the invite in Unix seconds. The token ends
+                    with the invite.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The token also holds <code>iat</code> and <code>jti</code>. Each
+            guest request checks the signature, then reads the invite row. A
+            deleted or expired invite answers
+            <code>401 gateway.jwt.invite_ended</code>. The token holds no
+            <code>project_id</code>, no <code>resource_identity</code>, no
+            <code>instance_id</code> and no <code>connection_id</code>.
           </p>
           <h2 id="api-shape">API shape</h2>
           <p>
