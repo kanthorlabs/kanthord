@@ -47,6 +47,11 @@
             <a href="#3-allow-an-evidence-read">3. Allow an evidence read</a>
           </li>
           <li><a href="#4-revoke-an-invite">4. Revoke an invite</a></li>
+          <li>
+            <a href="#5-review-a-request-outside-the-shared-projects"
+              >5. Review a request outside the shared projects</a
+            >
+          </li>
           <li><a href="#result">Result</a></li>
           <li><a href="#troubleshooting">Troubleshooting</a></li>
         </ul>
@@ -60,7 +65,8 @@
             Share one conversation of the Workbench with a guest. The guest
             needs no account. The guest opens a link, types a name, reads the
             conversation, writes notes and starts a run with a mention of an
-            agent. You approve every act of that run.
+            agent. You approve every act of that run, except the acts that you
+            grant on the invite.
           </p>
           <h2 id="before-you-start">Before you start</h2>
           <ul>
@@ -94,6 +100,12 @@
               projects that the guest can work on. The dialog shows the hint
               &ldquo;Select at least one project.&rdquo; until you pick one.
             </li>
+            <li>
+              Under
+              <strong>What &lt;name&gt; may do without your approval</strong>,
+              check the acts that the guest runs with no card. Check nothing to
+              approve every act yourself.
+            </li>
             <li>Select <strong>Create link</strong>.</li>
             <li>
               Select <strong>Copy link</strong>. The dialog shows the link once.
@@ -111,6 +123,32 @@
             Every live invite of the conversation shares one set of projects.
             When an invite is live, the dialog shows that set and locks the
             field. Revoke every invite to change the set.
+          </p>
+          <p>The dialog groups the acts that you can grant:</p>
+          <ul>
+            <li>
+              <strong>Reversible acts</strong> run at once. One opposite call
+              undoes each act.
+            </li>
+            <li>
+              <strong>Judged acts</strong> run when the Guard finds that the
+              message of the guest directs them.
+            </li>
+          </ul>
+          <p>
+            Each act shows its operation id and a description. Check a group to
+            check all of its acts. When you check an act, the dialog warns:
+            &ldquo;Anyone who holds this link can run the checked acts in your
+            name, on the selected projects, without your approval, until the
+            link expires or you revoke it. Auto mode off stops them.&rdquo; The
+            grant is fixed at create. To change it, revoke the invite and create
+            a new one. A grant applies only to a run that the guest of that
+            invite starts.
+          </p>
+          <p>
+            After the create, the dialog shows the grant of the link. The list
+            shows each invite with &ldquo;Approval for every act&rdquo;, or with
+            the count of the granted acts. Select the count to read the ids.
           </p>
           <h2 id="2-send-the-link">2. Send the link</h2>
           <p>
@@ -162,9 +200,9 @@
               <code>workbench.guest.agent_refused</code>.
             </li>
             <li>
-              You approve every act of a guest run on its card. A guest never
-              approves. Only you replace or stop the run and remove a queued
-              message.
+              You approve every act of a guest run on its card, except the acts
+              that the invite grants. A guest never approves. Only you replace
+              or stop the run and remove a queued message.
             </li>
             <li>
               A guest sees the queue with no <strong>Edit</strong>, no
@@ -210,6 +248,47 @@
             The guest loses access at once, and the link stops working. A revoke
             deletes the invite.
           </p>
+          <h2 id="5-review-a-request-outside-the-shared-projects">
+            5. Review a request outside the shared projects
+          </h2>
+          <p>
+            A guest can direct an act on a project that you did not share. The
+            agent then asks you through the tool
+            <code>request_owner_act</code>, and the run ends with one line. The
+            guest never sees the request.
+          </p>
+          <ol>
+            <li>
+              Open the conversation. The section
+              <strong>Requests outside the shared projects</strong> lists each
+              open request with the guest, its age, the operation and the
+              target. Home shows the conversation on an
+              <strong>Outside request</strong> card with
+              <strong>Open conversation</strong>.
+            </li>
+            <li>Select <strong>Review</strong> on a request.</li>
+            <li>
+              Read the dialog
+              <strong>Run an act outside the shared projects</strong>. It names
+              the project, the facts of the target and the input that the agent
+              wrote.
+            </li>
+            <li>
+              Type the exact name of the project in the field. The dialog does
+              not trim the text or ignore the case.
+            </li>
+            <li>
+              Select <strong>Run on &lt;name&gt;</strong>, or select
+              <strong>Reject</strong>. <strong>Cancel</strong> keeps the request
+              open.
+            </li>
+          </ol>
+          <p>
+            The act runs as your own act. Nothing about the request enters the
+            conversation. A reject keeps the project hidden. A request lives
+            until its invite ends, and a restart removes it. After an approve or
+            a reject, the same act cannot raise a new request for 24 hours.
+          </p>
           <h2 id="result">Result</h2>
           <p>
             The invitee reads the conversation, writes notes and starts runs for
@@ -244,6 +323,38 @@
                   <td>
                     The set holds no project, more than 50, a repeated id or an
                     unknown project. Pick 1 to 50 existing projects.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>workbench.invite.grant_invalid</code></td>
+                  <td>
+                    The grant names an act that the agent of the conversation
+                    does not list, or a repeated act. Check only the acts that
+                    the dialog shows.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>workbench.scope_request.name_mismatch</code>, or
+                    <strong>Run on</strong> stays disabled
+                  </td>
+                  <td>
+                    The typed text differs from the project name. Type the exact
+                    name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>workbench.scope_request.not_found</code></td>
+                  <td>
+                    The request ended. You revoked the invite, the invite
+                    expired, or kanthord restarted.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>workbench.scope_request.refused</code></td>
+                  <td>
+                    The act is no longer open as a request, or its project is
+                    now shared. The request is gone.
                   </td>
                 </tr>
                 <tr>
