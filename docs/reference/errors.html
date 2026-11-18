@@ -219,6 +219,24 @@
                   <td>Authentication or caller access was rejected.</td>
                 </tr>
                 <tr>
+                  <td><code>gateway.scope.not_found</code></td>
+                  <td>
+                    HTTP <code>404</code>. A call under the read-only identity
+                    of a guest-started run names a record of another project or
+                    an absent record. Both answer the same body. The message is
+                    &quot;The record is not found.&quot;
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>gateway.scope.refused</code></td>
+                  <td>
+                    HTTP <code>403</code>. A call under the read-only identity
+                    of a guest-started run names a global record or an operation
+                    with no project. The message is &quot;This operation is not
+                    available in a run that a guest started.&quot;
+                  </td>
+                </tr>
+                <tr>
                   <td><code>gateway.registration.stale</code></td>
                   <td>
                     The recorded registration has ended and cannot be replayed.
