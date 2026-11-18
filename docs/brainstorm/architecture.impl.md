@@ -1807,6 +1807,11 @@ The deck rules follow.
 - The Outside request card has the title "<title>: N requests outside the shared projects", with "1 request" for one. Its tab label is "Outside request", in the card and in the rows of the inline list. Its cause reads "Shared conversation · A guest run asked for an act on a project that is not shared."
 - The Outside request card has no tab among the seven. Its lead act is "Open conversation", a link to the conversation. It has no approve control and no "Ask Yumi". The review sits in the [chat](workbench-service.impl.md#out-of-scope-requests).
 - An information item is a line in the stream. It never takes the primary or the secondary.
+- Notice line: the Home stream shows one line per conversation with a pending [completion notice](workbench-service.md#workbench-session). The line reads "<title>: <notice>", with the link "Open chat".
+- `<notice>` holds each project block of the last notice as `<project name> · <stats>`, joined by "; ". For example: "Release plan: shop · 2 Completed, 1 Discarded".
+- The notice lines sit with the information lines, above the card deck, oldest first. A notice line never takes the primary or the secondary card. The deck count ignores it.
+- A notice line shows while no owner message follows the last notice of that conversation. A guest note does not clear it. No seen mark is stored.
+- A Home read checks the watched nodes of every conversation of the owner.
 - No project filter exists. The deck covers every project.
 - The deck holds the refresh while an act dialog is open.
 - Exit after an act: the card slides out in 220 ms, and the next card takes the cursor place. A muted line reads "Done: <subject> · <n> items wait".
