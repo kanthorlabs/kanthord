@@ -689,6 +689,7 @@ The guest header of `guest-chat.tsx` shows these lines:
 - The strict tool `guard_verdict` takes `{ tier, confidence, request_quote, reason }`. `tier` is `auto` or `confirm`. `confidence` is a number from 0 to 1. `reason` holds at most `GUARD_REASON_MAX_CHARS` characters.
 - `redactForeignText` keeps the structure of the input and walks each string leaf. A string leaf above `GUARD_TEXT_KEEP_CHARS` characters that `Run.request` lacks becomes `"<agent text, N chars>"`, where N is its length. Every other leaf stays as it is.
 - A precondition field (`expected_*`, `blocked_attempt`) comes from a server read. The classifier never counts it as an invented value.
+- The `reason` of a human act is an annotation that the agent writes. The classifier never counts it as an invented value, and it does not widen the scope.
 - The constants are in `engine/src/workbench/contract.ts`:
   - `GUARD_MAX_TOKENS` is 1024.
   - `GUARD_TIMEOUT_MS` is 10000.
