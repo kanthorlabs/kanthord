@@ -58,15 +58,21 @@ The human identity that the Gateway Service mints for the reads of a run that a 
 The term names no closed set.
 Mai asks Yumi for a report in the conversation of Ulrich. Yumi reads under the read-only identity of Ulrich. A mutation under it answers 401.
 
+## delegate identity
+
+The human identity that the Gateway Service mints for one invocation of a granted act of a run that a [guest](workbench-service.vocabulary.md#guest) started. It names the inviting human, shows the name "<guest> (guest)" and carries the projects of the invite. The Gateway Service mints it only after it checks the [grant](workbench-service.vocabulary.md#invite-grant).
+The term names no closed set.
+Mai asks Yumi to pause a node, and her invite grants `mission.node.pause`. The Gateway Service claims the grant and runs the pause under a delegate identity of Ulrich named "Mai (guest)". The identity ends with the call.
+
 ## project scope
 
-The set of projects that a [read-only identity](#read-only-identity) carries. The Gateway Service refuses every record outside it before the handler runs.
+The set of projects that a [read-only identity](#read-only-identity) or a [delegate identity](#delegate-identity) carries. The Gateway Service refuses every record outside it before the handler runs.
 The term names no closed set.
 The invite of Mai names the projects `Billing` and `Payments`. A read of a node of `Search` answers 404 `gateway.scope.not_found`, and so does a read of a node that does not exist.
 
 ## scoped identity
 
-An identity that carries a [project scope](#project-scope). The read-only identity is the only scoped identity.
+An identity that carries a [project scope](#project-scope). The read-only identity and the [delegate identity](#delegate-identity) are the scoped identities.
 The term names no closed set.
 The Gateway Service runs the scope check for the read-only identity of Ulrich in the run of Mai. It runs no scope check for the human identity of Ulrich in his own run.
 

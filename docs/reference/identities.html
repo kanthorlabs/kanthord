@@ -151,6 +151,12 @@
             and the same name give the same <code>guest_id</code>.
           </p>
           <p>
+            A delegate identity, which the Gateway mints for one granted
+            invocation of a guest run, carries the
+            <code>jti</code> <code>grant:&lt;tool_call_id&gt;</code>. It is not
+            a ULID, and no token carries it.
+          </p>
+          <p>
             A ULID does not establish causal order. Use the owning service&#39;s
             revision or ordering contract when causal order is required.
           </p>
