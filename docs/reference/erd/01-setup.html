@@ -301,6 +301,7 @@ erDiagram
         text invited_by_name "owner display name, read by guest.get as owner_name"
         integer expires_at "Unix ms, 7 days after the create, read by join, list, resolve and the stream"
         text invitee_name "label of 1-64 characters, read by list and the share dialog"
+        text project_ids "JSON array of sorted unique project ids, 1-50 at create, never changed, read by resolve, list, guest.get and create"
     }
 
     project_project ||..o{ project_binding : "FK project_id"
@@ -1510,6 +1511,17 @@ erDiagram
               <code>invitee_name</code> is the label that the owner types, from
               1 to 64 characters. <code>workbench.invite.list</code> reads it,
               and the share dialog shows it.
+            </li>
+            <li>
+              <code>project_ids</code> holds a JSON array of project ids, sorted
+              and unique. The array holds 1 to 50 ids at create, and it never
+              changes. A reference to <code>project_project.id</code> holds no
+              foreign key. <code>resolveInvite</code> reads it as the project
+              scope of the guest and of a guest-started run.
+              <code>workbench.invite.list</code> and
+              <code>workbench.guest.get</code> read it to answer the projects of
+              the invite. <code>workbench.invite.create</code> reads the set of
+              a live invite and compares it with the new set.
             </li>
           </ul>
           <h2 id="cross-group-references">Cross-group references</h2>

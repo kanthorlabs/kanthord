@@ -69,6 +69,18 @@ A binding identity and a project identity follow the identity convention of [arc
 - [gateway-service.impl.md](gateway-service.impl.md#the-jwt) rules that JWT.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules the form.
 
+## The project lookups
+
+- `ProjectService.projectOf(prefix, id)` answers the project of a record, or `null`. The prefix is `project` or `binding`. `isProjectServicePrefix` tells these two from the prefixes of the Mission Service.
+- The lookup `project` reads `project_project` by its primary key and answers the identity of the project.
+- The lookup `binding` reads `project_binding` by its primary key and answers `project_id`.
+- Each lookup is one indexed read. The Gateway resolver of the [project scope](gateway-service.impl.md#the-project-scope) calls them.
+- `projectNames(ids)` answers a map from project identity to name for the ids that exist. It reads `project_project` with one `IN` list. An empty list answers an empty map.
+- The Workbench invite check and the invite answers read `projectNames`. An unknown id has no entry.
+- The query of `project.list` takes `id`: one project identity or an array of at most 50 identities. It has no CLI flag.
+- `listProjects` filters in SQL with `id IN (...)`. The order stays `id` descending, and the cursor rule stays the same.
+- A call under a read-only identity narrows `id` to the projects of its invite before the handler runs.
+
 ## The workspace directory
 
 - The workspace directory is `projects/<project identity>/` of the state directory.
