@@ -124,7 +124,7 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
 - [ ] Added 2026-11-18 from the L7 apps review. The engine counts the length of a name in UTF-16 units, and `apps` counts code points. A name with characters outside the Basic Multilingual Plane can pass the dashboard and fail the engine with 400 `workbench.invite.name_invalid`. Rule one unit for both.
 - [ ] Added 2026-11-18 from the L7 apps review. Four UI follow-ups remain: a visible label of the invite link field, the lines of the evidence danger card per the L7 design, the trim and NFC name rule in the mock daemon, and the streaming member shown by display name.
 - [ ] Added 2026-11-18 from layer L8. Rule that a guest-started run reads no earlier tool result of a run that it did not start. Today it reads the earlier answers of the conversation, and the share dialog warns about it.
-- [ ] Added from layer L8a. A persistent owner audit of out-of-scope approvals, when a page reads it. Today an approval and a reject leave only the log line `workbench.scope_request.settled`.
+- [ ] Added 2026-11-19 from layer L8a. A persistent owner audit of out-of-scope approvals, when a page reads it. Today an approval and a reject leave only the log line `workbench.scope_request.settled`.
 
 ### Worker Service
 

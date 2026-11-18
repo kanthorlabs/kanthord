@@ -593,8 +593,8 @@ The guest header of `guest-chat.tsx` shows these lines:
 - The `footprint.*` and `tracking.*` mutations:
   - R3: `footprint.backup.delete`, `footprint.cleanup.create`, `tracking.trace.delete`.
   - C: `footprint.alert.acknowledge`, `footprint.cleanup.cancel`, `footprint.measure.run`, `tracking.cause.label`.
-- The mutating `workbench.session.*` acts:
-  - C: `workbench.session.approve`, `workbench.session.message`, `workbench.session.create`, `workbench.session.configure`, `workbench.session.fork`, `workbench.session.abort`, `workbench.session.queue.remove`, `workbench.session.action.report`, `workbench.session.autoMode.set`, `workbench.session.scopeRequest.approve`, `workbench.session.scopeRequest.reject`.
+- The mutating `workbench.session.*` acts and the invite revoke:
+  - C: `workbench.session.approve`, `workbench.session.message`, `workbench.session.create`, `workbench.session.configure`, `workbench.session.fork`, `workbench.session.abort`, `workbench.session.queue.remove`, `workbench.session.action.report`, `workbench.session.autoMode.set`, `workbench.session.scopeRequest.approve`, `workbench.session.scopeRequest.reject`, `workbench.invite.revoke`.
 - The set rule: every mutation whose access is in `HUMAN_POLICIES` (`human`, `human_or_worker`, `human_or_service`) and that no tool list names is in the set.
 - `mission.proposal.decide` stays on the `ops@1` list.
 - A new human mutation fails the classification test until a ruling places it.
