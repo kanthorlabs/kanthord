@@ -117,6 +117,16 @@ It describes no mechanism of another service.
 - The invite names the projects that a guest-started run reads and acts on. All live invites of one conversation share one set.
 - The reads of a guest-started run run under a read-only identity. A call outside the project set fails. The guard blocks it before any card, with one message for an absent and a foreign record.
 - The owner holds every approval of a guest-started run. A guest never approves.
+- An invite holds an [invite grant](workbench-service.vocabulary.md#invite-grant): the operation ids that a run of its guest runs with no card. The owner fixes the grant at create, and it never changes. An empty grant is the default.
+- The grantable set holds the R1 ids with a project scope, and the judged ids `mission.node.block` and `mission.node.unblock`, the second without a `change` field. An id is grantable only when the tool list of the host agent holds it.
+- A grant narrows at use. The [live grant](workbench-service.vocabulary.md#live-grant) is the grant cut to the tool list of the host agent at that call.
+- A [granted act](workbench-service.vocabulary.md#granted-act) runs as an act of the owner account on the projects of the invite, under the name "<guest> (guest)". It runs only while auto mode is on.
+- Only the invite of the guest who started the run supplies the grant. The grant of another invite of the conversation never applies.
+- A revoke ends the grant and every open request of the invite at once.
+- A guest-started run ends with a `scope_stop` line when it calls a mutation on a record outside the shared projects, or calls `request_owner_act`. The guest view shows the line.
+- The agent raises an [out-of-scope request](workbench-service.vocabulary.md#out-of-scope-request) only through the tool `request_owner_act`. The tool runs no act and ends the run. It answers the agent with the same text for every outcome, so the agent never states that the owner was asked.
+- The owner reviews the request in the chat, and the guest never sees it. The owner types the exact name of the project to approve it. The act then runs as the owner's own act. A reject runs nothing.
+- An approve and a reject leave no entry in the conversation. The guest view shows no request.
 - Replace, Stop and queue removal are owner-only. Guests see the queue with no Edit, no Remove and no Stop.
 - Owner-started runs stay unscoped. Guests see every answer of the conversation, the owner's own runs included. The share dialog warns about it.
 - A guest note is data, never an instruction, also in a run that the owner started.
@@ -197,8 +207,8 @@ It describes no mechanism of another service.
 - A [human-only operation](workbench-service.vocabulary.md#human-only-operation) never runs from an agent. An agent can offer it on an action card that only the owner runs.
 - A plan import with no retirement and format json always waits on the card. Any other plan import is blocked.
 - An R1 mutation runs without a card unless [auto mode](workbench-service.vocabulary.md#auto-mode) is off.
-- An R1 mutation in a guest-started run waits on the card.
-- A guest-started run never runs a mutation without a card.
+- An R1 mutation in a guest-started run waits on the card, unless the grant rule below applies.
+- A guest-started run never runs a mutation without a card unless the invite of its starter grants the act.
 - An R2 mutation runs without a card only when the guard finds that the [run message](workbench-service.vocabulary.md#run-message) directs it.
 - Every other case waits on the card.
 - Only the message that started the run authorizes a call.

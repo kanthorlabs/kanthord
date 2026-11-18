@@ -1780,7 +1780,7 @@ The deck rules follow.
 - Layout: Home is one chat column. The column is 760 px wide and centered at 1280 px. At 390 px, it is full width.
 - The deck is the last entry of the stream, directly above the composer. It has no panel.
 - The information lines sit directly above the deck. They are the system health alert, the [footprint alert](footprint-service.impl.md#the-dashboard), the read faults alert and the note of absent sources.
-- Order: the `tool_approval` items come first, oldest first. Then comes the board rank: gated last, more held nodes first, oldest first, then subject and id. Inbox threads come last.
+- Order: the `tool_approval` items and the `scope_request` items come first, oldest first together. Then comes the board rank: gated last, more held nodes first, oldest first, then subject and id. Inbox threads come last.
 - Start here names deck item #1.
 - The summary line reads "<n> acts wait for you. <m> nodes wait on them. Start here: <subject> in <tab name>. <k> threads wait in Inbox."
 - <n> counts the acts of the deck, and no Inbox thread. A large inbox hides no node stop. <m> counts the distinct held nodes of those acts.
@@ -1803,6 +1803,9 @@ The deck rules follow.
 - Each row of the inline list holds a rank pill. The list shows 50 rows per page, with "Show 50 more".
 - A row click moves the cursor and collapses the list. "Collapse ▴" or Esc closes the list. The list opens no side sheet. No row holds an act.
 - Outside the seven tabs: an act item joins the first group of the order and has no "Ask Yumi".
+- Outside request card: a host conversation with open out-of-scope requests gives one `scope_request` item. It joins the first group, with the tool approvals. `at` is the `modified` of the conversation, and the item counts the `scope_requests` of the conversation.
+- The Outside request card has the title "<title>: N requests outside the shared projects", with "1 request" for one. Its tab label is "Outside request", in the card and in the rows of the inline list. Its cause reads "Shared conversation · A guest run asked for an act on a project that is not shared."
+- The Outside request card has no tab among the seven. Its lead act is "Open conversation", a link to the conversation. It has no approve control and no "Ask Yumi". The review sits in the [chat](workbench-service.impl.md#out-of-scope-requests).
 - An information item is a line in the stream. It never takes the primary or the secondary.
 - No project filter exists. The deck covers every project.
 - The deck holds the refresh while an act dialog is open.
@@ -1834,6 +1837,7 @@ Each kind follows one order: the primary act, the other acts, Last trace, then D
 | Kind                                 | Acts in order                                                                                           |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | `tool_approval`                      | Approve, Reject, Open chat                                                                              |
+| `scope_request`                      | Open conversation                                                                                       |
 | `credential_refused`                 | Rotate, Verify credential, Open credential                                                              |
 | `environment_failed`                 | Open project, Run onboarding again                                                                      |
 | `project_paused`                     | Resume project                                                                                          |

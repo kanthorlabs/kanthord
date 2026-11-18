@@ -261,3 +261,27 @@ Mai writes "@Yumi Report the state of project P". Yumi reads under the read-only
 The set of 1 to 50 projects that an [invite](#invite) names. A run that a guest started reads and acts only on records of these projects. All live invites of one conversation share one set.
 The term names no closed set.
 Ulrich invites Mai with the projects P and Q. Mai asks "@Yumi Read node N of project R". The call answers that the record is not available in this conversation, for a record of R and for an absent record alike.
+
+## invite grant
+
+The list of operation ids that an [invite](#invite) lets a run of its [guest](#guest) run with no card. The owner fixes it at create. An empty list grants nothing.
+The term names no closed set.
+Ulrich invites Mai and checks `mission.node.pause`. A run that Mai starts pauses a node with no card. A run that another guest starts still waits on the card.
+
+## granted act
+
+A call of an operation that the [live grant](#live-grant) of the invite of the run starter covers. It runs with no card as an act of the owner account, under the name "<guest> (guest)", while [auto mode](#auto-mode) is on.
+The term names no closed set.
+Mai writes "@Yumi Pause node N". Yumi calls `mission.node.pause`, which her invite grants, and the call runs. The tool row shows "Ran without approval for Mai (guest): reversible".
+
+## live grant
+
+The [invite grant](#invite-grant) cut to the operations that the host agent lists and that a grant can hold at the time of the call. A revoke or an expiry of the invite empties it.
+The term names no closed set.
+Ulrich removes `mission.node.pause` from the tool list of the host agent. The grant of Mai's invite still names it, but the live grant no longer holds it.
+
+## out-of-scope request
+
+The ask of a run that a [guest](#guest) started that the owner runs one act on a record outside the [project scope](#project-scope). The agent raises it with the tool `request_owner_act`. It lives as long as its invite. The owner approves it with the typed project name or rejects it.
+The term names no closed set.
+Mai writes "@Yumi Pause node N of project R". Project R is not shared. Yumi calls `request_owner_act`, and the run ends. Ulrich reviews the request, types the name of R and runs the act as his own act.
