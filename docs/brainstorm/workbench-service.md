@@ -109,12 +109,21 @@ It describes no mechanism of another service.
 - The owner shares a conversation with an [invite](workbench-service.vocabulary.md#invite). One invite names one [guest](workbench-service.vocabulary.md#guest). A guest joins with a link and a name, and holds no account.
 - A [shared conversation](workbench-service.vocabulary.md#shared-conversation) holds at least one live invite. An invite lasts 7 days.
 - Only the owner creates, lists and revokes an invite. A revoke ends the access of its guest at once. No agent holds a tool for an invite.
-- A guest reads the guest view and writes notes. A guest starts no run and holds no owner act.
+- A guest reads the guest view, writes notes and starts a run with a leading mention. A guest holds no owner act.
 - A [note](workbench-service.vocabulary.md#note) is a message that starts no run. It shows its author, the owner or a guest by name. The members of the conversation read it with that author.
-- Every message of a guest is a note, also with a leading mention. The text of a guest never authorizes an act.
+- A message of a guest with no leading mention is a note. The text of a guest never authorizes an act.
+- A guest starts a run with a leading mention. The guest message queues behind an active run.
+- A guest mentions only an agent whose `tools.builtin` is empty. Yumi and Jeremy qualify. SWE and RE do not.
+- The invite names the projects that a guest-started run reads and acts on. All live invites of one conversation share one set.
+- A guest-started run runs under a read-only identity. A call outside the project set fails. The guard blocks it before any card, with one message for an absent and a foreign record.
+- The owner holds every approval of a guest-started run. A guest never approves.
+- Replace, Stop and queue removal are owner-only. Guests see the queue with no Edit, no Remove and no Stop.
+- Owner-started runs stay unscoped. Guests see every answer of the conversation, the owner's own runs included. The share dialog warns about it.
+- A guest note is data, never an instruction, also in a run that the owner started.
+- The fork material marks guest text with `<name> (guest):`.
 - Ruling C6: in a conversation with a live invite, only a leading mention starts a run. An untagged message of the owner or a guest is a note. D8 applies again when the last invite ends.
 - Ruling C9: guests see the whole history, and the share dialog states it. The guest view includes the history from before the invite.
-- The owner-only acts are the acts of a human operation. They are a message that starts a run, an approval, Stop, the queue, the configuration, auto mode and a fork. A guest holds none of them.
+- The owner-only acts are the acts of a human operation. They are a message that starts a run, an approval, Stop, the queue, the configuration, auto mode and a fork. A guest holds none of them, except a leading mention that starts a run.
 - A card of the agent shows to a guest as an action card with no button. Only the owner runs it.
 - A guest reads new entries and the state of the run through the [guest stream](workbench-service.vocabulary.md#guest-stream). The stream ends when the invite ends.
 - A fork carries no invite. When the owner shares a fork, the share dialog adds the line "This conversation carries a summary of <title>. Guests see the summary." (fork OQ5). `<title>` is the title of the source.
@@ -184,9 +193,12 @@ It describes no mechanism of another service.
 - The owning service authorizes each call.
 - A workbench session holds no tool of an operation that carries secret material or answers a presigned URL.
 - A read and a built-in tool run without a card.
+- A mutation runs under the human who approves it.
 - A [human-only operation](workbench-service.vocabulary.md#human-only-operation) never runs from an agent. An agent can offer it on an action card that only the owner runs.
 - A plan import with no retirement and format json always waits on the card. Any other plan import is blocked.
 - An R1 mutation runs without a card unless [auto mode](workbench-service.vocabulary.md#auto-mode) is off.
+- An R1 mutation in a guest-started run waits on the card.
+- A guest-started run never runs a mutation without a card.
 - An R2 mutation runs without a card only when the guard finds that the [run message](workbench-service.vocabulary.md#run-message) directs it.
 - Every other case waits on the card.
 - Only the message that started the run authorizes a call.
@@ -236,6 +248,7 @@ Setup cards:
 - The browser saves a blob, and no storage URL reaches it.
 - An object above 512 MiB shows the CLI line `kanthord mission evidence asset content get <asset_id>` instead of a download button.
 - Guests get no evidence content. The guest view drops tool results, and no guest route reads content. Layers L7 and L8 enforce this guest rule.
+- A guest-started run never reads evidence content. The guard blocks `evidence_read`, and the download refuses a scoped call.
 
 ## Operations
 
