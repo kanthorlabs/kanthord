@@ -52,6 +52,24 @@ What the Gateway Service establishes from a guest JWT, and what it passes to the
 The term names no closed set.
 Mai joins the conversation of Ulrich with a link and the name "Mai". The Gateway Service verifies her JWT, reads the invite row and establishes the guest identity. A request for a human operation with that JWT answers 401.
 
+## read-only identity
+
+The human identity that the Gateway Service mints for the reads of a run that a [guest](workbench-service.vocabulary.md#guest) started. It names the inviting human and carries the projects of the invite. The Gateway Service refuses it on every mutation.
+The term names no closed set.
+Mai asks Yumi for a report in the conversation of Ulrich. Yumi reads under the read-only identity of Ulrich. A mutation under it answers 401.
+
+## project scope
+
+The set of projects that a [read-only identity](#read-only-identity) carries. The Gateway Service refuses every record outside it before the handler runs.
+The term names no closed set.
+The invite of Mai names the projects `Billing` and `Payments`. A read of a node of `Search` answers 404 `gateway.scope.not_found`, and so does a read of a node that does not exist.
+
+## scoped identity
+
+An identity that carries a [project scope](#project-scope). The read-only identity is the only scoped identity.
+The term names no closed set.
+The Gateway Service runs the scope check for the read-only identity of Ulrich in the run of Mai. It runs no scope check for the human identity of Ulrich in his own run.
+
 ## client secret
 
 The secret that the server derives for one `client` JWT. A worker instance at the `worker` placement receives it sealed in the connection answer and holds it in memory only.

@@ -49,6 +49,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] Added 2026-09-24. Telegram registers its platform entry and its credential types in `project-service.impl.md` when its design lands.
 - [ ] Added 2026-09-26 from the pin-and-use ruling. The UI shows a removed binding with the records that reference it. No page declares that read, and the records live in the Mission, Worker and Scheduler Services. Declare the reverse lookup and the service that answers it.
 - [ ] RULED 2026-11-06 by Ulrich (P2, P2b, T1, T2, inbox S3, inbox S6). Build the binding kind `conversation`, the key `link_trust` of a conversation binding and of a repository binding, and the key `inbox`. The binding draft of `apps` keeps `link_trust` and a `conversation` binding unchanged. [project-service.impl.md](project-service.impl.md#conversation-configuration) holds the design. Delete the item when the engine and `apps` hold the change.
+- [ ] Added 2026-11-18 from layer L8. Rule that a project delete must keep invite scopes fail closed. An invite stores its project ids in `workbench_invite.project_ids`. The id of a deleted project must grant no record. Decide whether a delete also removes the id from each live invite.
 
 ### Mission Service
 
@@ -122,6 +123,7 @@ Added 2026-10-06 by Ulrich. A human drives a workbench session through the chat 
 - [ ] Added 2026-11-18 from the L7 end-to-end checks. An untagged message that waits in the queue before `invite.create` still runs by D8 when it starts. The rule of a note applies at the arrival of a message, not at the start of a queued item. Confirm this rule or move it to the start of the item.
 - [ ] Added 2026-11-18 from the L7 apps review. The engine counts the length of a name in UTF-16 units, and `apps` counts code points. A name with characters outside the Basic Multilingual Plane can pass the dashboard and fail the engine with 400 `workbench.invite.name_invalid`. Rule one unit for both.
 - [ ] Added 2026-11-18 from the L7 apps review. Four UI follow-ups remain: a visible label of the invite link field, the lines of the evidence danger card per the L7 design, the trim and NFC name rule in the mock daemon, and the streaming member shown by display name.
+- [ ] Added 2026-11-18 from layer L8. Rule that a guest-started run reads no earlier tool result of a run that it did not start. Today it reads the earlier answers of the conversation, and the share dialog warns about it.
 
 ### Worker Service
 

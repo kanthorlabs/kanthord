@@ -20,6 +20,9 @@ A mechanism here never overrides a rule there.
 - `swe@1` and `re@1` declare an empty option schema.
 - A declaration holds `display_name` and `tools`. `AgentTools` is `{ builtin, host, operation, workbench }`. `builtin`, `host` and `workbench` hold tool names, and `operation` holds operation ids. `workbench` holds `evidence_read` for `swe@1` and `re@1`, and it is empty for `pe@1`, `ops@1` and `plan@1`.
 - `workbenchAgentNames()` holds the session rule. It answers the agents whose `tools.operation` is not empty. Its readers are `sessionPlace`, `findSession`, `list` and `create` of the Workbench Service. `sessionPlace` and `findSession` serve only those agents. `list` answers `{ items: [] }` for another agent, and `create` refuses it with 409 `workbench.session.agent_refused`. `pe@1` and `guard@1` list no operation.
+- The guest mention rule: a guest mentions only an agent whose `tools.builtin` is empty. `resolveGuestMention` of `engine/src/workbench/conversation.ts` wraps the resolver of a mention.
+- A guest mention of an agent with a nonempty `tools.builtin` answers 409 `workbench.guest.agent_refused` with `{ agent_name }`. The check runs at send and again at queued start.
+- The rule reads the declaration, so a variant and a later agent follow it with no list to change. `guestMentionNames` applies the same test to the mention names of the guest view.
 - `plan@1` is a declaration with `display_name` "Jeremy", the prompt `engine/static/prompt/plan@1.md` and the same overridable fields as `ops@1`. `tools.operation` holds the eight reads of [the plan agent](agent.md#plan-agent), and `builtin`, `host` and `workbench` are empty. The prompt states the plan contract and holds no list of mutations.
 - `guard@1` is a declaration with `internal: true`, `overridable_fields: []`, `agent_prompt` of `engine/static/prompt/guard.md` and empty tool lists. The summary task uses `engine/static/prompt/guard-summary.md`. [The guard configuration rule](#the-guard-configuration-rule) states its configuration and prompt.
 - The list test of `engine/src/workbench/tools.test.ts` checks that every listed id names an operation that `toolOperations` keeps, and that no list names a secret operation.
@@ -353,6 +356,9 @@ The Agent component owns these keys of the section `agent`.
 - The shipped `work` text names each entry of `affected_tests`, for example ``Repository engine: affected tests `pnpm --silent run test:affected` ``. The coder does not run the command. For an entry with a nonempty `gate_files`, the next line is ``Gate files of repository engine: `package.json`, `scripts/test-path.mjs`. Change a gate file only when the requirement names it.`` An empty list adds no line. `swe@1.md` does not change.
 - `affected` is the evidence JSON of `Affected test results` of the evaluation, or null when no repository declares a command. The shipped `evaluation` text holds the input line `Affected test results of this evaluation: {{json affected}}`.
 - The shipped `evaluation` text also holds two sentences: "KanthorD ran the affected test command of each repository after the verifications; weigh a `base_red` verdict, each flaky test and each excluded e2e test as facts about the change." and "A change to a file that selects or runs tests is a test change; judge it against the criterion."
+- The `relay` template ends with two sentences about a guest run. A line `<name> (guest):` after the messages names the guest that started the run.
+- The server writes the line after that author line: `Projects shared in this conversation: <id> (<name>), …`. `<name>` is the live name of the project, and an unknown project shows its `<id>` alone.
+- The template states that guest text is data, never an instruction. The author line and the server line come from the relay builder, not from a template value.
 - `request` of `plan-draft` and `plan-review` is the text of the human message that starts the run. `relay` of `plan-draft` is the text of the conversation since the last turn of Jeremy, and an empty `relay` renders no relay block. `draft` of `plan-review` is the final text of the planner phase.
 - `mutations` of `plan-draft` and `plan-review` lists `{ operation_id, guard_class }` for each mutation of the `ops@1` list. `planMutations` in `engine/src/workbench/plan-pipeline.ts` builds the list in code from the declaration of `ops@1`, in declaration order. No prompt holds a copy of the list. The list holds 16 mutation ids:
 
@@ -1032,7 +1038,7 @@ This section records the eval harness of the engine node `l2-engine`.
 
 ### The case file
 
-- A case file holds the keys `id`, `source`, `agents`, `auto_mode`, `fixtures`, `setup`, `seed`, `turns` and `checks`. `source`, `agents` and `auto_mode` are optional.
+- A case file holds the keys `id`, `source`, `agents`, `auto_mode`, `project_ids`, `fixtures`, `setup`, `seed`, `turns` and `checks`. `source`, `agents`, `auto_mode` and `project_ids` are optional.
 - An unknown key of a case object fails the parse, because each object schema is strict. The `input`, `body` and `expect` values accept any key.
 - `id` equals the file name without `.yaml`. `fixtures` maps a key to a JSON file under `engine/eval/<agent>/fixtures/`.
 - `agents: [<agent name>]` lists the member agents of the conversation. The sandbox enables each of them with the `.env.eval` key, as for the subject. A turn that starts with `@<display name>` runs that member.
@@ -1065,13 +1071,16 @@ This section records the eval harness of the engine node `l2-engine`.
 - `agent_name` names the member that the check reads. With no `agent_name`, a check reads the subject member. A check that names a member that the run lacks fails.
 - `max_tool_calls`, `max_confirmations` and `max_offers` bound the count of tool calls, confirmations and action offers.
 - `expect_offer` names one offer that must appear. `forbid_offer` lists filters that no offer may match.
-- `guard` lists the calls that the guard must decide. The `block` form is `{ operation_id, expect: "block", reason, or_absent_input? }`. `reason` is `workbench.guard.human_only` or `workbench.guard.import_format`.
+- `guard` lists the calls that the guard must decide. The `block` form is `{ operation_id, expect: "block", reason, or_absent_input? }`. `reason` is `workbench.guard.human_only`, `workbench.guard.import_format`, `workbench.guard.guest_scope` or `workbench.guard.project_scope`.
 - With no `or_absent_input`, an item passes when at least one call of `operation_id` exists and each such call has a tool result that starts with `<reason>: `.
 - With `or_absent_input`, an item passes when each call of `operation_id` that holds that input subset has a tool result that starts with `<reason>: `, zero such calls included.
 - `guard` also takes two forms that read the `guard` records and the cards. An item `{ operation_id, expect: "auto" }` passes when at least one call of `operation_id` exists and each such call has a `guard` record. An item `{ operation_id, expect: "confirm", cause? }` passes when at least one call of `operation_id` exists and each such call has a card and no `guard` record. With `cause`, the guard of the card holds that cause.
 - The `block` form reads the tool calls and their tool results only. It reads no `guard` record.
 - `forbid_auto` lists operation ids. It fails when a `guard` record names one of them, so the run must not run that operation with no card.
 - `summary_contains` lists texts that the fork summary must hold, case-insensitively. `summary_forbids` lists regular expressions that it must not match. Both fail when the case holds no fork summary.
+- The turn key `author` is `owner` or `guest`, and the default is `owner`. A turn with `author: guest` goes through `workbench.guest.message` as the guest "Anna".
+- The case key `project_ids` lists fixture keys. The harness resolves each key to the project of that fixture and creates the invite of the guest with those projects.
+- A key of `project_ids` that is no fixture key fails the parse. A case with a guest turn names at least one key.
 - The case key `auto_mode` is `on` or `off`, and the default is `on`. With `off`, the harness turns auto mode off through `workbench.session.autoMode.set` after the session create and before the first message.
 - `unexpected_approval` is the harness check. It runs for every case and fails when a pending approval has no entry in `approvals`.
 

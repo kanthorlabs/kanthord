@@ -106,7 +106,7 @@ Ulrich creates the invite for Mai, and his conversation is a shared conversation
 
 ## note
 
-A message of a [shared conversation](#shared-conversation) that starts no run. It shows its author, the owner or a [guest](#guest). An untagged message of the owner is a note, and every message of a guest is a note.
+A message of a [shared conversation](#shared-conversation) that starts no run. It shows its author, the owner or a [guest](#guest). An untagged message of the owner is a note, and a message of a guest with no leading mention is a note.
 The term names no closed set.
 Ulrich writes "We wait for the review" in a shared conversation. The message is a note, and no agent answers. He writes "@SWE check node_9", and `swe@1` runs the message.
 
@@ -249,3 +249,15 @@ Ulrich writes "Unblock Add password reset". That message is the run message. A v
 The control in the chat header that sets [auto mode](#auto-mode) of the session. Only the owner changes it. The setting stays across a restart.
 The closed set of values is `on` and `off`.
 Ulrich turns the switch off before he asks Yumi to review a plan. Each mutation of the run that the guard does not block waits on a card.
+
+## read-only identity
+
+The caller identity of a run that a [guest](#guest) started. It carries the account of the inviter and the [project scope](#project-scope) of the invite. It runs a read of the scope only. It never runs a mutation.
+The term names no closed set.
+Mai writes "@Yumi Report the state of project P". Yumi reads under the read-only identity of Ulrich. A mutation that Yumi proposes waits on a card that only Ulrich approves, and it runs under Ulrich.
+
+## project scope
+
+The set of 1 to 50 projects that an [invite](#invite) names. A run that a guest started reads and acts only on records of these projects. All live invites of one conversation share one set.
+The term names no closed set.
+Ulrich invites Mai with the projects P and Q. Mai asks "@Yumi Read node N of project R". The call answers that the record is not available in this conversation, for a record of R and for an absent record alike.

@@ -279,6 +279,51 @@ A direct call that supplies a machine identity passes the worker-binding check a
 The route handler passes the identity to the service function as an explicit caller argument, so a service module imports no Hono symbol.
 The JWT never leaves the Gateway Service module.
 
+### The read-only identity
+
+- `mintReadOnlyIdentity(accountId, { inviteId, projectIds })` of `src/kernel/caller-mint.ts` mints the read-only identity. It is a frozen human identity with `jti` `reader:<invite id>`.
+- `callerProvenance.reader` records the value as a human identity. It also stores the mark `{ inviteId, projects }` in a module-private `WeakMap`.
+- `isReadOnlyIdentity(value)` is true for a marked value. `projectScopeOf(identity)` answers the set of projects, or `null` for an unmarked identity.
+- `readOnlyInviteOf(identity)` answers the invite identity of the mark, or `null`.
+- A guest identity holds `reader`, the read-only identity of its invite. `mintGuestIdentity` asserts it. `resolveGuest` builds it from the live invite row: `invited_by` and `project_ids`.
+- A scoped identity is an identity for which `projectScopeOf` answers a set. Only the read-only identity is scoped.
+- The `recheck` rule for a marked human identity:
+  - `recheckHuman` keeps the mark. It reads `readOnlyInviteOf` and resolves the invite again.
+  - It mints a new read-only identity with the live `project_ids`.
+  - A deleted or expired invite answers 401 `gateway.jwt.invite_ended`.
+- An unmarked human identity mints again as before.
+- The mutation refusal: `refuseReadOnlyMutation` answers 401 `gateway.authentication.unauthorized` for a mutation under a read-only identity.
+- The refusal runs after admission and before the input parse. It therefore runs before the idempotency reservation and the handler.
+
+### The project scope
+
+- `Operation.projectScope` is optional. Its values are the `ProjectScopeRule` constants `target`, `target_json` and `list`.
+- An operation with no `projectScope` is refused for a scoped identity.
+- Rule `target`: every project-bound identity in the params, the query and the body must belong to a project of the scope.
+- Rule `target_json`: the same as `target`, and the body must hold `format` `json`. Any other body is refused.
+- Rule `list`: the check allows the call. `narrow` limits the query `id` to the scope. `project.list` is the only operation with this rule.
+- `ProjectScope` of `src/kernel/project-scope.ts` is the resolver. It takes a lookup `projectOf(prefix, id)` that answers the project of a record, or `null`.
+- The composition root wires the lookup: a prefix of the Project Service goes to `project.projectOf`, and every other prefix goes to `mission.projectOf`.
+- `PROJECT_BOUND_PREFIXES` holds `project`, `binding`, `mission`, `node`, `proposal`, `assessment`, `evidence` and `evidence_asset`.
+- `SCOPE_IDENTITY_LIMIT` is 256.
+- `check(operation, { input, scope })` answers `allowed`, `not_found` or `refused`:
+  - It collects every identity of a project-bound prefix from each string leaf of the params, the query and the body.
+  - It answers `refused` when no identity is found, or when more than `SCOPE_IDENTITY_LIMIT` are found.
+  - It answers `not_found` when one identity has no project, or has a project outside the scope. Otherwise it answers `allowed`.
+- The task id rule: the resolver does not look up a `task_` id. The mission import searches only the mission of the request. A foreign task id answers `mission.import.unknown_id`.
+- `narrow(input, scope)` keeps the query ids that the scope holds. Without a query `id`, it takes every id of the scope. It answers `null` when no id remains.
+- A `null` from `narrow` ends the call. The Gateway answers the status of the operation with `{ items: [], next_cursor: null }` and runs no handler.
+- A cursor of a scoped list operation is a keyset value. Its decode never reads a row.
+- `admitsAnswer(operation, answer, request)` is the answer check. A `Response` passes.
+- The answer check fails when a `project_id` of the answer is outside the scope. For rule `list`, it also fails when an `items[].id` is outside the scope.
+- The order in `execute`: input parse, scope check, idempotency reservation, handler, answer check.
+- `scopeGate` runs the scope check. The scope check runs under a scoped identity only. An invocation with no `projectScope` wiring refuses a scoped call.
+- A `refused` verdict answers 403 `gateway.scope.refused`. The message is "This operation is not available in a run that a guest started."
+- A `not_found` verdict answers 404 `gateway.scope.not_found`. The message is "The record is not found." The answer holds no details.
+- A foreign record and an absent record give the same 404.
+- `refuseForeignAnswer` runs the answer check after the handler. A failed check logs `gateway.scope.answer_refused` at level error with `operation` and `request_id`.
+- The failed answer check answers 404 `gateway.scope.not_found`. The log line holds no record.
+
 ## Errors and logging
 
 One `respondError()` function produces every failure body, in the shape `{"error":{"code","message","details"},"request_id"}`.

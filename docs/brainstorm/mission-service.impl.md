@@ -189,6 +189,18 @@ The service also derives one `FrozenAction` for each pair of a `reply` action an
 - `mission_evidence_asset_evidence` is a unique index on `mission_evidence_asset (evidence_id, id)`. The asset reads and the asset delete of an evidence record use it.
 - Each lookup index ends with the primary key of its table, so each one is unique.
 
+## The project lookups
+
+- `MissionService.projectOf(prefix, id)` answers the project of a record, or `null`. The prefix is `mission`, `node`, `proposal`, `assessment`, `evidence` or `evidence_asset`.
+- `projectOfRecord` of `src/mission/store.ts` runs one statement for each prefix. The Gateway resolver of the [project scope](gateway-service.impl.md#the-project-scope) calls it.
+- `mission` reads `project_id` of `mission_mission` by its primary key.
+- `node` reads `mission_node` by its primary key and joins `mission_mission` on `mission_id`.
+- `proposal` reads `mission_proposal` by its primary key. It joins `mission_node` on `node_id`, then `mission_mission`.
+- `assessment` reads `mission_assessment` by its primary key. It joins `mission_node` through `mission_assessment.node_id`, then `mission_mission`.
+- `evidence` reads `mission_evidence` by its primary key. It joins `mission_node` on `node_id`, then `mission_mission`.
+- `evidence_asset` reads `mission_evidence_asset` by its primary key. It joins `mission_evidence` on `evidence_id`, then `mission_node` and `mission_mission`.
+- Each lookup is one indexed read. A missing record answers `null`.
+
 ## Export and the two formats
 
 - `mission.export` uses `GET /api/mission/:mission_id/export?format=markdown|json` with `human` access.
