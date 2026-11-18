@@ -66,6 +66,12 @@ async function sections() {
     EVIDENCE_TEXT_MAX_BYTES,
     EVIDENCE_TEXT_MEDIA_TYPES,
   } = await import(join(ENGINE, "workbench/evidence.ts"));
+  const { isConcurrencyKey, requestOwnerActTool } = await import(
+    join(ENGINE, "workbench/scope-requests.ts")
+  );
+  const { WORKBENCH_REQUEST_OWNER_ACT_TOOL } = await import(
+    join(ENGINE, "workbench/contract.ts")
+  );
   const operations = [];
   for (const [directory, exportNames] of CONTRACTS) {
     const contract = await import(join(ENGINE, directory, "contract.ts"));
@@ -113,7 +119,23 @@ async function sections() {
       .map((agent) => `${agent.display_name} (${agent.agent_name})`),
   };
   assert.ok(evidence.agents.length > 0, `no agent holds ${EVIDENCE_READ_TOOL}`);
-  return { groups: result, actions, evidence };
+  const requestTool = requestOwnerActTool(() => {});
+  assert.equal(requestTool.name, WORKBENCH_REQUEST_OWNER_ACT_TOOL);
+  assert.ok(
+    isConcurrencyKey("expected_state") && isConcurrencyKey("blocked_attempt"),
+  );
+  const request = {
+    tool: requestTool.name,
+    description: requestTool.description,
+    parameters: Object.entries(requestTool.parameters.properties).map(
+      ([name, schema]) => ({
+        name,
+        type: schema.type,
+        description: schema.description,
+      }),
+    ),
+  };
+  return { groups: result, actions, evidence, request };
 }
 
 const EVIDENCE_PARAMETER_TEXT = {
@@ -151,8 +173,34 @@ function evidenceSection(evidence) {
 }
 
 const evidenceTitle = "Workbench tool <code>evidence_read</code>";
+const requestTitle = "Workbench tool <code>request_owner_act</code>";
 
-function render({ groups, actions, evidence }) {
+function requestSection(request) {
+  assert.deepEqual(
+    request.parameters.map(({ name, type }) => [name, type]),
+    [
+      ["operation_id", "string"],
+      ["input", "object"],
+    ],
+    "the parameters of request_owner_act changed",
+  );
+  return [
+    `<h2 id="request-owner-act">${requestTitle}</h2>`,
+    `<p>An agent in a run that a guest started also holds the tool <code>${request.tool}</code>. It asks the owner to run one act on a record that is not available in the conversation. It runs nothing, and it needs no approval, because it is no operation. No other run holds it.</p>`,
+    "<p>The call ends the run. The tool gives the agent the same answer for every outcome, so the agent never learns whether the owner got a request. The owner reviews the request in the chat and types the name of the project to run the act.</p>",
+    ...table(
+      ["Parameter", "Type", "Description"],
+      request.parameters.map(({ name, type, description }) => [
+        `<code>${name}</code>`,
+        type,
+        escape(description),
+      ]),
+    ),
+    "<p>The tool drops a request whose body holds a concurrency key: any key that starts with <code>expected_</code>, and <code>blocked_attempt</code>. A dropped request raises nothing for the owner. The owner side supplies these keys.</p>",
+  ];
+}
+
+function render({ groups, actions, evidence, request }) {
   const anchor = (group) => group.anchor;
   const offerTitle = "Workbench tool <code>offer_action</code>";
   const lines = [
@@ -189,6 +237,7 @@ function render({ groups, actions, evidence }) {
     ),
     `          <li><a href="#offer-action">${offerTitle}</a></li>`,
     `          <li><a href="#evidence-read">${evidenceTitle}</a></li>`,
+    `          <li><a href="#request-owner-act">${requestTitle}</a></li>`,
     "        </ul>",
     "      </details>",
     "      <main>",
@@ -246,6 +295,7 @@ function render({ groups, actions, evidence }) {
       ]),
     ),
     ...evidenceSection(evidence),
+    ...requestSection(request),
     "        </article>",
     "      </main>",
     "    </div>",

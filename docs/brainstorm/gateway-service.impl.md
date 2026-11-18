@@ -281,19 +281,44 @@ The JWT never leaves the Gateway Service module.
 
 ### The read-only identity
 
-- `mintReadOnlyIdentity(accountId, { inviteId, projectIds })` of `src/kernel/caller-mint.ts` mints the read-only identity. It is a frozen human identity with `jti` `reader:<invite id>`.
-- `callerProvenance.reader` records the value as a human identity. It also stores the mark `{ inviteId, projects }` in a module-private `WeakMap`.
+- `mintReadOnlyIdentity(accountId, { inviteId, projectIds, guestName })` of `src/kernel/caller-mint.ts` mints the read-only identity. It is a frozen human identity with `jti` `reader:<invite id>`. It asserts a `guestName` that is not blank.
+- `callerProvenance.reader` records the value as a human identity. It also stores the mark `{ inviteId, guestName, projects }` in a module-private `WeakMap`.
 - `isReadOnlyIdentity(value)` is true for a marked value. `projectScopeOf(identity)` answers the set of projects, or `null` for an unmarked identity.
-- `readOnlyInviteOf(identity)` answers the invite identity of the mark, or `null`.
+- `readOnlyInviteOf(identity)` answers the invite identity of the mark, or `null`. `readOnlyGuestNameOf(identity)` answers the guest name of the mark, or `null`.
 - A guest identity holds `reader`, the read-only identity of its invite. `mintGuestIdentity` asserts it. `resolveGuest` builds it from the live invite row: `invited_by` and `project_ids`.
-- A scoped identity is an identity for which `projectScopeOf` answers a set. Only the read-only identity is scoped.
+- A scoped identity is an identity for which `projectScopeOf` answers a set. The read-only identity and the [delegate identity](#the-delegate-identity) are scoped.
 - The `recheck` rule for a marked human identity:
-  - `recheckHuman` keeps the mark. It reads `readOnlyInviteOf` and resolves the invite again.
-  - It mints a new read-only identity with the live `project_ids`.
+  - `recheckHuman` keeps the mark. It reads `readOnlyInviteOf` and `readOnlyGuestNameOf` and resolves the invite again.
+  - It mints a new read-only identity with the live `project_ids` and the guest name of the mark.
   - A deleted or expired invite answers 401 `gateway.jwt.invite_ended`.
 - An unmarked human identity mints again as before.
 - The mutation refusal: `refuseReadOnlyMutation` answers 401 `gateway.authentication.unauthorized` for a mutation under a read-only identity.
 - The refusal runs after admission and before the input parse. It therefore runs before the idempotency reservation and the handler.
+- An invocation that carries a `grant` skips this refusal. The [grant claim](#the-delegate-identity) then decides the call.
+
+### The delegate identity
+
+- `ClientOptions.grant` of `src/kernel/operation.ts` is `{ sessionId, toolCallId }`, and `InvocationOptions.grant` has the same shape.
+- Only the in-process client sets `grant`. The Workbench operation tool passes it for a call that holds a grant ticket. The HTTP route never sets it, so no request from the network carries a grant.
+- `Invocation.granted` claims the grant in `execute` after the input parse. It claims with the parsed input, before the scope check and before the idempotency reservation. It runs after `refuseReadOnlyMutation` and before `refuseCancelled`.
+- A mutation that carries a `grant` skips `refuseReadOnlyMutation`, so the claim decides the call.
+- A call with no `grant` keeps the identity that admission gave.
+- `Authentication.delegateOf(reader, grant, call)` reads `readOnlyInviteOf` and `readOnlyGuestNameOf` of the reader. It calls `claimGrant` of the Workbench Service with `{ inviteId, sessionId, toolCallId, operationId, input }`.
+- `claimGrant` answers `{ invitedBy, projectIds }` or `null`. The [Workbench Service](workbench-service.impl.md#invite-grant) rules its null cases.
+- A refused claim answers 401 `gateway.grant.refused`. The message is "The grant does not cover this call." The answer holds no details. These cases answer it:
+  - The operation is no mutation.
+  - The identity is no human identity, or it is no read-only identity.
+  - The read-only identity holds no invite or no guest name.
+  - The Workbench lookup is not wired, or `claimGrant` answers `null`.
+  - `invitedBy` of the claim differs from the `accountId` of the read-only identity.
+- `mintDelegateIdentity(accountId, { guestName, toolCallId, projectIds })` of `src/kernel/caller-mint.ts` mints the delegate identity. It is a frozen human identity.
+- Its `accountId` is the inviter, `invitedBy` of the claim. Its `jti` is `grant:<tool_call_id>`.
+- Its name is `<guest name> (guest)`. `cutAtCodePoint` cuts the guest name at a code point boundary, so that the name stays within `MAX_DISPLAY_NAME_LENGTH`, 64 characters, with the suffix " (guest)".
+- `callerProvenance.delegate` records the value as a human identity. It stores the project scope in a module-private `WeakMap`.
+- Its project scope is `projectIds` of the claim, the projects of the invite row at the claim. `projectScopeOf` answers that set, so the scope check applies to a granted call.
+- `isDelegateIdentity(value)` is true for a marked value. `isReadOnlyIdentity` is false for it.
+- A delegate identity lives for one invocation. No token carries it.
+- `recheck` refuses a delegate identity. `recheckHuman` answers 401 `gateway.authentication.unauthorized` for it.
 
 ### The project scope
 
@@ -316,7 +341,7 @@ The JWT never leaves the Gateway Service module.
 - A cursor of a scoped list operation is a keyset value. Its decode never reads a row.
 - `admitsAnswer(operation, answer, request)` is the answer check. A `Response` passes.
 - The answer check fails when a `project_id` of the answer is outside the scope. For rule `list`, it also fails when an `items[].id` is outside the scope.
-- The order in `execute`: input parse, scope check, idempotency reservation, handler, answer check.
+- The order in `execute`: input parse, grant claim, scope check, idempotency reservation, handler, answer check.
 - `scopeGate` runs the scope check. The scope check runs under a scoped identity only. An invocation with no `projectScope` wiring refuses a scoped call.
 - A `refused` verdict answers 403 `gateway.scope.refused`. The message is "This operation is not available in a run that a guest started."
 - A `not_found` verdict answers 404 `gateway.scope.not_found`. The message is "The record is not found." The answer holds no details.
@@ -338,6 +363,7 @@ A cancellation error of the request context answers 503 `gateway.invocation.canc
 `pino` redacts an enumerated list of paths, and a test asserts each path.
 
 - A deleted or expired invite answers 401 `gateway.jwt.invite_ended` (`JwtCause.InviteEnded`) at authentication, at recheck and in each guest operation.
+- A refused grant claim answers 401 `gateway.grant.refused`. See [The delegate identity](#the-delegate-identity).
 - kanthord logs the route pattern only, for example `/api/workbench/invite/join`. No log line holds an invite token.
 
 ## The operation registry

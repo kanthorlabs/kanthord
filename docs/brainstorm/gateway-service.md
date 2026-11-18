@@ -83,6 +83,7 @@ It describes no mechanism of another service.
 - A successful verification establishes the [guest identity](gateway-service.vocabulary.md#guest-identity).
 - The Gateway Service passes the guest identity to the Workbench Service. This transfer satisfies the [forwarding contract](gateway-service.vocabulary.md#forwarding-contract).
 - No caller nominates itself as a guest.
+- A granted act of a guest run runs under a delegate identity of the inviter that the Gateway mints for one invocation, after it checks the grant.
 - The Gateway mints a read-only identity of the inviting human for the reads of a guest run. It refuses that identity on every mutation. The read-only identity carries the projects of its invite. The Gateway refuses every other record before the handler, with one answer for an absent and a foreign record.
 - The invite token is the only gate of `workbench.invite.join`.
 

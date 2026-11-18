@@ -302,6 +302,7 @@ erDiagram
         integer expires_at "Unix ms, 7 days after the create, read by join, list, resolve and the stream"
         text invitee_name "label of 1-64 characters, read by list and the share dialog"
         text project_ids "JSON array of sorted unique project ids, 1-50 at create, never changed, read by resolve, list, guest.get and create"
+        text granted_operations "NOT NULL DEFAULT '[]', JSON array of sorted unique operation ids, fixed at create, read by the guard, claimGrant, list and guest.get"
     }
 
     project_project ||..o{ project_binding : "FK project_id"

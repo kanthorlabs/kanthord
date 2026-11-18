@@ -31,6 +31,7 @@
           <li><a href="#plan-1">Jeremy (plan@1)</a></li>
           <li><a href="#offer-action">Workbench tool <code>offer_action</code></a></li>
           <li><a href="#evidence-read">Workbench tool <code>evidence_read</code></a></li>
+          <li><a href="#request-owner-act">Workbench tool <code>request_owner_act</code></a></li>
         </ul>
       </details>
       <main>
@@ -572,6 +573,31 @@
 <li><code>application/yaml</code></li>
 </ul>
 <p>The tool refuses an image or any other binary type. The owner downloads that asset from the node page.</p>
+<h2 id="request-owner-act">Workbench tool <code>request_owner_act</code></h2>
+<p>An agent in a run that a guest started also holds the tool <code>request_owner_act</code>. It asks the owner to run one act on a record that is not available in the conversation. It runs nothing, and it needs no approval, because it is no operation. No other run holds it.</p>
+<p>The call ends the run. The tool gives the agent the same answer for every outcome, so the agent never learns whether the owner got a request. The owner reviews the request in the chat and types the name of the project to run the act.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>operation_id</code></td>
+<td>string</td>
+<td>The id of the act, for example mission.node.pause.</td>
+</tr>
+<tr>
+<td><code>input</code></td>
+<td>object</td>
+<td>The params, query and body of the act, with every field that the act input requires, for example body.reason in the words of the guest. Leave out every key that starts with expected_ and the key blocked_attempt, even when the schema of the act lists them as required. The owner supplies them.</td>
+</tr>
+</tbody></table>
+</div>
+<p>The tool drops a request whose body holds a concurrency key: any key that starts with <code>expected_</code>, and <code>blocked_attempt</code>. A dropped request raises nothing for the owner. The owner side supplies these keys.</p>
         </article>
       </main>
     </div>

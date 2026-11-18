@@ -280,18 +280,21 @@ The constants are in `engine/src/workbench/contract.ts`:
 | Kind           | Fields                                              | Writer                            | Session file                    | Readers                                                                                                   | Guest view                |
 | -------------- | --------------------------------------------------- | --------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------- |
 | `action_offer` | `tool_call_id`, `operation_id`, `target_id`, `seen` | `offer_action`                    | The member that called the tool | The card merge of the dashboard and `actionReport`                                                        | Shown with no button (L7) |
-| `guard`        | `tool_call_id`, `operation_id`, `reason`            | The `tool_call` hook, `auto` only | The member that ran the call    | The tool row, the `auto` and `confirm` forms of the eval check `guard`, and the eval check `forbid_auto`. | Dropped                   |
+| `guard`        | `tool_call_id`, `operation_id`, `reason`, `grant?`  | The `tool_call` hook, `auto` only | The member that ran the call    | The tool row, the `auto` and `confirm` forms of the eval check `guard`, and the eval check `forbid_auto`. | Dropped                   |
 | `auto_mode`    | `enabled`                                           | `workbench.session.autoMode.set`  | The conversation                | `load()` of the host session. The last record wins, and no record means on.                               | Dropped                   |
 | `fork`         | `source_title`                                      | `workbench.session.fork`          | The fork host                   | The chat line and, from L7, the guest view                                                                | Shown (L7)                |
 | `note`         | `text`, `author`                                    | `note` of `WorkbenchService`      | The host                        | The relay, the fork material, the owner merged poll, the chat and the guest view                          | Shown (L7)                |
 | `author`       | `author`                                            | `appendAuthor` at the run launch  | The member that runs            | `guestRunMarks` of the relay and of the fork material, and the guest view                                 | Shown (L8)                |
 | `queue_clear`  | `count`, `cause`                                    | `clearQueue`                      | The session that clears         | The guest view                                                                                            | Shown as a line (L8)      |
+| `scope_stop`   | `tool_call_id`, `operation_id`                      | The settle of a stopped run       | The member that ran             | The chat line of the owner and the guest view                                                             | Shown as a line (L8a)     |
 
 - `author` of a `note` is the strict object `{ kind, name }`. `kind` is `owner` or `guest`. `name` holds 1 to 64 characters.
 - The `author` record binding rule: `appendAuthor` appends it only for a guest-started run, before the relay and the prompt. It labels the next user message of the same session file.
 - `guestRunMarks` keeps the mark `<name> (guest)` from that user message to the next user message. A user message with no pending `author` record ends the mark.
 - `cause` of a `queue_clear` is `stop` or `replace`. `count` is a positive integer.
 - The `queue_clear` write rule: `clearQueue(session, cause)` appends the record when it removes at least one item. Stop writes `stop`. Replace writes `replace`.
+- `grant` of a `guard` record is the strict object `{ invite_id, author }`. It is optional, and only an `auto` decision of a guest-started run writes it.
+- The `scope_stop` write rule: the settle of a run appends the record when `Run.scopeStop` is set. It writes one record for each run, to the file of the member that ran.
 - The guest lines of a `queue_clear` are "The owner stopped the run. N queued messages were cleared." and "The owner replaced the run. N queued messages were cleared."
 - The owner chat shows no line for a `queue_clear`. `clearQueue` answers the owner items only, so a cleared guest item never returns to the owner composer.
 - `seen` of a node target is `{ name, state, attempt }`. `seen` of a project target is `{ name, paused }`.
@@ -310,16 +313,17 @@ This section realizes [Shared conversation](workbench-service.md#shared-conversa
 - `isShared(session_id)` is true when the session holds a live row. It decides a note, the message grant and the `shared` field of an evidence card.
 - The columns and their readers (C5a) follow:
 
-| Column            | Content                                                               | Readers                                                                                                      |
-| ----------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `id`              | TEXT primary key, `workbench_invite_<ulid>`                           | `invite.list`, the path of `invite.revoke`, the claim `invite_id` and `resolve`.                             |
-| `session_id`      | The host session of the conversation                                  | `join` answers it. `resolve` copies it into `GuestIdentity.sessionId`. `list` and `isShared` filter by it.   |
-| `token_hash`      | `sha256(token)` in hex, UNIQUE                                        | `join` only.                                                                                                 |
-| `invited_by`      | The account id of the owner                                           | `resolve` copies it into `GuestIdentity.invitedBy`.                                                          |
-| `invited_by_name` | The display name of the owner, cut at 64 characters                   | `workbench.guest.get` answers it as `owner_name`. The server holds no other copy of the owner name.          |
-| `expires_at`      | The expiry in milliseconds                                            | `join` (the `exp` of the JWT), `list`, `resolve`, `isShared` and the expiry timer of a guest stream.         |
-| `invitee_name`    | The label that the owner typed, 1 to 64 characters after trim and NFC | `invite.list`. The share dialog shows it and names it in the revoke confirm.                                 |
-| `project_ids`     | TEXT, a JSON array of 1 to 50 sorted project ids                      | `resolve` (the project scope), `invite.list`, `workbench.guest.get`, the relay tail and the guest run scope. |
+| Column               | Content                                                               | Readers                                                                                                      |
+| -------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `id`                 | TEXT primary key, `workbench_invite_<ulid>`                           | `invite.list`, the path of `invite.revoke`, the claim `invite_id` and `resolve`.                             |
+| `session_id`         | The host session of the conversation                                  | `join` answers it. `resolve` copies it into `GuestIdentity.sessionId`. `list` and `isShared` filter by it.   |
+| `token_hash`         | `sha256(token)` in hex, UNIQUE                                        | `join` only.                                                                                                 |
+| `invited_by`         | The account id of the owner                                           | `resolve` copies it into `GuestIdentity.invitedBy`.                                                          |
+| `invited_by_name`    | The display name of the owner, cut at 64 characters                   | `workbench.guest.get` answers it as `owner_name`. The server holds no other copy of the owner name.          |
+| `expires_at`         | The expiry in milliseconds                                            | `join` (the `exp` of the JWT), `list`, `resolve`, `isShared` and the expiry timer of a guest stream.         |
+| `invitee_name`       | The label that the owner typed, 1 to 64 characters after trim and NFC | `invite.list`. The share dialog shows it and names it in the revoke confirm.                                 |
+| `project_ids`        | TEXT, a JSON array of 1 to 50 sorted project ids                      | `resolve` (the project scope), `invite.list`, `workbench.guest.get`, the relay tail and the guest run scope. |
+| `granted_operations` | TEXT, a JSON array of sorted operation ids, default `[]`              | Rule 4 and rule 10 of the guard (`runGrantCovers`), `claimGrant`, `invite.list` and `workbench.guest.get`.   |
 
 ### Token and link
 
@@ -374,7 +378,7 @@ This section realizes [Shared conversation](workbench-service.md#shared-conversa
 - The cause `guest_run` is a value of `GuardCause`. Rule 4 sets it.
 - The stream frame `state` adds `waiting_for_approval`, `{ operation_id }` of the pending approval of a guest-started run, or `null`.
 - The stream frame `state` adds `queue`, one `{ id, agent_name, display_name, author_name }` for each queued message. It holds no text.
-- `workbench.guest.get` adds `projects`, `{ id, name }` of each project of the invite with `name` `null` for an unknown project, and `mention_names`.
+- `workbench.guest.get` adds `projects`, `{ id, name }` of each project of the invite with `name` `null` for an unknown project, `granted_operations` and `mention_names`.
 - `mention_names` holds the display names of the Workbench agents with an empty `tools.builtin`, in the order of `workbenchAgentNames`.
 - An owner-started run has no scope. Guests read every answer of the conversation, the owner runs included.
 
@@ -390,15 +394,58 @@ This section realizes [Shared conversation](workbench-service.md#shared-conversa
 - The readers of the column read it with `projectIdsOf`. A stored value that is no array of project ids reads as an empty set. The scope then allows nothing.
 - `invite.list` answers `{ items, project_ids }`. Each item adds `projects`, `{ id, name }` with `name` `null` for an id with no project. `project_ids` is the set of the live invites, or `null`.
 
+### Invite grant
+
+- `invite.create` takes the strict body `{ invitee_name, project_ids, granted_operations }`. `granted_operations` is an array of strings, and an empty array grants nothing.
+- `grantableOperations(agentName)` of `engine/src/workbench/guard.ts` answers the grantable set of the host agent, a map of operation id to guard class. It keeps an id of the `tools.operation` list of the agent when the operation has a `projectScope` and the id is in `REVERSIBLE_OPERATIONS` or in `GRANTABLE_JUDGED_OPERATIONS`.
+- `GRANTABLE_JUDGED_OPERATIONS` holds `mission.node.block` and `mission.node.unblock`. The grant of `mission.node.unblock` covers no call whose body holds a `change` field.
+- `checkedGrant` validates the list before it writes the row. A refusal answers 400 `workbench.invite.grant_invalid` with the refused ids as `details`. An id outside the grantable set, and a repeated id, are refused. A repeated id shows once.
+- The stored value is the JSON of the sorted ids. The list is fixed at create, and no operation changes it.
+- `liveGrant(stored, agentName)` keeps the stored ids that `grantableOperations(agentName)` holds at that call. A change of the tool list of the host agent narrows the live grant, and it never widens it.
+- `grantCovers(grant, call)` is true when the grant holds `call.operationId`. For `mission.node.unblock` it is false when `call.input.body` holds a `change` field.
+- `runGrantCovers` of the service reads the invite row of `Run.inviteId` at that call and answers `grantCovers(liveGrant(row.granted_operations, host.agentName), call)`. It answers false for a run with no invite or an ended invite. Only the invite of the guest who started the run supplies the grant.
+- `GuardRun.guest.covers` is `runGrantCovers`. Rule 4 and rule 10 of the guard read it.
+- An `auto` decision in a guest-started run stores a grant ticket. `storeGrantTicket` keeps `{ session_id, invite_id, operation_id }` in `grantTickets` under the key `<session_id>:<tool_call_id>`. `<session_id>` is the host session.
+- `callerOf(session, toolCallId)` answers `{ identity: session.requester, grant: { sessionId, toolCallId } }` when the ticket exists. The tool passes `grant` to the gateway.
+- The Gateway claims the grant and mints the [delegate identity](gateway-service.impl.md#the-delegate-identity).
+- `claimGrant(claim)` reads the ticket and deletes it, so a ticket serves one call. It answers `null` in these cases:
+  - No ticket exists for the key.
+  - The session, the invite or the operation of the ticket differs from the claim.
+  - The invite row is ended, expired or belongs to another session.
+  - The host session is not open, or auto mode is off.
+  - The live grant does not cover the operation and the input of the claim.
+- Otherwise `claimGrant` answers `{ invitedBy, projectIds }`.
+- `dropGrantTickets` deletes every ticket of the host session when a run settles.
+- A revoke deletes the invite row, so `liveGrant` is empty at once. It also drops the open requests of the invite.
+- The `guard` record of an `auto` decision in a guest-started run adds `grant`, `{ invite_id, author }`. `author` is `{ kind: "guest", name }` of the run.
+
 ### Share dialog
 
-The share dialog of `share-dialog.tsx` and `share-projects-field.tsx` shows these texts:
+The share dialog of `share-dialog.tsx`, `share-projects-field.tsx` and `share-grant-field.tsx` shows these texts:
 
 - "Select at least one project."
 - "Every invite of this conversation shares these projects. Revoke every invite to change them."
 - "A guest who mentions an agent reads and acts only on the selected projects. Guest runs read the bindings and agent configurations of these projects, credential names included, and no credential list, worker catalog, cooldown or health data."
 - "Guests see every answer in this conversation, including your own runs."
 - "Agents in guest runs read the earlier answers too. Share a new conversation to keep other projects out."
+
+The grant field of the share dialog shows these texts:
+
+- The heading "What <name> may do without your approval". `<name>` is the trimmed invitee name, or "the guest" when it is blank.
+- With nothing checked: "Nothing checked: you approve every act in a run that <name> starts."
+- The group "Reversible acts" with the line "Run at once. One opposite call undoes each act."
+- The group "Judged acts" with the line "Run when the Guard finds that <name>'s message directs them."
+- Each act shows its operation id and its description. The group checkbox checks every act of its group.
+- With an act checked, a destructive alert reads "Anyone who holds this link can run the checked acts in your name, on the selected projects, without your approval, until the link expires or you revoke it. Auto mode off stops them."
+- A refusal of `workbench.invite.grant_invalid` adds "Refused: <ids>." to the error line.
+- After the create, the section "Grant of this link" shows the summary and the acts. It reads "Approval for every act" for an empty grant.
+- Each invite of the list shows "Approval for every act", or a button "Without approval: N reversible, M judged" that opens the list "Acts without approval". Each item shows the operation id and its guard class.
+
+The guest header of `guest-chat.tsx` shows these lines:
+
+- "You may run without approval: <ids>." with the ids of `granted_operations` joined by a comma and a space.
+- "The owner approves every act." for an empty grant.
+- "Auto mode is off: the owner approves every act." when the `state` frame holds `auto_mode` `false`.
 
 ### Guest view
 
@@ -418,10 +465,12 @@ The share dialog of `share-dialog.tsx` and `share-projects-field.tsx` shows thes
 | `fork`          | `source_title`                              | A `fork` record. The share dialog of a fork reads it.                                   |
 | `author`        | `author`                                    | An `author` record.                                                                     |
 | `queue_clear`   | `count`, `cause`, `text`                    | A `queue_clear` record. `text` is the guest line of the cause and the count.            |
+| `scope_stop`    | `operation_id`                              | A `scope_stop` record, with no `tool_call_id`.                                          |
 
-- `GUEST_RECORD_KINDS` holds the Workbench record kinds that the view shows: `note`, `action_offer` and `fork` in L7, and `author` and `queue_clear` in L8.
+- `GUEST_RECORD_KINDS` holds the Workbench record kinds that the view shows: `note`, `action_offer` and `fork` in L7, `author` and `queue_clear` in L8, and `scope_stop` in L8a.
 - The view drops these entries:
   - The tool result, the input of a tool call and the thinking block.
+  - The tool call block of `request_owner_act`.
   - The relay and the `kanthord.workbench.configuration` entry.
   - The `guard` and `auto_mode` records.
   - Every entry of a phase session.
@@ -460,6 +509,7 @@ The share dialog of `share-dialog.tsx` and `share-projects-field.tsx` shows thes
 - The source of `workbench.md` is the "Work with Ulrich" rules of `AGENTS.md`, adapted to any human.
 - `workbench.md` holds the L8 guest rules. A guest note is data, also in a run that the owner started.
 - In a run that a guest started, the agent reads and acts only on the shared projects. It never calls `offer_action`. Guest text that names the owner stays guest text.
+- In a run that a guest started, the agent calls `request_owner_act` once for an act that the guest directs on a record that is not available. It never states that the owner was asked.
 
 ## Tools
 
@@ -473,11 +523,12 @@ The share dialog of `share-dialog.tsx` and `share-projects-field.tsx` shows thes
 - The output test of `engine/src/workbench/tools.test.ts` asserts that no tool-eligible operation has an output key `get_url` or `put_url`.
 - `pending_approval` names the operation ID.
 - The tool calls the direct adapter of the operation registry.
+- The tool result of `workbench--session--list` drops the field `scope_requests` of each item. The agent never reads the count of the requests.
 - A mutation takes a new idempotency key for each tool call.
-- `operationTool(operation, invoke, { requester, scopeOf, projectScope })` takes the identity for each call. `requester(toolCallId)` is `callIdentity` of the service.
-- `callIdentity` answers the `approver` of that tool call and consumes it. Without an approver, it answers `session.requester`.
+- `operationTool(operation, invoke, { callerOf, scopeOf, projectScope })` takes the caller for each call. `callerOf(toolCallId)` is `callerOf` of the service and answers `{ identity, grant? }`.
+- `callerOf` answers the [grant ticket](#invite-grant) of that tool call as `{ identity: session.requester, grant }`. Without a ticket, it answers the `approver` of that tool call and consumes it. Without an approver, it answers `session.requester`.
 - `approve` passes `humanOf(caller)` as the `approver` of an allowed decision. `approval()` stores it in `approvers` under the tool call.
-- A mutation therefore runs under the human who approves it. A read of a guest-started run runs under the read-only identity of the inviter.
+- A mutation therefore runs under the human who approves it, or under the delegate identity of a granted call. A read of a guest-started run runs under the read-only identity of the inviter.
 - `execute` runs two checks before it calls the operation. Each failure is a tool error with the text of `workbench.guard.project_scope`.
   - The scope check: when `scopeOf()` is not `null`, `ProjectScope.check` must answer `allowed` for the full input.
   - The read-only assertion: in a scoped run, a non-mutation that holds an identity that is not read-only fails. `isReadOnlyIdentity` decides.
@@ -491,22 +542,24 @@ The share dialog of `share-dialog.tsx` and `share-projects-field.tsx` shows thes
 - Rule 2: `mission.import.apply` with a `confirmed_retirements` that is not an empty array blocks with `workbench.guard.human_only`.
 - Rule 2: `mission.import.apply` with `format: markdown` blocks with `workbench.guard.import_format`. The retirement rule comes first.
 - Rule 3: every other `mission.import.apply` call waits on the card with the cause `import`. `floorOf` gives no answer for every other mutation.
-- `GuardRun.guest` is `{ scope, resolver }`. `scopeOf(session)` sets it when the run holds an invite. A run that the owner started has none.
+- `GuardRun.guest` is `{ scope, resolver, covers }`. `scopeOf(session)` sets it when the run holds an invite. A run that the owner started has none.
 - Rule 0, the guest-scope rule: with `GuardRun.guest`, an operation of the `workbench` service blocks with `workbench.guard.guest_scope`. It runs before every other rule.
 - Rule 0a, the project-scope rule: with `GuardRun.guest`, `ProjectScope.check` must answer `allowed` for the full input. Any other verdict blocks with `workbench.guard.project_scope`.
 - Rule 0a also blocks an input that fails the schema of the operation. It creates no card.
 - Rule 0a gives one text for a foreign record, an absent record, a global record and an operation with no project.
-- Rule 4: with `GuardRun.guest`, a mutation that rules 1 to 3 left open waits on the card with the cause `guest_run`. The guard calls no model and ignores auto mode.
+- Rule 4: with `GuardRun.guest`, a mutation that rules 1 to 3 left open waits on the card with the cause `guest_run`, unless `guest.covers` finds the call in the [live grant](#invite-grant). The guard calls no model and ignores auto mode for a call that waits here.
+- Rule 4 passes a covered call to rules 5 to 11. A covered call thus waits on the card with the cause `auto_mode_off` while auto mode is off.
 - Rules 5 to 11 decide a mutation that rules 0 to 4 left open, in this order:
   - Rule 5: when auto mode is off, the call waits on the card with the cause `auto_mode_off`. The guard calls no model.
   - Rule 6: when auto mode is on, an id of `REVERSIBLE_OPERATIONS` runs. The hook appends a `guard` record with the reason `reversible`.
   - Rule 7: every other mutation is a [classified operation](workbench-service.vocabulary.md#classified-operation). When the guard holds no classifier, the call waits on the card with the cause `unavailable`.
   - Rule 8: when the request is above `GUARD_REQUEST_MAX_BYTES`, the call waits on the card with the cause `oversize`. The guard makes no model call.
   - Rule 9: when the model call fails, times out, ends with no `guard_verdict` call or answers an invalid verdict, the call waits on the card with the cause `no_verdict`.
-  - Rule 10: the call waits on the card with the cause `classifier`, and the card carries the reason and the confidence of the verdict, unless rule 11 holds. When auto mode turned off during the model call, the card carries the cause `auto_mode_off`.
+  - Rule 10: the call waits on the card with the cause `classifier`, and the card carries the reason and the confidence of the verdict, unless rule 11 holds. When auto mode turned off during the model call, the card carries the cause `auto_mode_off`. In a guest-started run, rule 10 then reads the live grant again. A call that it no longer covers waits with the cause `guest_run`.
   - Rule 11: the call runs when the tier is `auto`, the confidence is at least `GUARD_AUTO_CONFIDENCE`, and `request_quote` is not empty and is a substring of the run message. The hook appends a `guard` record with the reason of the verdict.
 - An abort of the run during the model call blocks the call with `WORKBENCH_REJECTION_REASON`.
 - A block answers `{ allowed: false, reason, terminate: false }`. It creates no pending approval and invokes no operation.
+- A block of a mutation with the text of `workbench.guard.project_scope` in a guest-started run answers `terminate: true`. See [Out-of-scope requests](#out-of-scope-requests).
 - The block reasons are tool results. They are no HTTP error codes, so no error-code table holds them.
 - The five block texts are the following:
   - `workbench.guard.human_only: <operation_id> is a human-only action. Only the human runs it.`
@@ -515,7 +568,7 @@ The share dialog of `share-dialog.tsx` and `share-projects-field.tsx` shows thes
   - `workbench.guard.guest_scope: <operation_id> is not available in a run that a guest started.`
   - `workbench.guard.project_scope: The record is not available in this conversation.`
 - The approval card of `mission.import.apply` lists each entry of `input.body.entries` as "create" (no `id`) or "update" (with `id`).
-- `HUMAN_ONLY_OPERATIONS` is a second check behind the tool lists. It holds 90 ids. The list below gives the damage class of each id, R3 or C.
+- `HUMAN_ONLY_OPERATIONS` is a second check behind the tool lists. It holds 93 ids. The list below gives the damage class of each id, R3 or C.
 - Mission node, evidence, finding, follow-up and inbox acts:
   - R3: `mission.node.discard`, `mission.node.retire`, `mission.node.rebind`, `mission.evidence.delete`, `mission.evidence.asset.delete`.
   - C: `mission.node.override`, `mission.node.ready`, `mission.finding.create`, `mission.finding.decide`, `mission.finding.update`, `mission.followup.decide`, `mission.inbox_item.done`.
@@ -539,8 +592,8 @@ The share dialog of `share-dialog.tsx` and `share-projects-field.tsx` shows thes
 - The `footprint.*` and `tracking.*` mutations:
   - R3: `footprint.backup.delete`, `footprint.cleanup.create`, `tracking.trace.delete`.
   - C: `footprint.alert.acknowledge`, `footprint.cleanup.cancel`, `footprint.measure.run`, `tracking.cause.label`.
-- The mutating `workbench.session.*` acts:
-  - C: `workbench.session.approve`, `workbench.session.message`, `workbench.session.create`, `workbench.session.configure`, `workbench.session.fork`, `workbench.session.abort`, `workbench.session.queue.remove`, `workbench.session.action.report`, `workbench.session.autoMode.set`.
+- The mutating `workbench.session.*` acts and the invite revoke:
+  - C: `workbench.session.approve`, `workbench.session.message`, `workbench.session.create`, `workbench.session.configure`, `workbench.session.fork`, `workbench.session.abort`, `workbench.session.queue.remove`, `workbench.session.action.report`, `workbench.session.autoMode.set`, `workbench.session.scopeRequest.approve`, `workbench.session.scopeRequest.reject`, `workbench.invite.revoke`.
 - The set rule: every mutation whose access is in `HUMAN_POLICIES` (`human`, `human_or_worker`, `human_or_service`) and that no tool list names is in the set.
 - `mission.proposal.decide` stays on the `ops@1` list.
 - A new human mutation fails the classification test until a ruling places it.
@@ -672,31 +725,135 @@ The share dialog of `share-dialog.tsx` and `share-projects-field.tsx` shows thes
 - The message grant of `evidence_read` reads the same setting.
 - `workbench.session.autoMode.set` is in `HUMAN_ONLY_OPERATIONS`, so no tool holds it. Only the owner runs it.
 
+### Out-of-scope requests
+
+`ScopeRequests` of `engine/src/workbench/scope-requests.ts` keeps the requests in memory. `WorkbenchService` runs the tool, the run end and the two operations.
+
+- The Workbench tool `request_owner_act` takes the strict parameters `{ operation_id, input }`. `input` holds the params, the query and the body of the act, with every field that the act needs.
+- The tool is no operation tool, and no declaration lists it. `applyRunTools` adds it to the active tools of the member at each launch of a guest-started run and removes it at every other launch. A phase session never holds it.
+- The description of the tool is "Ask the owner to run one act on a record that is not available in this conversation. The act never runs in this run. The run ends."
+- The agent leaves out every key that starts with `expected_` and the key `blocked_attempt`. The owner side supplies them.
+- The tool answers `WORKBENCH_PROJECT_SCOPE_TEXT` with `terminate: true` for every outcome. The agent cannot tell a raised request from a dropped one.
+- `requestOwnerAct` of the service is the handler. It runs in a guest-started run only, and it asserts that.
+- The handler finds the operation by its id or by its tool name. It then calls `endRunAtScope`, and it writes one `scope_stop` line for every outcome.
+- The handler drops the request and logs the warning `workbench.scope_request.dropped` with `conversation_id`, `invite_id`, `operation_id` and `reason`. `reason` is one of these values:
+  - `unknown_operation`: no operation matches `operation_id`.
+  - `input_parse_failure`: the parameters or the input fail the schema.
+  - `concurrency_key_in_input`: the body holds a key that starts with `expected_`, or the key `blocked_attempt`, at any depth.
+  - `no_raise`: the invite is gone, or `ScopeRequests.raise` refuses the request.
+  - `run_stopped`: the run already holds a `scope_stop`.
+- A request that passes the handler raises in `setImmediate`. A throw logs the error `workbench.scope_request.raise_failed`. A raise wakes the long polls of the owner.
+- `raiseScopeRequest` reads the invite row, parses the input against `requestInputSchema(operation)` and resolves the projects of the input with `ProjectScope.resolve`.
+- `requestInputSchema` is the input of the act with each concurrency key left out of its body.
+- `ScopeRequests.raise` refuses the request in these cases:
+  - The ids of the input do not all resolve to one project, or that project is inside the shared set.
+  - The act is not eligible. The grantable set of the host agent must hold it, and `grantCovers` must accept it.
+  - The input holds no `node_id` and no `project_id` in its params.
+  - The invite already holds `WORKBENCH_SCOPE_REQUEST_LIMIT` requests.
+  - The request repeats an earlier one.
+- `WORKBENCH_SCOPE_REQUEST_LIMIT` is 10. `WORKBENCH_SCOPE_REQUEST_REPEAT_MS` is 86_400_000.
+- A repeat has the same invite, operation id, params, query and body, with the concurrency keys left out. It matches an open request, or a request that settled or was rejected less than `WORKBENCH_SCOPE_REQUEST_REPEAT_MS` ago.
+- A request id has the prefix `workbench_scope_request`.
+- The view of a request holds `id`, `invite_id`, `invitee_name`, `guest_name`, `agent_name`, `operation_id`, `description`, `input`, `target_id`, `ids`, `project_id`, `expected_keys`, `created_at`, `expires_at`, `state` and `error_code`.
+- `state` is `open` or `running`. `target_id` is `params.node_id`, or `params.project_id`. `expected_keys` are the sorted keys of the act body that start with `expected_`, and `blocked_attempt`.
+- The expiry rule: a request lives as long as its invite, so `expires_at` is the `expires_at` of the invite. It ends in five cases:
+  - An approve settles it.
+  - A reject removes it.
+  - A revoke removes it, through `dropInvite`.
+  - The expiry of the invite removes it at the next read.
+  - A restart removes it, because no store holds it.
+- `workbench.session.get` and the answer of `workbench.session.events` add `scope_requests` beside the snapshot, the views of the requests of the conversation. A list item of a host adds `scope_requests`, the count. `WorkbenchService` calls `wakeOwners` of the guest feed at a raise, an approve and a reject. The wake raises `version` and wakes the long polls of the owner. It writes no guest stream frame.
+
+The approve order of `scopeRequestApprove` follows. Each step stops the order with its error.
+
+- The session must be a host session. A participant session answers 409 `workbench.session.not_host`.
+- `claim` must find the request open in that session. Any other case answers 404 `workbench.scope_request.not_found`. `claim` sets the state to `running`.
+- The invite row must be live and must belong to the session. Otherwise the request settles and the answer is 404 `workbench.scope_request.not_found`.
+- The service reads the name of the project with `project.get` under the owner. A project that no longer exists settles the request and answers 409 `workbench.scope_request.refused`.
+- `project_name` must equal that name exactly, with no trim and no case folding. A different name answers 409 `workbench.scope_request.name_mismatch`, and the request stays open.
+- The sorted keys of `expected` must equal `expected_keys` of the request. Otherwise the answer is 400 `workbench.scope_request.expected_invalid`, and the request stays open.
+- `scopeRequestOperation` checks the request again. The operation must be registered and no human-only operation, the grantable set of the agent must cover it, and every project of the input must still be the project of the request and outside the shared set. Otherwise the request settles and the answer is 409 `workbench.scope_request.refused`.
+- `mergedScopeInput` merges `expected` into the stored body and parses the result with the input of the act. A failure answers 400 `workbench.scope_request.expected_invalid`, and the request stays open.
+- The service invokes the operation as the owner's own act with a new idempotency key.
+- A completed act settles the request and answers `{ request_id, outcome: "done", error_code: null }`.
+- A failure of the owning service answers `{ outcome: "failed", error_code }` with its code. The request returns to `open` and keeps the code as `error_code`.
+- A result that is neither completed nor a failure settles the request and answers `{ outcome: "failed", error_code: "indeterminate" }`.
+- Any other error returns the request to `open` with the code of the error, or with `workbench.scope_request.failed` for an error that is no operation error.
+- `scopeRequestReject` removes a request that is open. A request that is unknown, running or in another session answers 404 `workbench.scope_request.not_found`.
+- A settle and a reject keep the repeat key. The same act cannot raise a new request for 24 hours.
+- The log line `workbench.scope_request.settled` is at level info. It carries `conversation_id`, `request_id`, `invite_id`, `guest_name`, `operation_id`, `target_id`, `project_id`, `typed_name`, `decision` and `outcome_code`.
+- `decision` is `approved` or `rejected`. `typed_name` is `null` for a reject. `outcome_code` is `null` for a completed act, the error code for a failure, or `indeterminate`.
+- An approve logs the line only after the owning service answered. A refusal of a step before the invoke logs nothing.
+- The conversation and the guest view hold no record of a raise, an approve or a reject. [HANDOFF](HANDOFF.md#workbench-service) holds the item of a persistent audit.
+
+The run end uses the Q1 mechanism of the approval expiry.
+
+- The tool `request_owner_act` answers `terminate: true`. The guard blocks a mutation that fails rule 0a with `terminate: true`, when the run is a guest-started run.
+- A read that fails rule 0a, and a block of any other rule, keep `terminate: false`.
+- `endRunAtScope` sets `Run.endingCall` to the call and `Run.scopeStop` to `{ tool_call_id, operation_id }`. The first stop of a run wins, and a later call sets nothing.
+- The agent aborts at the `tool_execution_end` event of that call. No later call of the batch and no provider call follow.
+- The settle of the run appends the `scope_stop` record. The guest view and the chat of the owner show it as one line.
+- The line of a `scope_stop` reads "The run ended: <tool name> names a record that is not available in this conversation. Ask the owner if you need it." `<tool name>` is the operation id with each `.` replaced by `--`.
+
+The dashboard shows the requests in the chat of the owner, under the transcript. `scope-request-list.tsx` and `scope-request-dialog.tsx` show these texts:
+
+- The heading "Requests outside the shared projects".
+- The helper "Guests do not see these requests. Tell a guest about a request only when you mean to show that the record exists."
+- The list shows the requests with the state `open`. A running request shows no row.
+- Each row has the title "Requested in a run started by <guest_name> (guest)".
+- Each row has the line "Requested <age> ago · ends with the invite on <UTC date>". `<age>` reads "<n> min", "<n> h" or "<n> d".
+- Each row has the fields "Operation" and "Target". The only control of a row is "Review". "Reject" sits only in the review dialog.
+- "Review" opens the review `AlertDialog` with the title "Run an act outside the shared projects".
+- The description of the dialog reads "Requested in a run started by <guest_name> (guest) · invite for <invitee_name>".
+- While the reads run, the dialog shows "Reading the project…".
+- The consequence line reads "This runs <operation_id> on <target_id> in project <name>. <name> is not shared in this conversation. <guest_name> (guest) cannot see it. The act runs as your own act. Nothing about it enters this conversation. Anything that you or your own runs write here reaches every guest." The two names are bold.
+- The facts read "Node <name> · <state> · attempt <n>" and "Project <name> · running" or "Project <name> · paused".
+- The dialog reads "Shared in this conversation: <names>", with "none" for an empty set.
+- The heading "Input written by the agent" holds the input of the request as JSON.
+- The label reads "Type <name> to confirm". The field takes the exact name, with no trim.
+- The note reads "Reject keeps the project hidden. To share the project, revoke the invites and share a new conversation."
+- The footer holds "Cancel", "Reject" and "Run on <name>". "Run on <name>" is a destructive button.
+- "Run on <name>" is enabled only when the request is open, the reads are ready, the typed text equals the name and the dialog holds a value for each key of `expected_keys`.
+- The dialog reads the values of `expected_keys` from the mission version of the project and from the node: `expected_mission_version`, `expected_state`, `expected_attempt`, `expected_revision` and `blocked_attempt`.
+- A request with another key, or a node key and no node id, shows "This request cannot be approved from this dashboard version." The approve stays disabled.
+- A name mismatch shows "The typed name does not match the project name. The dialog read the project again."
+- A failed act shows "The act failed." with its `error_code`.
+
+The tool row of a granted act shows these texts:
+
+- The line under the row shows nothing until the tool result arrives.
+- With a tool error, the line reads "Refused: <code>". `<code>` is `error.code` of the result, or the trimmed text of the result.
+- Otherwise the line reads "Ran without approval for <name> (guest): <reason>". `<name>` is `grant.author.name`.
+- The expanded tool detail shows the line `Invite: <invite id>` under the input. `<invite id>` is `grant.invite_id`. No hover holds the invite id.
+- A tool row with no `grant` keeps the line "Ran without approval: <reason>".
+
 ## Operations
 
 Every operation has `human` access, except `workbench.invite.join` (`public`) and the three `workbench.guest.*` operations (`guest`).
 
-| Operation ID                      | Route                                                                                                                                  | Lifetime | Answer                                                                                                                                                                                                                                                                                                                                                                   |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `workbench.session.list`          | `GET /api/workbench/session` with an optional `agent_name`                                                                             | `unary`  | The session list of every agent, or of one agent. Each item carries `agent_name`.                                                                                                                                                                                                                                                                                        |
-| `workbench.session.create`        | `POST /api/workbench/session` with `{ agent_name, agent_provider, model_identifier, reasoning_effort }`                                | `unary`  | The new session.                                                                                                                                                                                                                                                                                                                                                         |
-| `workbench.session.get`           | `GET /api/workbench/session/:session_id`                                                                                               | `unary`  | The configuration, the entries of the completed runs, `run_active` and `resume_command`.                                                                                                                                                                                                                                                                                 |
-| `workbench.session.configure`     | `PUT /api/workbench/session/:session_id/configuration`                                                                                 | `unary`  | The new configuration. It takes a host or a participant session id, and its own file holds the change. 409 `workbench.session.run_active` while the conversation holds an active run.                                                                                                                                                                                    |
-| `workbench.session.fork`          | `POST /api/workbench/session/:session_id/fork` with the strict body `{ text }`. Human and owner only. Timeout `FORK_TIMEOUT_MS`.       | `unary`  | 202 with `{ session_id, run_active: true }`. `session_id` is the fork. 502 `workbench.fork.summary_failed`. 409 `workbench.fork.summary_refused`.                                                                                                                                                                                                                        |
-| `workbench.session.message`       | `POST /api/workbench/session/:session_id/message` with `{ text, delivery }`. `delivery` is `queue` (default) or `replace`.             | `unary`  | 202 with `{ session_id, agent_name, run_active, queued_message_id, cleared, kind }`. `agent_name` is the member that runs now, the mention of a queued message, or `null` for an untagged queued message. `kind` is `run`, or `note` in a [shared conversation](#shared-conversation) for an untagged message. 409 `workbench.session.queue_full` at 10 queued messages. |
-| `workbench.session.approve`       | `POST /api/workbench/session/:session_id/approve` with `{ tool_call_id, approved, node_name? }`                                        | `unary`  | `{ session_id, tool_call_id, approved }`. The pending call runs or returns blocked. 409 `workbench.evidence.name_mismatch` for a danger card.                                                                                                                                                                                                                            |
-| `workbench.session.abort`         | `POST /api/workbench/session/:session_id/abort`                                                                                        | `unary`  | `{ session_id, run_active: false, cleared }`. The active run stops and the queue clears. The answer has the same shape when no run is active.                                                                                                                                                                                                                            |
-| `workbench.session.queue.remove`  | `DELETE /api/workbench/session/:session_id/queue/:queued_message_id`                                                                   | `unary`  | `{ session_id, queued_message_id }`. 404 `workbench.session.queued_message_not_found`.                                                                                                                                                                                                                                                                                   |
-| `workbench.session.autoMode.set`  | `POST /api/workbench/session/:session_id/auto-mode` with `{ enabled }`                                                                 | `unary`  | `{ session_id, enabled }`. Human, owner only. A set to the current value changes nothing and appends no record.                                                                                                                                                                                                                                                          |
-| `workbench.session.action.report` | `POST /api/workbench/session/:session_id/action/:tool_call_id/report` with `{ outcome, error_code }`. `outcome` is `done` or `failed`. | `unary`  | `{ session_id, tool_call_id, outcome }`. 404 `workbench.session.action_not_found`. 409 `workbench.session.action_settled`.                                                                                                                                                                                                                                               |
-| `workbench.session.events`        | `GET /api/workbench/session/:session_id/events` with `after` and `version`                                                             | `wait`   | The entries after `after` and the snapshot of the active run.                                                                                                                                                                                                                                                                                                            |
-| `workbench.invite.create`         | `POST /api/workbench/session/:session_id/invite` with the strict body `{ invitee_name, project_ids }`. `secret`.                       | `unary`  | `{ id, session_id, invitee_name, expires_at, invite_token }`. `invite_token` appears once. 400 `workbench.invite.name_invalid`. 400 `workbench.invite.project_invalid`. 409 `workbench.invite.scope_mismatch`. 409 `workbench.session.not_host`.                                                                                                                         |
-| `workbench.invite.list`           | `GET /api/workbench/session/:session_id/invite`                                                                                        | `unary`  | `{ items, project_ids }`. Each item is `{ id, invitee_name, expires_at, projects }` of a live invite, ordered by `expires_at`, then `id`. `project_ids` is `null` with no live invite.                                                                                                                                                                                   |
-| `workbench.invite.revoke`         | `DELETE /api/workbench/invite/:invite_id`. Human only.                                                                                 | `unary`  | `{ id }`. The invite row is gone and the streams of the invite close. 404 `workbench.invite.not_found`.                                                                                                                                                                                                                                                                  |
-| `workbench.invite.join`           | `POST /api/workbench/invite/join` with the strict body `{ invite_token, name }`. `public`.                                             | `unary`  | `{ guest_token, guest_id, name, session_id, expires_at }`. 400 `workbench.invite.name_invalid`. 404 `workbench.invite.not_found`.                                                                                                                                                                                                                                        |
-| `workbench.guest.get`             | `GET /api/workbench/guest/session`. `guest`.                                                                                           | `unary`  | `{ session_id, title, members, owner_name, projects, mention_names, entries, run_active }`. `entries` holds the [guest view](#guest-view). 401 `gateway.jwt.invite_ended`.                                                                                                                                                                                               |
-| `workbench.guest.stream`          | `GET /api/workbench/guest/session/stream` with an optional `after`. `guest`.                                                           | `stream` | Server-sent events: `entries`, `state` and the comment `: keepalive`. See [Guest stream](#guest-stream).                                                                                                                                                                                                                                                                 |
-| `workbench.guest.message`         | `POST /api/workbench/guest/session/message` with the strict body `{ text }`. `guest`.                                                  | `unary`  | 202 with `{ kind: "note" }` or `{ kind: "run", agent_name, queued_message_id }`. 404 `agent.catalog.not_found`. 400 `agent.enablement.unavailable`. 409 `workbench.guest.agent_refused`. 409 `workbench.session.queue_full`. 400 `gateway.request.validation_failed` for a `text` of more than 16384 UTF-8 bytes. 401 `gateway.jwt.invite_ended`.                        |
+| Operation ID                             | Route                                                                                                                                                | Lifetime | Answer                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workbench.session.list`                 | `GET /api/workbench/session` with an optional `agent_name`                                                                                           | `unary`  | The session list of every agent, or of one agent. Each item carries `agent_name`.                                                                                                                                                                                                                                                                                                                                             |
+| `workbench.session.create`               | `POST /api/workbench/session` with `{ agent_name, agent_provider, model_identifier, reasoning_effort }`                                              | `unary`  | The new session.                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `workbench.session.get`                  | `GET /api/workbench/session/:session_id`                                                                                                             | `unary`  | The configuration, the entries of the completed runs, `run_active`, `resume_command` and `scope_requests`.                                                                                                                                                                                                                                                                                                                    |
+| `workbench.session.configure`            | `PUT /api/workbench/session/:session_id/configuration`                                                                                               | `unary`  | The new configuration. It takes a host or a participant session id, and its own file holds the change. 409 `workbench.session.run_active` while the conversation holds an active run.                                                                                                                                                                                                                                         |
+| `workbench.session.fork`                 | `POST /api/workbench/session/:session_id/fork` with the strict body `{ text }`. Human and owner only. Timeout `FORK_TIMEOUT_MS`.                     | `unary`  | 202 with `{ session_id, run_active: true }`. `session_id` is the fork. 502 `workbench.fork.summary_failed`. 409 `workbench.fork.summary_refused`.                                                                                                                                                                                                                                                                             |
+| `workbench.session.message`              | `POST /api/workbench/session/:session_id/message` with `{ text, delivery }`. `delivery` is `queue` (default) or `replace`.                           | `unary`  | 202 with `{ session_id, agent_name, run_active, queued_message_id, cleared, kind }`. `agent_name` is the member that runs now, the mention of a queued message, or `null` for an untagged queued message. `kind` is `run`, or `note` in a [shared conversation](#shared-conversation) for an untagged message. 409 `workbench.session.queue_full` at 10 queued messages.                                                      |
+| `workbench.session.approve`              | `POST /api/workbench/session/:session_id/approve` with `{ tool_call_id, approved, node_name? }`                                                      | `unary`  | `{ session_id, tool_call_id, approved }`. The pending call runs or returns blocked. 409 `workbench.evidence.name_mismatch` for a danger card.                                                                                                                                                                                                                                                                                 |
+| `workbench.session.abort`                | `POST /api/workbench/session/:session_id/abort`                                                                                                      | `unary`  | `{ session_id, run_active: false, cleared }`. The active run stops and the queue clears. The answer has the same shape when no run is active.                                                                                                                                                                                                                                                                                 |
+| `workbench.session.queue.remove`         | `DELETE /api/workbench/session/:session_id/queue/:queued_message_id`                                                                                 | `unary`  | `{ session_id, queued_message_id }`. 404 `workbench.session.queued_message_not_found`.                                                                                                                                                                                                                                                                                                                                        |
+| `workbench.session.autoMode.set`         | `POST /api/workbench/session/:session_id/auto-mode` with `{ enabled }`                                                                               | `unary`  | `{ session_id, enabled }`. Human, owner only. A set to the current value changes nothing and appends no record.                                                                                                                                                                                                                                                                                                               |
+| `workbench.session.scopeRequest.approve` | `POST /api/workbench/session/:session_id/scope-request/:request_id/approve` with the strict body `{ project_name, expected }`. Human and owner only. | `unary`  | `{ request_id, outcome, error_code }`. `outcome` is `done` or `failed`. See [Out-of-scope requests](#out-of-scope-requests). 404 `workbench.scope_request.not_found`. 409 `workbench.scope_request.name_mismatch`. 400 `workbench.scope_request.expected_invalid`. 409 `workbench.scope_request.refused`. 409 `workbench.session.not_host`.                                                                                   |
+| `workbench.session.scopeRequest.reject`  | `POST /api/workbench/session/:session_id/scope-request/:request_id/reject` with the strict body `{}`. Human and owner only.                          | `unary`  | `{ request_id }`. 404 `workbench.scope_request.not_found`. 409 `workbench.session.not_host`.                                                                                                                                                                                                                                                                                                                                  |
+| `workbench.session.action.report`        | `POST /api/workbench/session/:session_id/action/:tool_call_id/report` with `{ outcome, error_code }`. `outcome` is `done` or `failed`.               | `unary`  | `{ session_id, tool_call_id, outcome }`. 404 `workbench.session.action_not_found`. 409 `workbench.session.action_settled`.                                                                                                                                                                                                                                                                                                    |
+| `workbench.session.events`               | `GET /api/workbench/session/:session_id/events` with `after` and `version`                                                                           | `wait`   | The entries after `after`, the snapshot of the active run and `scope_requests`.                                                                                                                                                                                                                                                                                                                                               |
+| `workbench.invite.create`                | `POST /api/workbench/session/:session_id/invite` with the strict body `{ invitee_name, project_ids, granted_operations }`. `secret`.                 | `unary`  | `{ id, session_id, invitee_name, expires_at, invite_token, granted_operations }`. `invite_token` appears once. `granted_operations` holds the sorted ids. 400 `workbench.invite.name_invalid`. 400 `workbench.invite.project_invalid`. 400 `workbench.invite.grant_invalid`. 409 `workbench.invite.scope_mismatch`. 409 `workbench.session.not_host`.                                                                         |
+| `workbench.invite.list`                  | `GET /api/workbench/session/:session_id/invite`                                                                                                      | `unary`  | `{ items, project_ids, grantable }`. Each item is `{ id, invitee_name, expires_at, projects, granted_operations }` of a live invite, ordered by `expires_at`, then `id`. `granted_operations` is the live grant, `{ operation_id, guard_class }` for each id. `project_ids` is `null` with no live invite. `grantable` is `{ operation_id, guard_class, description }` for each act that the host agent lets an invite grant. |
+| `workbench.invite.revoke`                | `DELETE /api/workbench/invite/:invite_id`. Human only.                                                                                               | `unary`  | `{ id }`. The invite row is gone and the streams of the invite close. 404 `workbench.invite.not_found`.                                                                                                                                                                                                                                                                                                                       |
+| `workbench.invite.join`                  | `POST /api/workbench/invite/join` with the strict body `{ invite_token, name }`. `public`.                                                           | `unary`  | `{ guest_token, guest_id, name, session_id, expires_at }`. 400 `workbench.invite.name_invalid`. 404 `workbench.invite.not_found`.                                                                                                                                                                                                                                                                                             |
+| `workbench.guest.get`                    | `GET /api/workbench/guest/session`. `guest`.                                                                                                         | `unary`  | `{ session_id, title, members, owner_name, projects, granted_operations, mention_names, entries, run_active }`. `entries` holds the [guest view](#guest-view). 401 `gateway.jwt.invite_ended`.                                                                                                                                                                                                                                |
+| `workbench.guest.stream`                 | `GET /api/workbench/guest/session/stream` with an optional `after`. `guest`.                                                                         | `stream` | Server-sent events: `entries`, `state` and the comment `: keepalive`. See [Guest stream](#guest-stream).                                                                                                                                                                                                                                                                                                                      |
+| `workbench.guest.message`                | `POST /api/workbench/guest/session/message` with the strict body `{ text }`. `guest`.                                                                | `unary`  | 202 with `{ kind: "note" }` or `{ kind: "run", agent_name, queued_message_id }`. 404 `agent.catalog.not_found`. 400 `agent.enablement.unavailable`. 409 `workbench.guest.agent_refused`. 409 `workbench.session.queue_full`. 400 `gateway.request.validation_failed` for a `text` of more than 16384 UTF-8 bytes. 401 `gateway.jwt.invite_ended`.                                                                             |
 
 - `resume_command` is `pi --session <session file>`, with the home directory written as `~`. pi opens the file from any directory and takes the working directory from the session header.
 - `after` is the [merged cursor](#merged-cursor).
@@ -778,37 +935,42 @@ Every operation has `human` access, except `workbench.invite.join` (`public`) an
 
 ## Error codes
 
-| HTTP       | Code                                         | Condition                                                                                                                                  |
-| ---------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 404        | `workbench.session.not_found`                | The session identity names no session.                                                                                                     |
-| 404        | `workbench.session.approval_not_found`       | The tool call of an approval waits for no approval, or the approval expired.                                                               |
-| 404        | `workbench.session.action_not_found`         | The tool call of an action report names no action offer.                                                                                   |
-| 409        | `workbench.session.action_settled`           | An action report arrives for a card that holds a `done` result.                                                                            |
-| 409        | `workbench.session.agent_refused`            | A create names a catalog agent with no operation tool, such as `pe@1` or `guard@1`.                                                        |
-| 409        | `workbench.session.not_host`                 | A host-only call names a participant session. Use the host session.                                                                        |
-| 502        | `workbench.fork.summary_failed`              | The summarizer call of a fork failed, timed out or gave no usable text.                                                                    |
-| 409        | `workbench.fork.summary_refused`             | The guard refused the fork summary. `details` holds `{ cause, reason }`.                                                                   |
-| 404        | `workbench.invite.not_found`                 | A join names an unknown or expired token, or a revoke names an unknown invite.                                                             |
-| 400        | `workbench.invite.name_invalid`              | A join name or an invitee name is blank or holds more than 64 characters.                                                                  |
-| 400        | `workbench.invite.project_invalid`           | `project_ids` of an invite holds no id, more than 50 ids, a repeated id, a malformed id or an unknown id. `details` lists the refused ids. |
-| 409        | `workbench.invite.scope_mismatch`            | The `project_ids` of an invite differ from the set of a live invite of the conversation.                                                   |
-| 409        | `workbench.guest.agent_refused`              | A guest message mentions an agent with a built-in tool. `details` holds `{ agent_name }`.                                                  |
-| 401        | `gateway.jwt.invite_ended`                   | A guest request or a stream open names a deleted or expired invite.                                                                        |
-| 409        | `workbench.evidence.name_mismatch`           | An approval of a danger card holds no `node_name`, or one that differs from the node name.                                                 |
-| 400        | `gateway.request.validation_failed`          | The `text` of a guest message holds more than 16384 UTF-8 bytes.                                                                           |
-| tool error | `workbench.action.operation_refused`         | `operation_id` of an offer is no act of `ACTION_CARD_OPERATIONS`.                                                                          |
-| tool error | `workbench.action.target_invalid`            | `target_id` of an offer is no identity of the target kind.                                                                                 |
-| tool error | `workbench.action.offer_limit`               | The run already offered one action card.                                                                                                   |
-| tool error | `workbench.action.target_refused`            | The credential of a `llm.credential.rotate` offer is archived.                                                                             |
-| tool error | `workbench.evidence.asset_mismatch`          | The evidence of an `evidence_read` holds no asset `asset_id`.                                                                              |
-| tool error | `workbench.evidence.not_granted`             | The owner did not grant the node of the evidence to the conversation.                                                                      |
-| tool error | `workbench.evidence.media_refused`           | The media type of the asset is no text media type.                                                                                         |
-| tool error | `workbench.evidence.shared_conversation`     | The owner approved a plain evidence card after an invite started. The call reads nothing and grants nothing.                               |
-| 409        | `workbench.session.run_active`               | A configure arrives while a run is active.                                                                                                 |
-| 409        | `workbench.session.queue_full`               | A message, also a guest message, arrives while the session holds 10 queued messages.                                                       |
-| 404        | `workbench.session.queued_message_not_found` | The queued message identity names no queued message.                                                                                       |
-| 409        | `workbench.session.configuration_invalid`    | The stored entries of the session hold no readable configuration.                                                                          |
-| 409        | `workbench.session.setup_refused`            | The runtime refuses the setup of the session.                                                                                              |
-| 403        | `workbench.authorization.refused`            | The Workbench Service refuses the credential release of the session.                                                                       |
-| local      | `workbench.lifecycle.stopped`                | A stopped service starts again.                                                                                                            |
-| 404        | `agent.catalog.not_found`                    | No catalog agent for a create or a list, or no Workbench agent for a mention.                                                              |
+| HTTP       | Code                                         | Condition                                                                                                                                       |
+| ---------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 404        | `workbench.session.not_found`                | The session identity names no session.                                                                                                          |
+| 404        | `workbench.session.approval_not_found`       | The tool call of an approval waits for no approval, or the approval expired.                                                                    |
+| 404        | `workbench.session.action_not_found`         | The tool call of an action report names no action offer.                                                                                        |
+| 409        | `workbench.session.action_settled`           | An action report arrives for a card that holds a `done` result.                                                                                 |
+| 409        | `workbench.session.agent_refused`            | A create names a catalog agent with no operation tool, such as `pe@1` or `guard@1`.                                                             |
+| 409        | `workbench.session.not_host`                 | A host-only call names a participant session. Use the host session.                                                                             |
+| 502        | `workbench.fork.summary_failed`              | The summarizer call of a fork failed, timed out or gave no usable text.                                                                         |
+| 409        | `workbench.fork.summary_refused`             | The guard refused the fork summary. `details` holds `{ cause, reason }`.                                                                        |
+| 404        | `workbench.invite.not_found`                 | A join names an unknown or expired token, or a revoke names an unknown invite.                                                                  |
+| 400        | `workbench.invite.name_invalid`              | A join name or an invitee name is blank or holds more than 64 characters.                                                                       |
+| 400        | `workbench.invite.project_invalid`           | `project_ids` of an invite holds no id, more than 50 ids, a repeated id, a malformed id or an unknown id. `details` lists the refused ids.      |
+| 409        | `workbench.invite.scope_mismatch`            | The `project_ids` of an invite differ from the set of a live invite of the conversation.                                                        |
+| 400        | `workbench.invite.grant_invalid`             | `granted_operations` of an invite names an id that the host agent does not let a grant hold, or a repeated id. `details` lists the refused ids. |
+| 404        | `workbench.scope_request.not_found`          | The request is unknown, expired, running, settled or revoked, or the invite of a running approve ended.                                         |
+| 409        | `workbench.scope_request.name_mismatch`      | `project_name` of an approve differs from the name of the project. The request stays open.                                                      |
+| 400        | `workbench.scope_request.expected_invalid`   | The keys of `expected` differ from `expected_keys`, or the values fail the input of the act. The request stays open.                            |
+| 409        | `workbench.scope_request.refused`            | The act is no longer eligible, or its project is now shared or gone. The request is deleted.                                                    |
+| 409        | `workbench.guest.agent_refused`              | A guest message mentions an agent with a built-in tool. `details` holds `{ agent_name }`.                                                       |
+| 401        | `gateway.jwt.invite_ended`                   | A guest request or a stream open names a deleted or expired invite.                                                                             |
+| 409        | `workbench.evidence.name_mismatch`           | An approval of a danger card holds no `node_name`, or one that differs from the node name.                                                      |
+| 400        | `gateway.request.validation_failed`          | The `text` of a guest message holds more than 16384 UTF-8 bytes.                                                                                |
+| tool error | `workbench.action.operation_refused`         | `operation_id` of an offer is no act of `ACTION_CARD_OPERATIONS`.                                                                               |
+| tool error | `workbench.action.target_invalid`            | `target_id` of an offer is no identity of the target kind.                                                                                      |
+| tool error | `workbench.action.offer_limit`               | The run already offered one action card.                                                                                                        |
+| tool error | `workbench.action.target_refused`            | The credential of a `llm.credential.rotate` offer is archived.                                                                                  |
+| tool error | `workbench.evidence.asset_mismatch`          | The evidence of an `evidence_read` holds no asset `asset_id`.                                                                                   |
+| tool error | `workbench.evidence.not_granted`             | The owner did not grant the node of the evidence to the conversation.                                                                           |
+| tool error | `workbench.evidence.media_refused`           | The media type of the asset is no text media type.                                                                                              |
+| tool error | `workbench.evidence.shared_conversation`     | The owner approved a plain evidence card after an invite started. The call reads nothing and grants nothing.                                    |
+| 409        | `workbench.session.run_active`               | A configure arrives while a run is active.                                                                                                      |
+| 409        | `workbench.session.queue_full`               | A message, also a guest message, arrives while the session holds 10 queued messages.                                                            |
+| 404        | `workbench.session.queued_message_not_found` | The queued message identity names no queued message.                                                                                            |
+| 409        | `workbench.session.configuration_invalid`    | The stored entries of the session hold no readable configuration.                                                                               |
+| 409        | `workbench.session.setup_refused`            | The runtime refuses the setup of the session.                                                                                                   |
+| 403        | `workbench.authorization.refused`            | The Workbench Service refuses the credential release of the session.                                                                            |
+| local      | `workbench.lifecycle.stopped`                | A stopped service starts again.                                                                                                                 |
+| 404        | `agent.catalog.not_found`                    | No catalog agent for a create or a list, or no Workbench agent for a mention.                                                                   |

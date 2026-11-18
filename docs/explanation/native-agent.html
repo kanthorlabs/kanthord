@@ -1252,6 +1252,41 @@ Binding prompt of repository app:
               setting stays across a restart.
             </li>
             <li>
+              <strong>Invite grants</strong> (Workbench only) change the card
+              rule for a run that a guest started. Such a run never runs a
+              change with no card, unless the invite of the guest who started
+              the run grants the act. You choose the granted acts when you
+              create the invite, and the list never changes. You can grant the
+              reversible changes that act on a project, and the unblock and
+              block of a node. An unblock that changes the node content is never
+              granted. The grant covers only the acts that the tool list of the
+              agent holds. A granted act runs with no card only while auto mode
+              is on. It runs as your own act on the projects of the invite,
+              under the name “&lt;guest&gt; (guest)”. A grant of the judged acts
+              also needs the guard to find that the message of the guest directs
+              the act. A revoke ends the grant at once.
+            </li>
+            <li>
+              <strong><code>request_owner_act</code></strong> (Workbench only,
+              runs that a guest started) lets the agent ask you to run one act
+              on a record outside the shared projects. The tool runs nothing and
+              ends the run, and the agent learns nothing about your answer. You
+              review the request in the chat and type the exact name of the
+              project to run the act as your own act. A guest never sees the
+              request. See the
+              <a href="../reference/workbench/tools.html#request-owner-act"
+                >tool reference</a
+              >.
+            </li>
+            <li>
+              <strong>The run end of an out-of-scope act.</strong> A run that a
+              guest started ends when it calls a change on a record outside the
+              shared projects, or when it calls <code>request_owner_act</code>.
+              The conversation then shows one <code>scope_stop</code> line: “The
+              run ended: &lt;tool name&gt; names a record that is not available
+              in this conversation. Ask the owner if you need it.”
+            </li>
+            <li>
               <strong><code>offer_action</code></strong> (Workbench only) lets
               the agent offer one action card for an act that it cannot call, or
               that you did not direct. The tool runs nothing. You click the
