@@ -109,13 +109,13 @@ It describes no mechanism of another service.
 - The owner shares a conversation with an [invite](workbench-service.vocabulary.md#invite). One invite names one [guest](workbench-service.vocabulary.md#guest). A guest joins with a link and a name, and holds no account.
 - A [shared conversation](workbench-service.vocabulary.md#shared-conversation) holds at least one live invite. An invite lasts 7 days.
 - Only the owner creates, lists and revokes an invite. A revoke ends the access of its guest at once. No agent holds a tool for an invite.
-- A guest reads the guest view, writes notes and starts a run with a leading mention. A guest holds no owner act.
+- A guest reads the guest view, writes notes and starts a run with a leading mention. A guest holds no other owner act.
 - A [note](workbench-service.vocabulary.md#note) is a message that starts no run. It shows its author, the owner or a guest by name. The members of the conversation read it with that author.
 - A message of a guest with no leading mention is a note. The text of a guest never authorizes an act.
 - A guest starts a run with a leading mention. The guest message queues behind an active run.
 - A guest mentions only an agent whose `tools.builtin` is empty. Yumi and Jeremy qualify. SWE and RE do not.
 - The invite names the projects that a guest-started run reads and acts on. All live invites of one conversation share one set.
-- A guest-started run runs under a read-only identity. A call outside the project set fails. The guard blocks it before any card, with one message for an absent and a foreign record.
+- The reads of a guest-started run run under a read-only identity. A call outside the project set fails. The guard blocks it before any card, with one message for an absent and a foreign record.
 - The owner holds every approval of a guest-started run. A guest never approves.
 - Replace, Stop and queue removal are owner-only. Guests see the queue with no Edit, no Remove and no Stop.
 - Owner-started runs stay unscoped. Guests see every answer of the conversation, the owner's own runs included. The share dialog warns about it.

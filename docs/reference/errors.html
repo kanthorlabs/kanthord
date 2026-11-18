@@ -231,9 +231,11 @@
                   <td><code>gateway.scope.refused</code></td>
                   <td>
                     HTTP <code>403</code>. A call under the read-only identity
-                    of a guest-started run names a global record or an operation
-                    with no project. The message is &quot;This operation is not
-                    available in a run that a guest started.&quot;
+                    of a guest-started run names a global record, an operation
+                    with no project, or more than 256 project-bound records. See
+                    the project scope in <code>gateway-service.impl.md</code>.
+                    The message is &quot;This operation is not available in a
+                    run that a guest started.&quot;
                   </td>
                 </tr>
                 <tr>
