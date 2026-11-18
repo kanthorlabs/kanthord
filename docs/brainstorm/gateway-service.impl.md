@@ -301,6 +301,7 @@ The JWT never leaves the Gateway Service module.
 - `ClientOptions.grant` of `src/kernel/operation.ts` is `{ sessionId, toolCallId }`, and `InvocationOptions.grant` has the same shape.
 - Only the in-process client sets `grant`. The Workbench operation tool passes it for a call that holds a grant ticket. The HTTP route never sets it, so no request from the network carries a grant.
 - `Invocation.granted` claims the grant in `execute` after the input parse. It claims with the parsed input, before the scope check and before the idempotency reservation. It runs after `refuseReadOnlyMutation` and before `refuseCancelled`.
+- A mutation that carries a `grant` skips `refuseReadOnlyMutation`, so the claim decides the call.
 - A call with no `grant` keeps the identity that admission gave.
 - `Authentication.delegateOf(reader, grant, call)` reads `readOnlyInviteOf` and `readOnlyGuestNameOf` of the reader. It calls `claimGrant` of the Workbench Service with `{ inviteId, sessionId, toolCallId, operationId, input }`.
 - `claimGrant` answers `{ invitedBy, projectIds }` or `null`. The [Workbench Service](workbench-service.impl.md#invite-grant) rules its null cases.
