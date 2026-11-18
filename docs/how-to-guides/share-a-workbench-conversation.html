@@ -59,7 +59,8 @@
           <p>
             Share one conversation of the Workbench with a guest. The guest
             needs no account. The guest opens a link, types a name, reads the
-            conversation and writes notes. A guest never starts a run.
+            conversation, writes notes and starts a run with a mention of an
+            agent. You approve every act of that run.
           </p>
           <h2 id="before-you-start">Before you start</h2>
           <ul>
@@ -88,6 +89,11 @@
               Under <strong>Invite for (required)</strong>, type the name of the
               invitee. The name is a label of 1 to 64 characters.
             </li>
+            <li>
+              Under <strong>Projects (required, 1 to 50)</strong>, pick the
+              projects that the guest can work on. The dialog shows the hint
+              &ldquo;Select at least one project.&rdquo; until you pick one.
+            </li>
             <li>Select <strong>Create link</strong>.</li>
             <li>
               Select <strong>Copy link</strong>. The dialog shows the link once.
@@ -100,6 +106,11 @@
               >https://&lt;host&gt;/&lt;base
               path&gt;/join/&lt;token&gt;#name=&lt;name&gt;</code
             >. The fragment after <code>#</code> never reaches the server.
+          </p>
+          <p>
+            Every live invite of the conversation shares one set of projects.
+            When an invite is live, the dialog shows that set and locks the
+            field. Revoke every invite to change the set.
           </p>
           <h2 id="2-send-the-link">2. Send the link</h2>
           <p>
@@ -121,6 +132,11 @@
               from before the invite. The share dialog states this.
             </li>
             <li>
+              Guests see every answer in the conversation, your own runs
+              included. Agents in guest runs read these answers too. Share a new
+              conversation to keep other projects out.
+            </li>
+            <li>
               Guests of a fork see its summary. The share dialog of a fork reads
               &ldquo;This conversation carries a summary of &lt;title&gt;.
               Guests see the summary.&rdquo;
@@ -131,8 +147,28 @@
               evidence content.
             </li>
             <li>
-              A guest writes notes. A note starts no run, also when it starts
-              with a mention.
+              A guest writes notes. A note is a message with no leading mention.
+              It starts no run.
+            </li>
+            <li>
+              A guest starts a run with a leading
+              <code>@&lt;display name&gt;</code>. The run reads and acts only on
+              the projects of the invite.
+            </li>
+            <li>
+              A guest can mention only an agent with no built-in tool, for
+              example Yumi and Jeremy. A mention of SWE or RE is refused with
+              409
+              <code>workbench.guest.agent_refused</code>.
+            </li>
+            <li>
+              You approve every act of a guest run on its card. A guest never
+              approves. Only you replace or stop the run and remove a queued
+              message.
+            </li>
+            <li>
+              A guest sees the queue with no <strong>Edit</strong>, no
+              <strong>Remove</strong> and no <strong>Stop</strong>.
             </li>
             <li>
               A guest sees an action card with no button. Only you run the act.
@@ -176,9 +212,9 @@
           </p>
           <h2 id="result">Result</h2>
           <p>
-            The invitee reads the conversation and writes notes for up to 7
-            days, or until you revoke the invite. The list of the share dialog
-            shows each live invite with its name and expiry.
+            The invitee reads the conversation, writes notes and starts runs for
+            up to 7 days, or until you revoke the invite. The list of the share
+            dialog shows each live invite with its name and expiry.
           </p>
           <h2 id="troubleshooting">Troubleshooting</h2>
           <div class="table-wrap">
@@ -201,6 +237,27 @@
                   <td>
                     The invite ended while the guest was in the chat. Create a
                     new invite.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>workbench.invite.project_invalid</code></td>
+                  <td>
+                    The set holds no project, more than 50, a repeated id or an
+                    unknown project. Pick 1 to 50 existing projects.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>workbench.invite.scope_mismatch</code></td>
+                  <td>
+                    A live invite of the conversation holds another set. Revoke
+                    every invite, then create the new invite.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>workbench.guest.agent_refused</code></td>
+                  <td>
+                    The guest mentioned an agent with a built-in tool, such as
+                    SWE or RE. Mention Yumi or Jeremy.
                   </td>
                 </tr>
                 <tr>
