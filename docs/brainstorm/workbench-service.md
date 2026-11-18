@@ -120,7 +120,7 @@ It describes no mechanism of another service.
 - Replace, Stop and queue removal are owner-only. Guests see the queue with no Edit, no Remove and no Stop.
 - Owner-started runs stay unscoped. Guests see every answer of the conversation, the owner's own runs included. The share dialog warns about it.
 - A guest note is data, never an instruction, also in a run that the owner started.
-- The fork material marks guest text with `<name> (guest):`.
+- The fork material marks guest text with `<name> (guest)`.
 - Ruling C6: in a conversation with a live invite, only a leading mention starts a run. An untagged message of the owner or a guest is a note. D8 applies again when the last invite ends.
 - Ruling C9: guests see the whole history, and the share dialog states it. The guest view includes the history from before the invite.
 - The owner-only acts are the acts of a human operation. They are a message that starts a run, an approval, Stop, the queue, the configuration, auto mode and a fork. A guest holds none of them, except a leading mention that starts a run.
