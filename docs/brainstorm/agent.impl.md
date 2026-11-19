@@ -727,6 +727,7 @@ Rule 6 finds a private key by its header: a PEM header, the PGP header `-----BEG
 
 - No per-project allowlist, no baseline file, no inline pragma in version 1: one standard configuration. Ulrich adds exceptions later.
 - In `write` and `edit`, the restore puts the real text back, so a false positive costs only the view of the model.
+- Model text gets rule 0 only. So the model sees its own earlier text, for example a test value that it wrote, and does not copy a marker of it.
 - In `bash`, a marker blocks the call. So a false positive that the model copies into `bash` blocks that call.
 - The tag keeps a literal marker in a file harmless. A foreign marker stays text.
 - The entropy floor keeps a common word of the free-value rules out of rule 0b. Only a word that the model used in a tool input spreads.
@@ -793,7 +794,8 @@ The two-pass scan applies to `message_end`, `text()` and the `context` handler:
 - Pass 1 runs rules 1 to 17 over every string of the message and over each escaped view. It adds each new value to the table after the merge.
 - Pass 2 runs rules 0 and 0b over every string, each escaped view and each run of the wrapped view, with the updated table.
 - Then the merged spans of both passes are replaced, and each final merged span enters the table.
-- So a value that a rule finds on line 2 is also masked on line 1. The same holds for another string of the message and for a second tool call.
+- So a value that a rule finds on line 2 is also masked on line 1. The same holds for another string of the message.
+- For an `assistant` message, pass 1 and rule 0b run only over the keys outside `content`. The `content` gets rule 0 in pass 2.
 - Pass 2 does not change a kept thinking block.
 
 ### The handlers
@@ -819,6 +821,7 @@ The `context` handler and the `custom` messages:
 
 - The restore writes a value back only into the input of `write` and `edit`.
 - A marker of this session in a `bash` call blocks the call. So no command receives a masked value. This closes the path of a prompt injection that sends a value with `curl`.
+- A value that the model types into a command is model text, and the command receives it.
 - A marker of the LLM credential blocks the call in every tool.
 - Every other tool, for example `read`, `grep`, a workbench operation tool or a custom tool, receives the marker text unchanged.
 
@@ -860,19 +863,26 @@ Strings that the `message_end` handler redacts:
 - On the message object and on each content block, the handler skips the structural keys. The keys are `type`, `role`, `id`, `toolCallId`, `toolName`, `customType`, `api`, `provider`, `model` and `stopReason`.
 - More structural keys: `timestamp`, `mimeType`, `textSignature`, `thinkingSignature`, `thoughtSignature`, `namespace` and `responseId`. The handler also skips the `data` of an image block.
 - Inside `arguments`, `details`, `nestedCalls`, `sections`, `toolsAdded` and custom `content`, the handler redacts every string at any depth.
+- The `content` of an `assistant` message is model text. The handler applies only rule 0 to it: no pattern rule and no rule 0b. Model text adds no value to the table.
+- Every other key of an `assistant` message, for example `errorMessage`, gets every rule.
 - For a `toolResult` message, the handler walks every string of every key, not only `content` and `details`. pi 1.1.0 drops `structuredContent` from the message (`pi-agent-core/agent-loop.js`). A later pi version that keeps it gets the same redaction, and a test pins the persisted keys.
 
 Thinking blocks:
 
 The handler applies the first thinking rule that matches, in this order:
 
-1. A block of `openai-completions` whose `thinkingSignature` is a reasoning field name is redacted. pi replays its text in that field with no signature check (`pi-ai/api/openai-completions.js`).
-2. A block with `redacted: true` or a non-empty `thinkingSignature` stays whole, and each finding in it counts as `thinking_kept`.
-3. Every other block is redacted.
+1. A block of `openai-completions` whose `thinkingSignature` is a reasoning field name is redacted with rule 0. pi replays its text in that field with no signature check (`pi-ai/api/openai-completions.js`).
+2. A block with `redacted: true` or a non-empty `thinkingSignature` stays whole, and each rule 0 finding in it counts as `thinking_kept`.
+3. Every other block is redacted with rule 0, as all model text.
 
 - Each redacted block keeps its `thinkingSignature`.
 - Rule 3 redacts an unsigned Google block and an unsigned Bedrock block (`pi-ai/api/google-generative-ai.js`; `pi-ai/api/bedrock-converse-stream.js`).
-- For a kept block, the handler scans its text and its signature. It adds each finding to the table and counts it as `thinking_kept`. Rule 0b then masks each later occurrence.
+- For a kept block, the handler scans its text and its signature with rule 0, and counts each finding as `thinking_kept`.
+
+The final assistant text:
+
+- `lastText` of the worker agent returns `redaction.modelOutput` of the last assistant text. The coder report, the examine assessment and the judgement read it, and the evidence holds it.
+- `modelOutput` applies every rule with the session markers. It adds no value to the known set, so a later tool result does not mask a value of the model text.
 
 Hook order:
 
@@ -892,8 +902,9 @@ Hook order:
 | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | User message (work prompt, instruction, workbench human text, `env@1` JSON failure)               | `message_end`, escaped view; the worker also redacts before `session.prompt`                                                | Covered                                                                                                                                                                                          |
 | System message (prompt sections, `toolsAdded`), with the instruction file and the Binding prompts | `message_end`; `openSession` redacts the loader input                                                                       | Covered                                                                                                                                                                                          |
-| Assistant text, tool call arguments, `errorMessage`                                               | `message_end`                                                                                                               | Covered                                                                                                                                                                                          |
-| Thinking with a provider signature                                                                | Scanned, kept whole, counted, values added to the table                                                                     | Kept                                                                                                                                                                                             |
+| Assistant text, thinking and tool call arguments                                                  | `message_end`, rule 0 only                                                                                                  | Kept. The provider made this text. The session file keeps a pattern value of model text. The tracer and the `turns.jsonl` writer apply rule 0 and rules 1 to 17 to their copies.                 |
+| Assistant `errorMessage`                                                                          | `message_end`                                                                                                               | Covered                                                                                                                                                                                          |
+| Thinking with a provider signature                                                                | Scanned with rule 0, kept whole, counted                                                                                    | Kept                                                                                                                                                                                             |
 | Tool result content, `details` and every other key of every tool                                  | `message_end` of the `toolResult` message; rules 0 and 0b                                                                   | Covered                                                                                                                                                                                          |
 | Restored value in a later tool output                                                             | Rule 0b for a restored value that spreads; the result of the same call for a shorter value                                  | Covered, except a later output of a short value                                                                                                                                                  |
 | Truncated, encoded or wrapped LLM credential                                                      | Rule 0 forms, parts and the wrapped view                                                                                    | Covered                                                                                                                                                                                          |
@@ -947,7 +958,7 @@ The worker writes seven attributes at the end of the `agent.session` span (`engi
 - The `message_end` handler catches every error itself, because pi persists the unchanged message after a handler error (`pi-coding-agent/core/extensions/runner.js`). On an error outside a string, each non-structural string becomes `<redacted:scan_failed:a:TAG>`.
 - The `context` handler catches every error, and the summary becomes `<redacted:scan_failed:a:TAG>`.
 - The `tool_call` handler catches every error and returns `{ block: true, reason }`. On a throw, pi also fails the call (`pi-agent-core/agent-loop.js`).
-- `known()` rejects at the first call: the set stays empty, and rules 0b to 17 still apply.
+- `known()` rejects at the first call: the set stays empty, and rules 0b to 17 still apply. The `content` of an assistant message then gets no rule.
 
 ### Tests
 
@@ -1019,9 +1030,10 @@ A test file builds every fake key from parts at run time, for example `["AKIA", 
 
 `engine/src/agent/hooks/sensitive-text-redaction.test.ts`:
 
-- `message_end` for each role, with `system` sections and `toolsAdded`.
+- `message_end` for each role other than `assistant`, with `system` sections and `toolsAdded`.
+- Assistant: `content` keeps a pattern value and a table value and masks a known secret. `errorMessage` keeps every rule. A signed thinking block adds no value to the table.
+- `modelOutput`: masks every rule and adds no value to the known set.
 - Same message: line 1 of a tool result holds the value in a form that no rule matches. Line 2 holds a rule 4 finding. Both lines hold the marker.
-- Same message: two tool calls of one assistant message hold one value.
 - A rule 12 value restored into `edit`, then the `toolResult` with its `diff` holds the marker.
 - A rule 4 password `pass` is restored into `edit`, and the `toolResult` of that call holds the marker. A later `npm test` output with `passed` stays unchanged.
 - A rule 13 value of 12 characters and entropy below 3.25 is restored into `write`. A later `cat` `toolResult` of that file holds the marker.
@@ -1031,7 +1043,7 @@ A test file builds every fake key from parts at run time, for example `["AKIA", 
 - Thinking: a signed Anthropic block, a signed Codex block and a signed Azure Responses block stay whole, and `thinking_kept` grows.
 - Thinking: an unsigned Google block and a Bedrock block with an empty signature are redacted, and each keeps its `thinkingSignature`.
 - Thinking: an `openai-completions` block with `reasoning_content` is redacted and keeps its signature. A block of another API with a signature stays whole.
-- Thinking: pass 2 leaves a kept block unchanged, and a kept finding masks a later text.
+- Thinking: pass 2 leaves a kept block unchanged.
 - Structural keys: `thoughtSignature` stays; a key `model` inside `arguments` is redacted.
 - `restore`: `write` and `edit` input; a nested `write` call with `parentToolCallId`.
 - `restore` by tool: a `read` and a `grep` input with a rule 12 marker reach the tool unchanged. A `read` input with a `llm_credential` marker blocks.
