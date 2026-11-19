@@ -456,6 +456,12 @@ interface CommonPorts {
 interface FoundryHost<P extends CommonPorts> {
   capabilities: readonly InlineExtension[];
   ports: P;
+  steps?: StepWatch;
+}
+
+interface StepWatch {
+  started(step: string): void;
+  ended(step: string, scope: unknown): void;
 }
 
 interface ImplementPorts extends CommonPorts {
@@ -615,6 +621,7 @@ Rules of the Foundry:
 16. **Unknown error.** The walker of a `tasks` function catches a throw. It returns `FoundryEnd` kind `failed` with the error and the result of the last completed step. The Foundry gives the error no stop reason. The Foundry host merges the result, then maps the error: the worker host with `run.stopOf`, the CLI host with the mapping of section 5.7.
 17. **Redaction.** A `FoundryStep` that puts tool output or git output into a stop detail or a log redacts it through `secrets.redact` first.
 18. **Logs.** A `FoundryStep` writes each log message of section 3 through the port `log`.
+19. **Step watch.** The walker calls `host.steps.started` before each step and `host.steps.ended` with the step scope after it. The watch makes no decision and returns nothing. `runPhase` gets the same watch through the optional `ChainIo.steps`, which `walkStep` calls. Only the CLI host sets either field. The worker host passes no watch. The CLI host uses it for the step of each outbox entry, the step run times and the last `UnitCtx` of each unit. It assumes that steps run in sequence.
 
 Port implementations:
 
@@ -1600,17 +1607,17 @@ OAuth refresh:
 
 Leak paths:
 
-| Path                                          | Rule                                                                                                                                                                                      |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `turns.jsonl`                                 | The recorder writes the request after the redaction hook of the session. It never writes the stream options, so it holds no `apiKey`.                                                     |
-| `spans.jsonl`, stop details                   | Each credential value joins the known secrets of the CLI host: `knownSecrets` of `agentPort` and the port `secrets.redact`. The session trace and the stop detail thus redact it.         |
-| `outbox.json`                                 | The CLI ports and `localHostTools` hold no credential operation. The frozen store sends no report.                                                                                        |
-| `progress.json`, `outbox.json`, `uploads/`    | The writer redacts each known secret with the matcher of the session hook: exact, encoded and partial forms. It decodes an upload as UTF-8 text when it can, else it redacts exact bytes. |
-| `result.json`, `context.json`, `metrics.json` | They record the mode, `provider_id` and the overrides. No override takes a credential. `context.json` omits `sshAccess`, `agent`, `baseHead` and `memo`, and it holds no credential.      |
-| logs, diagnostics                             | No log field takes a credential. A diagnostic holds no embedded value.                                                                                                                    |
-| child processes                               | The environment rule of "Calls outside the worker" applies.                                                                                                                               |
-| seed, capture, export                         | No credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.                                                               |
-| core dump                                     | The command page tells the developer to run `ulimit -c 0` first; `repository.impl.md` states the core-dump risk of a host install.                                                        |
+| Path                                          | Rule                                                                                                                                                                                                                         |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `turns.jsonl`                                 | The recorder writes the request after the redaction hook of the session. It never writes the stream options, so it holds no `apiKey`. Each line passes the writer redaction. A tool line holds only `content` and `isError`. |
+| `spans.jsonl`, stop details                   | Each credential value joins the known secrets of the CLI host: `knownSecrets` of `agentPort` and the port `secrets.redact`. The session trace and the stop detail thus redact it.                                            |
+| `outbox.json`                                 | The CLI ports and `localHostTools` hold no credential operation. The frozen store sends no report.                                                                                                                           |
+| `progress.json`, `outbox.json`, `uploads/`    | The writer redacts each known secret with the matcher of the session hook: exact, encoded and partial forms. It decodes an upload as UTF-8 text when it can, else it redacts exact bytes.                                    |
+| `result.json`, `context.json`, `metrics.json` | They record the mode, `provider_id` and the overrides. No override takes a credential. `context.json` omits `sshAccess`, `agent`, `baseHead` and `memo`, and it holds no credential.                                         |
+| logs, diagnostics                             | No log field takes a credential. A diagnostic holds no embedded value.                                                                                                                                                       |
+| child processes                               | The environment rule of "Calls outside the worker" applies.                                                                                                                                                                  |
+| seed, capture, export                         | No credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.                                                                                                  |
+| core dump                                     | The command page tells the developer to run `ulimit -c 0` first; `repository.impl.md` states the core-dump risk of a host install.                                                                                           |
 
 SSH:
 
@@ -1679,7 +1686,12 @@ SIGINT cancels the stop context with `worker_stopped`. The command then disposes
 
 **Overrides**
 
-Overrides edit the seed before `tasks_prepare`. Replay mode refuses each override with `cli.worker.tasks.mode_invalid`.
+Overrides edit the seed before `tasks_prepare`. The `turns.jsonl` header records each override of the live run. Replay mode takes the overrides from the header:
+
+- A non-file override (`--model`, `--reasoning`, `--unit`, `--budget-turns`, `--budget-wall`, `--skip-release-gate`) comes from the header. Replay refuses each of these options on its command line with `cli.worker.tasks.mode_invalid`.
+- The header records `--system-prompt` and `--templates` as content digests. Replay requires each file option that the header names, and only those. A missing option, an extra option or a digest that differs fails with `cli.worker.tasks.replay_invalid`.
+- A seed digest that differs from the header fails with `cli.worker.tasks.replay_invalid`.
+- Each check runs before the output folder exists.
 
 | Option                       | Effect                                                                                                  |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -1704,6 +1716,13 @@ Replay rule (D32): a replay runs each agent tool again, and the result of an ope
 - In replay mode, the wrapper answers the recorded result and does not call the tool.
 - pi registers an MCP tool itself, with the hints of its server, so the CLI host has no `execute` to wrap. The CLI host records and answers each call of an open-world MCP tool through `options.createTransport`. An MCP tool with no `openWorldHint` counts as open world.
 - A replay runs every other tool again: each pi built-in tool, `evidence-upload`, `link_update_list` and each capability tool with `openWorldHint: false`.
+- A replay runs the recorded tool calls on the host with the `--pass-env` values. The command page tells the developer to replay only a `turns.jsonl` that the developer recorded.
+
+`turns.jsonl` format: the first line is the header `{ kind: "header", version, seed_digest, overrides }`. Each request line holds the provider, the model id and the messages after the redaction hook. Each answer line holds the assistant message. Each tool line holds the name, the call id and the result or the error of an open-world capability tool. The recorder replaces the output folder path with a token, and removes the message `timestamp` and `durationMs`.
+
+Replay compares each request with the recorded request. The comparison maps every redaction marker form to `<redacted:<rule>>` and every `pi-bash-<hex>.log` path to one token. When the writer redaction changes an answer line or a tool line, the recorder marks the line `redacted: true` and keeps only the redacted text. A replay stops at a marked answer with `redacted_record`. A marked tool line replays its redacted result. `cli.worker.tasks.replay_diverged` names the `turn`, the `step` and one reason: `request_differs`, `request_extra`, `tool_unrecorded`, `redacted_record` or `turns_unused`. A completed replay that leaves a recorded request or tool line unused fails with `turns_unused`.
+
+The replay output folder must not equal, contain or lie inside the folder of the `--replay` file, compared by real path. Otherwise the command fails with `cli.worker.tasks.option_invalid`.
 
 End mapping of the CLI host:
 
@@ -1720,7 +1739,7 @@ With `--verify`, the command runs these checks and records each result in `resul
 5. With the end `completed`, each tree has a clean status: no index change, no untracked file and no operation path.
 6. With the end `completed`, the route is `passed`. With `--skip-release-gate`, the route is absent.
 7. A stop code is in the `stops` list of the step that `result.json` names, or it is `revoked`, `operation_failed/<server code>` or `provider_failed/*` (section 3), or it is a requested stop of rule 4a.
-8. In replay mode, the outbox and the commits equal those of the recorded run in the folder of the `--replay` file. The comparison replaces each commit id with its tree id and its message. The replay rule gives each open-world capability tool call its recorded result.
+8. In replay mode, the outbox and the commits equal those of the recorded run in the folder of the `--replay` file. The comparison replaces each commit id with its tree id and its message. The replay rule gives each open-world capability tool call its recorded result. Check 8 reads the recorded checkouts with `git log` under `isolatedGitEnvironment`, plus `log.showSignature=false` and `gpg.program`, `gpg.ssh.program` and `gpg.x509.program` set to `false`, so a config of a recorded tree runs no program.
 
 **Commands**
 
