@@ -157,7 +157,7 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - The baseline is `baseline.md` of the eval set: 11 runs `completed`, checks 3, 5 and 6 pass, 338 turns, 584 k output tokens, 81.9 tasks minutes.
 - Two seeds end `completed` with no commit: `XHDK27G1` and `YE4JXRX0`.
 - The first B5 run failed: each replay stopped with `request_differs` at turn 2 to 6, on bash output that changes over time. The drift rule fixes it.
-- B5 with the drift rule: 10 of 11 replays end `completed` with check 8 passed, with 2 to 13 drift entries each. `T8TWV9P5` stops at turn 11 with `redacted_record`, see the open item of the session redaction.
+- B5 with the drift rule: 10 of 11 replays end `completed` with check 8 passed, with 2 to 13 drift entries each. `T8TWV9P5` stops at turn 11 with `redacted_record`, see the open items of the session redaction.
 
 ## Phase C: behavior layers
 
@@ -179,7 +179,9 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - [ ] Open, in C1. Each phase C replay reads `drift` of `result.json`. Name the reader before C1 ends: a `--verify` check or a `tasks compare` section. With no reader, delete the field.
 
-- [ ] Open, before C1. The session redaction hook replaces test fixture values in the model request, for example `password: '<redacted:quoted_assignment>'`. The model then sees the marker in its own earlier tool call and writes it into the file. Seed `T8TWV9P5` spent turns 71 to 100 of 113 in this loop. The writer marks those answers, so its replay stops at turn 11 with `redacted_record`. Decide whether the model request keeps the model's own earlier tool call text.
+- [x] Closed. The session redaction hook replaced test fixture values in the model request, for example `password: '<redacted:quoted_assignment>'`. The model saw the marker in its own earlier tool call and wrote it into the file. Seed `T8TWV9P5` spent turns 71 to 100 of 113 in this loop. Ruled 2026-11-20 by Ulrich: the `content` of an assistant message gets rule 0 only, with no pattern rule and no table value. `agent.impl.md` § Sensitive text redaction records the rule. Two paths still show a marker of a model value, by the same ruling: a tool result that reads back a file of the model, and the compaction summary. Check both in the `T8TWV9P5` live run of C1.
+
+- [ ] Open, in C1 and C6. The `turns.jsonl` writer applies rule 0 and rules 1 to 17, so an answer with a fixture value stays marked, and its replay stops with `redacted_record`. Ruled 2026-11-20 by Aelita as owner: `T8TWV9P5` is a live seed only. The phase C replays use the other 10 seeds. Record `T8TWV9P5` live again in C1, after a new pi login in the eval set, and compare its turn count with the baseline of 113.
 
 - [ ] Open, in phase B. Each request line of `turns.jsonl` holds the full transcript, so the file grows with the square of the turn count, and `readTurns` loads the whole file with no size cap. Measure one real run in B3 and decide. B3 measures 59.7 MB for 113 turns and 11.1 MB for 42 turns.
 
@@ -203,3 +205,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | A9   | `engine`   | [#644](https://github.com/kanthorlabs/kanthord-engine/pull/644) | `65f8664d`   |
 | B1   | `kanthord` | [#433](https://github.com/kanthorlabs/kanthord/pull/433)        | `9872b3cb`   |
 | B5   | `engine`   | [#646](https://github.com/kanthorlabs/kanthord-engine/pull/646) | `66b45da5`   |
+| C0   | `engine`   | [#650](https://github.com/kanthorlabs/kanthord-engine/pull/650) | `cd52d454`   |
