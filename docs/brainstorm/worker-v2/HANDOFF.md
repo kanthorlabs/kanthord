@@ -138,7 +138,7 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - [x] B2. Export the seeds.
 - [x] B3. Live record run of each seed.
 - [x] B4. Baseline report.
-- [ ] B5. Replay of each seed against its own record.
+- [x] B5. Replay of each seed against its own record.
 
 ### B1 and B2 deviations
 
@@ -156,7 +156,8 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - The credential is an Anthropic subscription login of Ulrich in a separate pi folder of the eval set. The run reads it on standard input.
 - The baseline is `baseline.md` of the eval set: 11 runs `completed`, checks 3, 5 and 6 pass, 338 turns, 584 k output tokens, 81.9 tasks minutes.
 - Two seeds end `completed` with no commit: `XHDK27G1` and `YE4JXRX0`.
-- B5 fails: each replay stops with `replay_diverged`, reason `request_differs`, at turn 2 to 6. Each first difference is bash output that changes over time: an `ls -l` modification time or a test duration.
+- The first B5 run failed: each replay stopped with `request_differs` at turn 2 to 6, on bash output that changes over time. The drift rule fixes it.
+- B5 with the drift rule: 10 of 11 replays end `completed` with check 8 passed, with 2 to 13 drift entries each. `T8TWV9P5` stops at turn 11 with `redacted_record`, see the open item of the session redaction.
 
 ## Phase C: behavior layers
 
@@ -174,7 +175,11 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - [ ] Open, before a CLI command for `evaluation`. The `BaseHead` of `evaluation` clones base trees with `cloneLocal` inside `foundryEvaluation`. Add `releaseTrees.takeBase` and `releaseTrees.giveBase` to `EvaluationPorts`, so that the Foundry constructs no tree (rule 1). Ruled 2026-11-17 by Aelita as owner.
 
-- [ ] Open, before phase C relies on replay. Tool output that changes over time diverges in a replay: a timestamp in `bash`, or a commit id after a `git commit` in `bash`, because the commit dates differ. Decide whether the CLI host child environment fixes `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`. Ruled 2026-11-19 by Aelita as owner: decide before C1.
+- [x] Closed. Tool output that changes over time diverged in a replay. Ruled 2026-11-19 by Ulrich: a difference only in the content text of a tool result is a drift. The replay continues and records the drift in `result.json`. The rule covers only the text of pi built-in tool results. The request structure stays strict.
+
+- [ ] Open, in C1. Each phase C replay reads `drift` of `result.json`. Name the reader before C1 ends: a `--verify` check or a `tasks compare` section. With no reader, delete the field.
+
+- [ ] Open, before C1. The session redaction hook replaces test fixture values in the model request, for example `password: '<redacted:quoted_assignment>'`. The model then sees the marker in its own earlier tool call and writes it into the file. Seed `T8TWV9P5` spent turns 71 to 100 of 113 in this loop. The writer marks those answers, so its replay stops at turn 11 with `redacted_record`. Decide whether the model request keeps the model's own earlier tool call text.
 
 - [ ] Open, in phase B. Each request line of `turns.jsonl` holds the full transcript, so the file grows with the square of the turn count, and `readTurns` loads the whole file with no size cap. Measure one real run in B3 and decide. B3 measures 59.7 MB for 113 turns and 11.1 MB for 42 turns.
 
@@ -197,3 +202,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | A8   | `engine`   | [#643](https://github.com/kanthorlabs/kanthord-engine/pull/643) | `c8d4292d`   |
 | A9   | `engine`   | [#644](https://github.com/kanthorlabs/kanthord-engine/pull/644) | `65f8664d`   |
 | B1   | `kanthord` | [#433](https://github.com/kanthorlabs/kanthord/pull/433)        | `9872b3cb`   |
+| B5   | `engine`   | [#646](https://github.com/kanthorlabs/kanthord-engine/pull/646) | `66b45da5`   |

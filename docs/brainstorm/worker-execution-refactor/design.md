@@ -1722,6 +1722,8 @@ Replay rule (D32): a replay runs each agent tool again, and the result of an ope
 
 Replay compares each request with the recorded request. The comparison maps every redaction marker form to `<redacted:<rule>>` and every `pi-bash-<hex>.log` path to one token. When the writer redaction changes an answer line or a tool line, the recorder marks the line `redacted: true` and keeps only the redacted text. A replay stops at a marked answer with `redacted_record`. A marked tool line replays its redacted result. `cli.worker.tasks.replay_diverged` names the `turn`, the `step` and one reason: `request_differs`, `request_extra`, `tool_unrecorded`, `redacted_record` or `turns_unused`. A completed replay that leaves a recorded request or tool line unused fails with `turns_unused`.
 
+A request that differs from the record only in the `text` of a text part of a pi built-in tool result is a drift, not a divergence. A built-in tool runs again on the host, so its output can hold a time or a duration. Everything else must stay equal, also the result of `evidence-upload`, `link_update_list` and each capability tool, because the worker composes it. The replay answers the recorded answer and records each drifted tool call once in `result.json` as `drift: [{ turn, step, message_index, tool_call_id, tool_name }]`. `drift` is `null` in live mode.
+
 The replay output folder must not equal, contain or lie inside the folder of the `--replay` file, compared by real path. Otherwise the command fails with `cli.worker.tasks.option_invalid`.
 
 End mapping of the CLI host:
