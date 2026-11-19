@@ -191,13 +191,20 @@
             <li>
               A guest starts a run with a leading
               <code>@&lt;display name&gt;</code>. The run reads and acts only on
-              the projects of the invite.
+              the projects of the invite. This holds also when the guest
+              mentions an agent variant.
             </li>
             <li>
-              A guest can mention only an agent with no built-in tool, for
-              example Yumi and Jeremy. A mention of SWE or RE is refused with
-              409
-              <code>workbench.guest.agent_refused</code>.
+              A guest can mention an agent variant by its display name, as an
+              agent. A variant follows the base agent. A variant of Yumi or
+              Jeremy is available. A variant of SWE or RE is not.
+            </li>
+            <li>
+              A guest can mention only an agent or a variant with no built-in
+              tool, for example Yumi and Jeremy. The autocomplete of the guest
+              lists only these names. A mention of SWE or RE, or of a variant of
+              them, is refused with 409
+              <code>workbench.guest.agent_refused</code>, and no run starts.
             </li>
             <li>
               You approve every act of a guest run on its card, except the acts
@@ -368,7 +375,8 @@
                   <td><code>workbench.guest.agent_refused</code></td>
                   <td>
                     The guest mentioned an agent with a built-in tool, such as
-                    SWE or RE. Mention Yumi or Jeremy.
+                    SWE or RE, or a variant of that agent. Mention Yumi, Jeremy
+                    or a variant of them.
                   </td>
                 </tr>
                 <tr>
