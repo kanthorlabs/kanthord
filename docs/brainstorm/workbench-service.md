@@ -76,8 +76,11 @@ It describes no mechanism of another service.
 - The [host session](workbench-service.vocabulary.md#host-session) owns a [conversation](workbench-service.vocabulary.md#conversation). The agent picked in New Session is the host. On Home, the host is `ops@1`.
 - A new conversation opens with a host greeting from `greeting.md`, with the display name and the model. The server writes it with no model call.
 - An untagged first message runs the host. A leading mention in the first message runs the mentioned member (H4).
-- One session exists per member: the host session, and one [participant session](workbench-service.vocabulary.md#participant-session) for each other agent. Another agent joins at its first [mention](workbench-service.vocabulary.md#mention).
+- A member of a conversation is one session agent or one agent variant. One session exists per member: the host session, and one [participant session](workbench-service.vocabulary.md#participant-session) for each other member. Another agent or variant joins at its first [mention](workbench-service.vocabulary.md#mention).
+- A leading `@<display name>` of a variant routes to that variant member, as a catalog display name does. The longest display name wins.
+- A variant member runs with the tools, the enablement, the default configuration and the guard of its base agent. It answers under its own display name.
 - Only a leading `@<display name>` routes, case-insensitively. Outside a [shared conversation](workbench-service.vocabulary.md#shared-conversation) (C6), an untagged message goes to the member that answered last (D8). The greeting counts as the answer of the host.
+- In a [shared conversation](workbench-service.vocabulary.md#shared-conversation), a guest mentions a variant only when its base agent holds no built-in tool.
 - One run exists per conversation (D14). The queue item stores its mention target, and an untagged item resolves at its start (Q2).
 - A queued row shows "to @<display name>", or "to last answer" for an untagged item.
 - `get`, `events`, `message`, `abort`, `queue.remove` and `autoMode.set` on a participant session id answer 409 `workbench.session.not_host`.

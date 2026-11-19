@@ -318,7 +318,8 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - A run writes `.dev/eval/<agent>/<run>.json`. No run file is committed.
 - A variant run plays every case of the base suite with one variant. It compares with the latest run of the history of the base agent.
 - A variant has no committed history. The variant run of `make eval` refuses `ACCEPT=1`, and it never writes a history file.
-- A case holds the key `variants` to create variants for its own session. The key `session_variant` names the variant of the session.
+- A case can declare variants with the case field `variants`. The harness creates each variant through `agent.variant.create` before the first turn. The key `session_variant` names the variant of the session.
+- The `ops@1` suite holds `variant-persona` (V1): a variant "Night Ops" answers its own name and not "Yumi". It holds `variant-mention` (V2): `@Night Ops` runs the variant member, and the relay labels it.
 - The [eval history](agent.vocabulary.md#eval-history) `docs/reference/agent/evals/<agent>.json` is committed. It holds the first recorded run and every later [accepted run](agent.vocabulary.md#accepted-run). Each run is appended, oldest first. No run is removed.
 - No database table and no `agent.eval.*` operation exist.
 - `make eval` compares a run with the latest entry of the history. It matches a case by its `case_digest`.
