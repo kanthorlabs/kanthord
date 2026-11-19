@@ -136,8 +136,8 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - [x] B1. Select 8 to 12 seeds: open nodes for `worker tasks seed`, or new executions with the capture hook on. Ulrich selects. Aelita proposes candidates from the traces.
 - [x] B2. Export the seeds.
-- [ ] B3. Live record run of each seed.
-- [ ] B4. Baseline report.
+- [x] B3. Live record run of each seed.
+- [x] B4. Baseline report.
 - [ ] B5. Replay of each seed against its own record.
 
 ### B1 and B2 deviations
@@ -149,6 +149,14 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - `make e2e-start` sent no `resource_kind` for the poll inbound, and the server refused it. kanthord #433 sends `resource_kind: "repository"`.
 - The run stops at `External.Requested` until a human merges each pull request of the coder. A local loop merged them.
 - The eval set lives in `~/kanthord-evalset/worker-v2` with mode `0700`. `index.md` holds the execution id, the case and the `seed.json` digest of each seed.
+
+### B3 and B4 deviations
+
+- Each seed runs against its own source tree. The tree holds the base branch at its head of the seed claim time, and the node branch at the seed head. `bases.tsv` of the eval set lists each base head. The run clones only branch refs, so a seed head on a remote-tracking ref only fails with `cli.worker.tasks.tree_invalid`.
+- The credential is an Anthropic subscription login of Ulrich in a separate pi folder of the eval set. The run reads it on standard input.
+- The baseline is `baseline.md` of the eval set: 11 runs `completed`, checks 3, 5 and 6 pass, 338 turns, 584 k output tokens, 81.9 tasks minutes.
+- Two seeds end `completed` with no commit: `XHDK27G1` and `YE4JXRX0`.
+- B5 fails: each replay stops with `replay_diverged`, reason `request_differs`, at turn 2 to 6. Each first difference is bash output that changes over time: an `ls -l` modification time or a test duration.
 
 ## Phase C: behavior layers
 
@@ -168,7 +176,7 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - [ ] Open, before phase C relies on replay. Tool output that changes over time diverges in a replay: a timestamp in `bash`, or a commit id after a `git commit` in `bash`, because the commit dates differ. Decide whether the CLI host child environment fixes `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`. Ruled 2026-11-19 by Aelita as owner: decide before C1.
 
-- [ ] Open, in phase B. Each request line of `turns.jsonl` holds the full transcript, so the file grows with the square of the turn count, and `readTurns` loads the whole file with no size cap. Measure one real run in B3 and decide.
+- [ ] Open, in phase B. Each request line of `turns.jsonl` holds the full transcript, so the file grows with the square of the turn count, and `readTurns` loads the whole file with no size cap. Measure one real run in B3 and decide. B3 measures 59.7 MB for 113 turns and 11.1 MB for 42 turns.
 
 - [ ] Open, with the first open-world capability. The open-world tool record keys by `call_id` only, and a live run records a doubled `call_id` that the reader refuses. Key by the turn position plus the call id.
 
