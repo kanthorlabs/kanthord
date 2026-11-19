@@ -2779,21 +2779,21 @@ kanthord worker tasks seed <execution_id> --output <folder> [--force]
 kanthord worker tasks compare <output-a> <output-b>
 ```
 
-- `--credential-stdin` reads one JSON object from standard input before any other work, as `kanthord worker join` reads its instance configuration, so no secret reaches the command line. Exactly one of `--replay` and `--credential-stdin` is required.
-- `--output` of `run` defaults to `./tasks-run-<execution_id>`. An existing folder fails unless `--force` is set.
+- `--credential-stdin` reads one JSON object from standard input after the option, seed and output folder checks and before the output folder or any child process exists, so no secret reaches the command line. The object holds `provider_id`, `credential` and, for a provider with routing metadata, `metadata` ([design.md §5.7](worker-execution-refactor/design.md#57-standalone-tasks-run)). Exactly one of `--replay` and `--credential-stdin` is required.
+- `--output` of `run` defaults to `./tasks-run-<execution_id>`. An existing folder fails unless `--force` is set. `--force` replaces only an empty folder or a run folder, which holds both `result.json` and `state/`.
 - On success, `run` prints one JSON line with the output folder, the end kind and the exit code.
 - The help text and the command page state that `env.setup`, the verification commands and agent `bash` run on the host with its network.
 - `compare` prints differences in route, end, commits, unit results and `metrics.json`. It fails with `cli.worker.tasks.seed_mismatch` when the seed digests of the two runs differ.
 
 Files read by `run`: `<seed-folder>/seed.json`, each `--tree` path, `--replay` file, `--system-prompt` file, each file of `--templates`, and with `--verify` the `outbox.json` and `spans.jsonl` of the recorded folder. Files written by `run`: the output folder and its contents. Files read by `seed`: none. Files written by `seed`: `<output>/seed.json`. Files read by `compare`: `result.json` and `metrics.json` of each folder.
 
-| Exit code | Condition                                                                                                                  |
-| --------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 0         | `run`: the phase completed or exited with a budget end, and each `--verify` check passed; `seed`, `compare`: success       |
-| 1         | a diagnostic: an invalid seed, option, folder or standard input, an invalid or diverged replay, or another handled failure |
-| 2         | `run`: the phase stopped, or SIGINT cancelled it with the stop `worker_stopped`                                            |
-| 4         | `run`: the phase completed or exited, and a `--verify` check failed                                                        |
-| 5         | `run`: the `tasks` function ended with `failed`, an unknown error                                                          |
+| Exit code | Condition                                                                                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0         | `run`: the phase completed or exited with a budget end, and each `--verify` check passed; `seed`, `compare`: success                                                            |
+| 1         | a diagnostic before or after the output folder exists: an invalid seed, option, folder, tree, unit or standard input, an invalid or diverged replay, or another handled failure |
+| 2         | `run`: the phase stopped, or SIGINT cancelled it with the stop `worker_stopped`                                                                                                 |
+| 4         | `run`: the phase completed or exited, and a `--verify` check failed                                                                                                             |
+| 5         | `run`: the `tasks` function ended with `failed`, an unknown error                                                                                                               |
 
 Exit code 3 stays reserved for `worker.instance.superseded` of `serve worker`.
 
@@ -2801,11 +2801,12 @@ Exit code 3 stays reserved for `worker.instance.superseded` of `serve worker`.
 | ----- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | local | `cli.worker.tasks.seed_invalid`        | `seed.json` fails its schema, a binding has no tree source, the seed lacks a key that the phase reads, or `setup` lacks `prompt.final` or `templates` and the matching option is absent |
 | local | `cli.worker.tasks.tree_invalid`        | a `--tree` path is no git repository, or a clone lacks the seed head or `origin/<base_branch>`                                                                                          |
+| local | `cli.worker.tasks.option_invalid`      | a `--pass-env` name is unset, fixed (`PATH`, `LANG`, `TMPDIR`, `HOME`) or removed by `childEnvironment`, or another option value is invalid                                             |
 | local | `cli.worker.tasks.mode_invalid`        | neither or both of `--replay` and `--credential-stdin`, or an override with `--replay`                                                                                                  |
-| local | `cli.worker.tasks.credential_invalid`  | standard input is a terminal, or it holds no valid credential of the effective provider                                                                                                 |
+| local | `cli.worker.tasks.credential_invalid`  | standard input is a terminal, it holds no valid credential of the effective provider, its `metadata` differs from the seed agent metadata, or the pi directory holds an `auth.json`     |
 | local | `cli.worker.tasks.credential_expiring` | an `oauth` access token expires before the wall deadline plus 5 minutes                                                                                                                 |
 | local | `cli.worker.tasks.unit_unknown`        | a `--unit` names no unit of the plan                                                                                                                                                    |
-| local | `cli.worker.tasks.output_exists`       | the output folder exists and `--force` is absent                                                                                                                                        |
+| local | `cli.worker.tasks.output_exists`       | the output folder exists and `--force` is absent, or `--force` names a folder that is not empty and is not a run folder                                                                 |
 | local | `cli.worker.tasks.replay_invalid`      | the `--replay` file has another version or an invalid line                                                                                                                              |
 | local | `cli.worker.tasks.replay_diverged`     | a model request differs from the recorded request                                                                                                                                       |
 | local | `cli.worker.tasks.seed_mismatch`       | `compare` got two runs of different seeds                                                                                                                                               |
