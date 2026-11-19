@@ -1639,7 +1639,7 @@ D32 changes these production behaviors of a worker session:
 
 **Seed format**
 
-`seed.json` requires: `claim` (the `MethodClaim`), `setup` (the `ExecutionSetup` as `execution.setup.get` answers it), `revision` (the pinned node revision) and `heads` (the seed head of each binding). Optional: `plan`, `affectedTests`, `prior`, `link_updates`, `elapsed_ms`. The schema is strict. `state.open` sets `refreshed` to no refresh before `units.plan`, so the seed holds no `refreshed`. The seed holds no credential, no SSH identity, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The seed writer removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. The local run applies neither map; a developer names a variable with `--pass-env`.
+`seed.json` requires: `claim` (the `MethodClaim`), `setup` (the `ExecutionSetup` as `execution.setup.get` answers it), `revision` (the pinned node revision) and `heads` (the seed head of each binding). Optional: `plan`, `affectedTests`, `prior`, `link_updates`, `elapsed_ms`. The schema is strict. `state.open` sets `refreshed` to no refresh before `units.plan`, so the seed holds no `refreshed`. The seed holds no credential, no SSH identity, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The seed writer removes `containerEnv`, `remoteEnv` and `build.args` from each `setup.repositories[].environment.document`. The local run applies none of them; a developer names a variable with `--pass-env`.
 
 A hand-written seed omits `prompt.final` and `templates` of `setup`. The run takes them from `--system-prompt` and `--templates`. Without those options, such a seed fails with `cli.worker.tasks.seed_invalid`.
 
@@ -1666,11 +1666,11 @@ When the operator sets `KANTHORD_CAPTURE_TASKS=1`, `runChain` calls the capture 
 
 - `seed.json` with `claim`, `setup`, `revision`, `heads`, `prior`, `affectedTests`, `plan` and `elapsed_ms`.
 
-The hook writes no credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The hook removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture with the instance data.
+The hook writes no credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The hook removes `containerEnv`, `remoteEnv` and `build.args` from each `setup.repositories[].environment.document`. A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture with the instance data.
 
 **Seed export**
 
-`worker.execution.seed.get` is a `human` read of `unary` lifetime at `GET /api/worker/execution/:execution_id/seed`, with the access policy of `scheduler.execution.get`. It answers `{ claim, setup, revision, heads }` for any execution of a node that is not closed. An export of a closed node answers 409 `worker.execution.seed_unavailable`. The route answers no credential, no SSH identity and no handover key. The route removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. It holds no value of `containerEnv`, `remoteEnv` or the process environment. `worker-service.impl.md` holds the full route spec.
+`worker.execution.seed.get` is a `human` read of `unary` lifetime at `GET /api/worker/execution/:execution_id/seed`, with the access policy of `scheduler.execution.get`. It answers `{ claim, setup, revision, heads }` for any execution of a node that is not closed. `heads` comes from the head evidence of the execution, else of an earlier execution on the same node branch, else the prompt pin, else the current base head. The route writes nothing. An export of a closed node answers 409 `worker.execution.seed_unavailable`. The route answers no credential, no SSH identity and no handover key. The route removes `containerEnv`, `remoteEnv` and `build.args` from each `setup.repositories[].environment.document`. It holds no value of `containerEnv`, `remoteEnv` or the process environment. `worker-service.impl.md` holds the full route spec.
 
 **Calls outside the worker**
 
