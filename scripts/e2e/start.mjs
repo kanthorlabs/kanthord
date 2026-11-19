@@ -304,7 +304,10 @@ const inbound = await api.post("/api/intake/inbound", {
   platform: "github",
   consumer: "mission.delivery.admit",
   credential: config.repository.config.credential,
-  configuration: { resource: config.repository.github },
+  configuration: {
+    resource_kind: "repository",
+    resource: config.repository.github,
+  },
 });
 log("poll inbound created", {
   inbound: inbound.id,
