@@ -86,7 +86,7 @@ A mechanism here never overrides a rule there.
 
 ### List fields
 
-- Each item of `workbench.session.list` adds `host_session_id`, `display_name` and `participants`.
+- Each item of `workbench.session.list` adds `host_session_id`, `display_name`, `participants` and `notice`. See [Completion notice](#completion-notice).
 - A host item answers `host_session_id: null`, its participants in `participants`, and the newest `modified` of its members as `modified`.
 - A participant item answers the id of its host in `host_session_id` and an empty `participants`. A participant is never a top-level item.
 - The filter `agent_name` selects the host agent.
@@ -288,7 +288,7 @@ The constants are in `engine/src/workbench/contract.ts`:
 | `queue_clear`  | `count`, `cause`                                    | `clearQueue`                                     | The session that clears         | The guest view                                                                                            | Shown as a line (L8)             |
 | `scope_stop`   | `tool_call_id`, `operation_id`                      | The settle of a stopped run                      | The member that ran             | The chat line of the owner and the guest view                                                             | Shown as a line (L8a)            |
 | `watch`        | `node_ids`                                          | The server, at a completed create or import call | The host                        | `watch.ts`                                                                                                | Dropped                          |
-| `notice`       | `watch_entry_id`, `projects`                        | The watch check                                  | The host                        | The chat, the guest view, the relay, `watch.ts` and the session list                                      | Shown without `project_id` (L10) |
+| `notice`       | `watch_entry_id`, `projects`                        | The watch check                                  | The host                        | The chat, the guest view, the relay, the fork material, `watch.ts` and the session list                   | Shown without `project_id` (L10) |
 
 - `author` of a `note` is the strict object `{ kind, name }`. `kind` is `owner` or `guest`. `name` holds 1 to 64 characters.
 - The `author` record binding rule: `appendAuthor` appends it only for a guest-started run, before the relay and the prompt. It labels the next user message of the same session file.
@@ -313,7 +313,7 @@ This section realizes the completion notice of [Workbench session](workbench-ser
 - A task is content of a node and is never watched.
 - A call that creates no node, a rejected call and a blocked call append no record.
 - The open-watch rule: the open watch is the union of `node_ids` of every `watch` record after the record that `watch_entry_id` of the last `notice` names. With no notice, every `watch` record is open.
-- The single check runs at most once per `WORKBENCH_WATCH_CHECK_MS` = 60000 for each conversation. The throttle is in memory.
+- With an open watch, the check of a conversation starts at most once per `WORKBENCH_WATCH_CHECK_MS` = 60000. The throttle is in memory.
 - One check runs at a time for each conversation. A second caller awaits the running check.
 - Reads: the check calls `mission.node.get` through the registry under the owner identity of the read. `name` is `content.name`.
 - `ended_at` is `created_at` of the newest outcome from `mission.outcome.list` with `limit: 1`.
@@ -321,12 +321,12 @@ This section realizes the completion notice of [Workbench session](workbench-ser
 - The terminal set is `Completed` and `Discarded`.
 - The retired-node rule: a node with `retired_at` set leaves the notice. A watch whose read nodes are all retired gives no notice and stays open.
 - The failed read: a failed Mission or Project read ends the check with no notice and no record. The next check after 60 s reads again.
-- The writer: when every node of the open watch that the check read is terminal, the check appends one `notice`.
+- The writer: when every node of the open watch that is not retired is terminal, and one node or more is not retired, the check appends one `notice`.
 - `watch_entry_id` of the `notice` names the last `watch` record that the check read. A `watch` record appended during the read stays open.
 - A read appends a notice: owner `get` and `events` of a conversation run its check. `workbench.session.list` runs the check of each host conversation with an open watch.
-- Guest reads, the relay and the fork run no check.
+- Guest reads, a read under a read-only identity, the relay and the fork run no check.
 - The list field: each host item of `workbench.session.list` answers `notice: string | null`. `null` means no pending notice.
-- The value is not null while no owner message follows the last `notice` record of that conversation. A guest note does not clear it. No seen mark is stored.
+- The value is not null while no owner message and no owner note follow the last `notice` record of that conversation. A guest note and the first message of a guest-started run do not clear it. No seen mark is stored.
 - The list text holds each project block of the last `notice` record as `<project name> · <stats>`, joined by "; ". For example: "shop · 2 Completed; api · 1 Discarded".
 - `noticeSummary` of `engine/src/workbench/watch.ts` builds the list text.
 - Participant items and items whose load fails answer `notice: null`.

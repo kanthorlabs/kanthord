@@ -1809,9 +1809,9 @@ The deck rules follow.
 - An information item is a line in the stream. It never takes the primary or the secondary.
 - Notice line: the Home stream shows one line per conversation with a pending [completion notice](workbench-service.md#workbench-session). The line reads "<title>: <notice>", with the link "Open chat".
 - `<notice>` holds each project block of the last notice as `<project name> · <stats>`, joined by "; ". For example: "Release plan: shop · 2 Completed, 1 Discarded".
-- The notice lines sit with the information lines, above the card deck, oldest first. A notice line never takes the primary or the secondary card. The deck count ignores it.
-- A notice line shows while no owner message follows the last notice of that conversation. A guest note does not clear it. No seen mark is stored.
-- A Home read checks the watched nodes of every conversation of the owner.
+- The notice lines sit with the information lines, above the card deck, oldest `modified` of the conversation first. A notice line never takes the primary or the secondary card. The deck count ignores it.
+- A notice line shows while no owner message and no owner note follow the last notice of that conversation. A guest note does not clear it. No seen mark is stored.
+- A Home read calls `workbench.session.list`. The list runs the [watch check](workbench-service.impl.md#completion-notice) of each host conversation with an open watch.
 - No project filter exists. The deck covers every project.
 - The deck holds the refresh while an act dialog is open.
 - Exit after an act: the card slides out in 220 ms, and the next card takes the cursor place. A muted line reads "Done: <subject> · <n> items wait".

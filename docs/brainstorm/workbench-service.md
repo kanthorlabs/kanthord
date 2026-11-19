@@ -83,7 +83,7 @@ It describes no mechanism of another service.
 - The fork carries one text, the summary. No transcript, tool result, approval, queue, card, record or evidence grant carries over. The source does not change.
 - Every fork starts with auto mode on, whatever the value of the source.
 - Only the owner forks. The operation is human only, and no tool list holds it.
-- When the nodes that a conversation created finish, the server writes one completion notice into the conversation. No agent run writes it.
+- When the nodes that a conversation created finish, the server writes one completion notice into the conversation at the next owner read of the conversation or of Home. No agent run writes it.
 - The notice covers the nodes that a completed `mission--node--create` or `mission--import--apply` call created, auto or approved alike. A rejected or blocked call adds nothing.
 - The notice shows one block per project. The header holds the project name and its stats, for example "shop · 2 Completed, 1 Discarded".
 - The header leaves out a state with a count of zero, for example "shop · 3 Completed".
