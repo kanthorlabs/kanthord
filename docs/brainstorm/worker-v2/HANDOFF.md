@@ -16,9 +16,9 @@ Update a step when its state changes. Record the pull request of each step.
   - Add the worker-only port `dependencies.read` and make `inputs.read(dependencies)` a `FoundryStep`. Replace the context key `env` with `input.env`.
 - [x] A6. Capabilities and guards (D32 layer 5). Implementer: Fable 5.2. Reviewer: Opus 5.5 and `/security-review`.
   - Build D27: `checkoutConfinement` with the `locations` rule in each `re@1` session, with the D27 test.
-- [ ] A7. CLI host and `worker tasks run` (D32 layer 6). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`. Two pull requests, one after the other. Ruled 2026-11-18 by Aelita as owner.
+- [x] A7. CLI host and `worker tasks run` (D32 layer 6). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`. Two pull requests, one after the other. Ruled 2026-11-18 by Aelita as owner.
   - [x] A7a. Live mode: the seed, `tasks_prepare` and `runPhase`, the CLI ports and capabilities, `--credential-stdin` and the frozen store, `--tree`, `--pass-env`, the output folder, the end mapping, SIGINT. Tests 1, 3, 7, 8, 9, 11, 12 and 15 of design section 5.7.
-  - [ ] A7b. Replay: the capture of `turns.jsonl`, the replay provider, the replay rule of open-world tools, `--verify` checks 1 to 8. Tests 4, 5, 13 and 16 of design section 5.7.
+  - [x] A7b. Replay: the capture of `turns.jsonl`, the replay provider, the replay rule of open-world tools, `--verify` checks 1 to 8. Tests 4, 5, 13 and 16 of design section 5.7.
 - [ ] A8. `worker tasks seed` and `worker tasks compare` (D31). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`.
 - [ ] A9. Pages `agent.impl.md` and `engine/docs/cli/worker.md`. Writer: Sonnet 5.5. Check: `crucible`.
 
@@ -106,6 +106,18 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - `eslint.config.js` lets the `src/apps/cli/` tests and `tasks-test-support.ts` import the worker test support and `src/agent/{pi,pi-tools}.ts`. It lets `src/worker/unit/` and `src/apps/worker/` import `src/llm/refresh-watch.ts`.
 - `--unit` is checked after `tasks_prepare`, so `unit_unknown` comes after `env.setup`.
 
+### A7b deviations
+
+- `FoundryHost.steps` and `ChainIo.steps` are optional `StepWatch` fields. `walkStep` of `chain-runner.ts` calls the watch. The worker host passes none, so the worker result is the same.
+- `TasksCommandIo.capabilities` exists, so that a test registers a capability with `openWorldHint: true`. Production passes the default capabilities.
+- A replay also writes its own `turns.jsonl`.
+- In live mode, the cache-warming requests of pi do not pass the stream function, so `turns.jsonl` does not record them.
+- Only a marked answer stops a replay with `redacted_record`. A marked tool line replays its redacted result.
+- When an open-world tool result holds a known secret, the tool line holds `[redacted]` and the recorded request holds a session marker. The replay stops at the next request with `request_differs`. A later fix gives the tool line the session marker form.
+- Check 8 sets `allowUnsafeGpgProgram` of simple-git for its one `git log` call, because simple-git refuses the key `gpg.program` without it.
+- No test asserts the step of an agent tool call inside a `tasks_prepare` session.
+- The MCP part of the replay rule is not built. It comes with the first MCP capability.
+
 ## Phase B: eval set baseline
 
 - [ ] B1. Select 8 to 12 executions. Ulrich selects. Aelita proposes candidates from the traces.
@@ -130,6 +142,12 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - [ ] Open, before a CLI command for `evaluation`. The `BaseHead` of `evaluation` clones base trees with `cloneLocal` inside `foundryEvaluation`. Add `releaseTrees.takeBase` and `releaseTrees.giveBase` to `EvaluationPorts`, so that the Foundry constructs no tree (rule 1). Ruled 2026-11-17 by Aelita as owner.
 
+- [ ] Open, before phase C relies on replay. Tool output that changes over time diverges in a replay: a timestamp in `bash`, or a commit id after a `git commit` in `bash`, because the commit dates differ. Decide whether the CLI host child environment fixes `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE`. Ruled 2026-11-19 by Aelita as owner: decide before C1.
+
+- [ ] Open, in phase B. Each request line of `turns.jsonl` holds the full transcript, so the file grows with the square of the turn count, and `readTurns` loads the whole file with no size cap. Measure one real run in B3 and decide.
+
+- [ ] Open, with the first open-world capability. The open-world tool record keys by `call_id` only, and a live run records a doubled `call_id` that the reader refuses. Key by the turn position plus the call id.
+
 - [ ] Open, at each pi upgrade. `src/agent/hooks/checkout-confinement.ts` holds a copy of the path rules of pi (`normalizePath`, `resolvePath` and the `read` spelling variants of pi 1.1.0). Compare the copy with the new pi version before the upgrade lands.
 
 ## Pull requests
@@ -143,3 +161,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | A5   | `engine`   | [#627](https://github.com/kanthorlabs/kanthord-engine/pull/627) | `cd6397e7`   |
 | A6   | `engine`   | [#628](https://github.com/kanthorlabs/kanthord-engine/pull/628) | `caffd816`   |
 | A7a  | `engine`   | [#639](https://github.com/kanthorlabs/kanthord-engine/pull/639) | `ec48ca0b`   |
+| A7b  | `engine`   | [#641](https://github.com/kanthorlabs/kanthord-engine/pull/641) | `64f943cd`   |
