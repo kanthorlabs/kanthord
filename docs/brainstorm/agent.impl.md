@@ -54,28 +54,67 @@ A mechanism here never overrides a rule there.
 - Every failure of the call answers `refuse` with a cause: `oversize`, `timeout`, `no_verdict` or `unavailable`. [Workbench Service Implementation](workbench-service.impl.md#guard-summary-check) holds the causes.
 - Tests cover the pin refusal at `put` and at `provider.add`.
 
+## The agent variant
+
+- The table `agent_variant` belongs to the Agent component and sits in the operational store. [agent.md](agent.md#agent-variant) holds the rules.
+- Its columns are `id`, `agent_name`, `display_name`, `instruction` and `revision`. `id` is the primary key with the prefix `agent_variant`.
+- `agent_name` is the base agent. `display_name` and `instruction` are the role. `revision` starts at 1 and grows by 1 for each update.
+- The unique index `agent_variant_display_name` is on `display_name COLLATE NOCASE`. The table holds no other index.
+- The table holds no time column.
+- `listVariants` reads `id`, `agent_name`, `display_name` and `revision` for `agent.variant.list`. `getVariant` reads the whole row. `agent.variant.get`, `agent.get` with `variant_id` and the Workbench Service read it. The Workbench Service reads it through its dependency `agentVariant`.
+- The five operations use the `human` access policy and the lifetime `unary`. They have no CLI command.
+
+| Operation              | Route                                   | Body                                               | Answer                                                    |
+| ---------------------- | --------------------------------------- | -------------------------------------------------- | --------------------------------------------------------- |
+| `agent.variant.list`   | `GET /api/agent/variant`                | none                                               | `{ items: [{ id, agent_name, display_name, revision }] }` |
+| `agent.variant.get`    | `GET /api/agent/variant/:variant_id`    | none                                               | `{ id, agent_name, display_name, instruction, revision }` |
+| `agent.variant.create` | `POST /api/agent/variant`               | `{ agent_name, display_name, instruction }`        | the variant with `revision` 1                             |
+| `agent.variant.update` | `PUT /api/agent/variant/:variant_id`    | `{ display_name, instruction, expected_revision }` | the variant with the next revision                        |
+| `agent.variant.delete` | `DELETE /api/agent/variant/:variant_id` | `{ expected_revision }`                            | `{ id }`                                                  |
+
+- `list` orders the items by `agent_name`, then by `display_name`.
+- The static path `/api/agent/variant` does not match `GET /api/agent/:agent_name`. The same holds for `/api/agent/cooldown` ([the operator operations](#the-operator-operations)).
+- The write rules run in this order:
+  - `create`: the base, the name rule and the name collision.
+  - `update`: the row, the revision, the name rule and the name collision.
+  - `delete`: the row, the revision and the in-use check.
+- The base rule: an unknown `agent_name` answers 404 `agent.catalog.not_found`. A name outside `workbenchAgentNames()` answers 409 `agent.variant.base_refused`.
+- The name rule: at most 40 characters, and the pattern `^[A-Za-z][A-Za-z0-9_-]*( [A-Za-z0-9_-]+)*$`. A failure answers 400 `agent.variant.name_invalid`.
+- The name collision: a name that equals a catalog display name or another variant name, case-insensitively, answers 409 `agent.variant.name_taken`. The unique index backs this check, and a failed insert or update on that index answers the same code.
+- The revision rule: an `expected_revision` that differs from the row answers 409 `agent.variant.revision_conflict` with `details: { variant_id, current }`. `current` is the whole row.
+- A `variant_id` that names no row answers 404 `agent.variant.not_found`.
+- The in-use check: `agent.variant.delete` calls the injected `variantInUse(agentName, variantId)`. It answers `true` when the session directory of the variant exists. The directory then keeps the variant, and the answer is 409 `agent.variant.in_use`. The check is synchronous and runs in the delete transaction.
+- `PROMPT_SOURCE_MAX_BYTES` is 32768 UTF-8 bytes. It is the limit of a prompt file and of a variant instruction.
+- The body schema of `create` and `update` checks the instruction. A blank instruction, or one above `PROMPT_SOURCE_MAX_BYTES`, answers 400 `gateway.request.validation_failed` with `details` path `["body", "instruction"]`. The service does not repeat the check. No instruction-specific code exists.
+- `agent.get` takes the query `variant_id`. The variant must belong to the `agent_name` of the path, or the answer is 404 `agent.variant.not_found`. `variant_id` with `project_id`, `binding_id` or `node_id` answers 400 `gateway.request.validation_failed`. The answer holds the Workbench prompt of the variant session.
+- The Workbench Service owns the variant session. [Workbench Service Implementation](workbench-service.impl.md) holds its place and its rules.
+- Tests cover each operation, each error code, the order of the write rules, the case-insensitive collision, the instruction limits at 32768 and 32769 bytes, the in-use refusal and the `agent.get` query refusals.
+
 ## The prompt answer
 
 - `prompt` holds `parts` and `final`.
 - `parts` holds the parts of the system prompt in reading order, the framing last. Each part holds `{ layer, part, name, origin, path, binding_id, commit, digest, heading, state, text }`.
 - The first seven fields form the [prompt reference](agent.vocabulary.md#prompt-reference) of the part. `promptReferenceSchema` of `engine/src/agent/contract.ts` defines it, and `promptPartSchema` adds `layer`, `heading`, `state` and `text`.
-- `part` is one of `standard`, `identity`, `role`, `workbench`, `instruction_file`, `repository`, `binding` and `framing`. `origin` is one of `binary`, `file`, `database` and `repository`. `state` is one of `resolved`, `changed`, `invalid` and `unreachable`. The three are the code enums `PromptPart`, `PromptOrigin` and `PromptPartState`.
-- `layer` is 1 for `standard`, `identity`, `role` and `workbench`, 2 for `instruction_file` and `repository`, 3 for `binding`, and null for `framing`.
-- `standard` is `base.md` and `role` is `<agent_name>.md`. `identity` is the rendered template `identity`. It stands between `standard` and `role` in the system prompt of both surfaces, for every agent of `workbenchAgentNames()`. `workbench` is `workbench.md`, and only the Workbench system prompt holds it. For each repository binding in binding order, `instruction_file` is the file of `prompts.instruction_file`, `repository` is the nonblank text of `prompts.repository`, and `binding` is the nonblank text of `prompts.agents[<agent_name>]`.
-- `name` is the file name of a layer 1 part. It is the template name of `framing`, for example `framing-worker`. It is the binding name of a layer 2 or layer 3 part.
-- `origin` is `binary` for a shipped text, `file` for an override file, `database` for `repository` and `binding`, and `repository` for `instruction_file`.
+- `part` is one of `standard`, `identity`, `role`, `variant`, `workbench`, `instruction_file`, `repository`, `binding` and `framing`. `origin` is one of `binary`, `file`, `database` and `repository`. `state` is one of `resolved`, `changed`, `invalid` and `unreachable`. The three are the code enums `PromptPart`, `PromptOrigin` and `PromptPartState`.
+- `layer` is 1 for `standard`, `identity`, `role`, `variant` and `workbench`, 2 for `instruction_file` and `repository`, 3 for `binding`, and null for `framing`.
+- `standard` is `base.md` and `role` is `<agent_name>.md`. `identity` is the rendered template `identity`. It stands between `standard` and `role` in the system prompt of both surfaces, for every agent of `workbenchAgentNames()`. `variant` is the instruction of the agent variant, and only the system prompt of a variant session holds it. It stands between `role` and `workbench`. `workbench` is `workbench.md`, and only the Workbench system prompt holds it. For each repository binding in binding order, `instruction_file` is the file of `prompts.instruction_file`, `repository` is the nonblank text of `prompts.repository`, and `binding` is the nonblank text of `prompts.agents[<agent_name>]`.
+- `name` is the display name of the variant for `variant`, and the file name of another layer 1 part. It is the template name of `framing`, for example `framing-worker`. It is the binding name of a layer 2 or layer 3 part.
+- `origin` is `binary` for a shipped text, `file` for an override file, `database` for `variant`, `repository` and `binding`, and `repository` for `instruction_file`.
 - `path` is the override location that the server looked up for `binary` and `file`. It is the repository path for origin `repository`, and `null` for origin `database` and when `agent.prompt.agent_directory` is empty.
 - `binding_id` is the binding revision of a layer 2 or layer 3 part, and `null` otherwise. `commit` is the commit of origin `repository`, 40 or 64 lower-case hex, and `null` otherwise.
 - `digest` is the SHA-256 hex digest of the exact UTF-8 text of the part, with no heading. It is null for a part that the server cannot read: an `invalid` or `unreachable` instruction file of `agent.get`.
 - `heading` is the plain-text line that the server writes before the text. The dashboard renders no heading itself.
 
-| Part                                       | `heading`                                                  |
-| ------------------------------------------ | ---------------------------------------------------------- |
-| `standard`, `role`, `workbench`, `framing` | null                                                       |
-| `instruction_file`                         | `Repository prompt of repository <name>, file <path>:`     |
-| `repository`                               | `Repository prompt of repository <name>, set in KanthorD:` |
-| `binding`                                  | `Binding prompt of repository <name>:`                     |
+| Part                                                  | `heading`                                                  |
+| ----------------------------------------------------- | ---------------------------------------------------------- |
+| `standard`, `role`, `variant`, `workbench`, `framing` | null                                                       |
+| `instruction_file`                                    | `Repository prompt of repository <name>, file <path>:`     |
+| `repository`                                          | `Repository prompt of repository <name>, set in KanthorD:` |
+| `binding`                                             | `Binding prompt of repository <name>:`                     |
 
+- `composePrompt(agentName, consumer, options: ComposeOptions)` composes the parts. `ComposeOptions` is `{ context, variant: PromptVariant | null }`, and `PromptVariant` is `{ display_name, instruction }`. A non-null `variant` requires the Workbench consumer.
+- The Workbench Service calls its dependency `compose(agentName, { context, variant })`. The variant is null for a session with no variant.
+- With a variant, `resolveAgentPrompt` adds the `variant` part before the `workbench` part. Its `origin` is `database`, its `name` is the variant display name, its `digest` is the digest of the instruction, and its text is the instruction only. The `identity` part renders the variant display name.
 - Only a `resolved` part holds `text`. A failed layer 2 read is a part state, and the read itself answers 200. An unreachable remote answers `unreachable`. An instruction file that is too large, is not UTF-8, cannot be read or holds a control character answers `invalid`. A text whose digest differs from its reference answers `changed`.
 - `final` holds the system prompt: each part in reading order. A part with a heading renders as the heading, a blank line and the text. `final` is null when a part is not `resolved`.
 - The query `view=final` answers `prompt` with `final` only.
@@ -302,7 +341,7 @@ The Agent component owns these keys of the section `agent`.
 
 ## Prompt files
 
-- The KanthorD prompt holds no table and no setting row. The files `base.md`, `<agent_name>.md` and `workbench.md` are its only source.
+- The KanthorD prompt holds no setting row. The files `base.md`, `<agent_name>.md` and `workbench.md` are its source, and the table `agent_variant` is the source of the `variant` part.
 - The server composes every consumer from the same reader of the agent directory. The worker application reads no prompt file.
 - `agent.prompt.agent_directory` holds the path of a directory, as a string, and it defaults to `agents`. The file of `swe@1` is then `~/.local/share/kanthord/agents/swe@1.md`.
 - An empty value means that every file is the shipped text.
@@ -1038,20 +1077,38 @@ This section records the eval harness of the engine node `l2-engine`.
 
 ### The case file
 
-- A case file holds the keys `id`, `source`, `agents`, `auto_mode`, `project_ids`, `fixtures`, `setup`, `seed`, `turns` and `checks`. `source`, `agents`, `auto_mode` and `project_ids` are optional.
+- A case file holds the keys `id`, `source`, `agents`, `auto_mode`, `project_ids`, `variants`, `session_variant`, `fixtures`, `setup`, `seed`, `turns` and `checks`. `source`, `agents`, `auto_mode`, `project_ids`, `variants` and `session_variant` are optional.
 - An unknown key of a case object fails the parse, because each object schema is strict. The `input`, `body` and `expect` values accept any key.
 - `id` equals the file name without `.yaml`. `fixtures` maps a key to a JSON file under `engine/eval/<agent>/fixtures/`.
 - `agents: [<agent name>]` lists the member agents of the conversation. The sandbox enables each of them with the `.env.eval` key, as for the subject. A turn that starts with `@<display name>` runs that member.
 - `setup` lists operation calls. `turns` lists a `human` text and `approvals`, a map of operation id to `approve` or `reject`.
 - A turn can be `fork: { text }` instead. The harness calls `workbench.session.fork` on the current session with `text`, and every later turn runs in the fork. A turn with `fork` holds no `approvals`. A failed fork fails the case with the check kind `fork`.
-- A placeholder resolves to a real id after the fixture import. It has five forms:
+- A placeholder resolves to a real id after the fixture import. It has five forms, and the sixth form `{{display_name}}` follows the list:
   - `{{<key>.project_id}}`
   - `{{<key>.node.<filename>}}`
   - `{{<key>.evidence.<filename>}}`
   - `{{<key>.evidence.<filename>.asset.<n>}}`
   - `{{native.platform}}`: the platform of the sandbox credential `native-credential`, `anthropic` for a key source and `anthropic-subscription` for a subscription source. `native` is not a valid fixture key.
+- `{{display_name}}` is the display name of the session agent: the variant display name in a variant session, else the display name of the agent. It works in `turns` and `checks` only, and `display_name` is a reserved fixture key.
 - Placeholders work in `setup`, `seed`, `turns`, `checks` and the text assets. An unknown key or filename fails the parse.
 - `case_digest` is the SHA-256 of the canonical JSON of the case file, followed by the bytes of its fixture files and evidence asset files.
+
+### The variant keys
+
+- `variants` lists `{ agent_name, display_name, instruction }`. The sandbox creates each item through `agent.variant.create` as the `human` caller before the turns. The operation applies the validation of the dashboard. A failed create fails the case with the check kind `variant`.
+- `session_variant` names the `display_name` of one item of `variants`. The harness opens the session of the case with that variant. A name that no item holds fails the parse. The item that `session_variant` names fails the load of the suite when its `agent_name` differs from the subject.
+- A case with `session_variant` keeps its own variant in a variant run.
+- `variant-persona` is a case of `ops@1`. It creates the variant "Night Ops" and opens the session with it. The turn asks "Who are you?". The run passes when the reply holds "Night Ops" and does not hold "Yumi", and the run asks no confirmation.
+
+### The variant run
+
+- `scripts/eval/run.sh` runs a variant run when `VARIANT_FILE` and `VARIANT_NAME` are both set. It passes `EVAL_VARIANT_FILE`, the absolute path of the file, and `EVAL_VARIANT_NAME` to `src/eval/run.eval.ts`.
+- The harness reads the file as the instruction. It creates the variant `EVAL_VARIANT_NAME` for the subject through `agent.variant.create` in each sandbox. It runs every case of the base suite with that variant.
+- The harness stops at start when only one of the two variables is set.
+- `EVAL_OUTPUT` is `.dev/eval/<agent>/variant-<slug>/<run>.json`. `<slug>` is `VARIANT_NAME` in lower case, with each run of characters outside `[a-z0-9]` replaced by one `-`, and no leading or trailing `-`.
+- `EVAL_HISTORY` is the history of the base agent. The variant run compares with its latest entry and reruns each regressed case, as a base run does.
+- The script refuses `ACCEPT=1` for a variant run, with `eval: ACCEPT=1 is refused for a variant run.` and exit 1. It checks the input before it reads `engine/.env.eval`.
+- A variant run never writes the history file and never renders `docs/reference/agent/evals.html`. When the history file is absent, the script prints `eval: no committed base run for <agent>.` and compares nothing.
 
 ### The seed steps
 
@@ -1099,7 +1156,7 @@ This section records the eval harness of the engine node `l2-engine`.
 - The baseline is the last history entry. A case with a `case_digest` that the baseline lacks is `new`. A baseline case that the run lacks is `dropped`.
 - A case that passed in the baseline and fails now is `regressed`. A case that failed and passes now is `improved`.
 - `scripts/eval/run.sh` reruns the regressed cases once, with `EVAL_RERUN=1`. It exits 1 when `comparison.regressed` stays non-empty.
-- `scripts/eval/run.sh` appends `<run>.entry.json` to the history only when the history is absent or `ACCEPT=1`.
+- `scripts/eval/run.sh` appends `<run>.entry.json` to the history only when the history is absent or `ACCEPT=1`. A variant run never appends.
 - `scripts/eval/render.mjs` renders the history files into `docs/reference/agent/evals.html`.
 
 ### The plan suite

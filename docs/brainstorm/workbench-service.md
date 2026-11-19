@@ -61,6 +61,11 @@ It describes no mechanism of another service.
 - The human changes the configuration of a workbench session at any time.
 - The Agent component validates every configuration of a workbench session as a complete [entry](worker-service.vocabulary.md#entry).
 - The working directory of a workbench session is the workbench directory of its agent.
+- A workbench session can run an [agent variant](agent.md#agent-variant) of its agent. The [variant session](workbench-service.vocabulary.md#variant-session) has its own session directory and the working directory of the base agent.
+- A list item and the session answer carry `variant_id`. The display name of a variant session is the variant name.
+- Home opens the latest base `ops@1` conversation only. A conversation of a variant never opens on Home.
+- A fork of a variant session keeps the variant.
+- The `plan@1` phase sessions of a variant compose with the variant.
 - The session list of an agent lists the sessions that the runtime stores for that workbench directory.
 - The session list of the Workbench lists the sessions of every agent.
 - The dashboard lists the workbench sessions under Workforce › Workbench, with a filter by agent.
@@ -151,7 +156,7 @@ It describes no mechanism of another service.
 
 [The Home page](architecture.impl.md#the-home-page) owns every other Home rule. This section holds the Yumi chat, "Ask Yumi" and the slash commands.
 
-- Home opens the latest `ops@1` conversation by `modified` whose first message does not start with "Case: ". It skips an item with an empty first message.
+- Home opens the latest base `ops@1` conversation by `modified` whose first message does not start with "Case: ". It skips an item with an empty first message.
 - "New chat" makes no API call. The first Send creates the conversation, then sends the message.
 - The pending approval of the open Home conversation shows as the [queue line](architecture.impl.md#the-home-page), and its acts sit on the deck card.
 - With Yumi off, Home shows "Yumi is not enabled. Enable Yumi to chat here." with a link to the agent page of `ops@1`. The composer is disabled with no command list.
@@ -197,6 +202,7 @@ It describes no mechanism of another service.
 ## Prompt
 
 - The system prompt of a workbench session composes the [KanthorD prompt](agent.md#prompt-composer) of its agent: `base.md`, the Role of the agent and `workbench.md`. The framing of the Workbench closes it.
+- The prompt of a variant session holds the parts in this order: `standard`, `identity`, `role`, `variant`, `workbench`, `framing`.
 - A workbench session reads no Repository prompt, no Binding prompt, no instruction file of the workbench directory and no file of a home directory.
 - A workbench session takes no work prompt. Each human message is a message of the session.
 - The Workbench Service owns `workbench.md`. It states that a human reads every reply.

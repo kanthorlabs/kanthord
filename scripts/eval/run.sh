@@ -8,6 +8,18 @@ REPEAT=${REPEAT:-3}
 CASES=${CASES:-}
 EVAL_TIMEOUT_MS=${EVAL_TIMEOUT_MS:-600000}
 PRETTIER="$ROOT/node_modules/.bin/prettier"
+VARIANT_FILE=${VARIANT_FILE:-}
+VARIANT_NAME=${VARIANT_NAME:-}
+
+if [ -n "$VARIANT_FILE" ] || [ -n "$VARIANT_NAME" ]; then
+	[ -n "$VARIANT_FILE" ] && [ -n "$VARIANT_NAME" ] || die "VARIANT_FILE and VARIANT_NAME go together."
+	[ "${ACCEPT:-}" != 1 ] || die "ACCEPT=1 is refused for a variant run."
+	[ "$AGENT" != guard ] || die "guard has no variant run."
+	[ -f "$VARIANT_FILE" ] || die "VARIANT_FILE is not a file."
+	VARIANT_SLUG=$(printf '%s' "$VARIANT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+	[ -n "$VARIANT_SLUG" ] || die "VARIANT_NAME holds no letter or digit."
+	VARIANT_FILE="$(cd "$(dirname "$VARIANT_FILE")" && pwd)/$(basename "$VARIANT_FILE")"
+fi
 
 MAIN=$(dirname "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)")
 ENV_FILE="$MAIN/engine/.env.eval"
@@ -46,13 +58,24 @@ unset LINE VALUE KEY_VALUE AUTH_FILE_VALUE EVAL_ANTHROPIC_API_KEY EVAL_ANTHROPIC
 
 HISTORY="$ROOT/docs/reference/agent/evals/$AGENT.json"
 RUN=$(date -u +%Y%m%d-%H%M%S)
-OUTPUT="$RUN_DIR/eval/$AGENT/$RUN.json"
+if [ -n "$VARIANT_FILE" ]; then
+	OUTPUT="$RUN_DIR/eval/$AGENT/variant-$VARIANT_SLUG/$RUN.json"
+else
+	OUTPUT="$RUN_DIR/eval/$AGENT/$RUN.json"
+	mkdir -p "$(dirname "$HISTORY")"
+fi
 ENTRY="${OUTPUT%.json}.entry.json"
-mkdir -p "$(dirname "$OUTPUT")" "$(dirname "$HISTORY")"
+mkdir -p "$(dirname "$OUTPUT")"
 
 export EVAL_AGENT=$AGENT EVAL_REPEAT=$REPEAT EVAL_OUTPUT=$OUTPUT EVAL_HISTORY=$HISTORY
 
 engine_eval() {
+	if [ -n "$VARIANT_FILE" ]; then
+		(cd "$ENGINE_DIR" && EVAL_VARIANT_FILE=$VARIANT_FILE EVAL_VARIANT_NAME=$VARIANT_NAME \
+			EVAL_CASES=$1 EVAL_RERUN=$2 pnpm --silent run test:files \
+			--env-file="$ENV_FILE" --test-timeout="$EVAL_TIMEOUT_MS" src/eval/run.eval.ts)
+		return
+	fi
 	if [ "$AGENT" = guard ]; then
 		(cd "$ENGINE_DIR" && EVAL_CASES=$1 EVAL_RERUN=$2 pnpm --silent run test:files \
 			--env-file="$ENV_FILE" --test-timeout="$EVAL_TIMEOUT_MS" src/eval/guard.eval.ts)
@@ -78,6 +101,10 @@ fs.writeFileSync(history, JSON.stringify(list));
 	(cd "$ROOT" && node scripts/eval/render.mjs && "$PRETTIER" --write docs/reference/agent/evals.html >/dev/null) || exit 1
 }
 
+if [ -n "$VARIANT_FILE" ] && [ ! -f "$HISTORY" ]; then
+	log "no committed base run for $AGENT."
+fi
+
 engine_eval "$CASES" 0 || exit $?
 
 REGRESSED=$(regressed_cases) || exit 1
@@ -87,7 +114,7 @@ if [ -n "$REGRESSED" ]; then
 	REGRESSED=$(regressed_cases) || exit 1
 fi
 
-if [ ! -f "$HISTORY" ] || [ "${ACCEPT:-}" = 1 ]; then
+if [ -z "$VARIANT_FILE" ] && { [ ! -f "$HISTORY" ] || [ "${ACCEPT:-}" = 1 ]; }; then
 	write_history
 fi
 

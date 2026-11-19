@@ -141,6 +141,21 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The undo line of `card` is "Waits on your card."
 - The undo line of `evidence_read` is "Asks your approval once per node in a conversation."
 
+## Agent variant
+
+- An [agent variant](agent.vocabulary.md#agent-variant) is a named role of one Workbench session agent. It holds a display name and an instruction (V-OD1).
+- The tools, the enablement, the agent providers, the default configuration, the KanthorD prompt files, the Workbench part and the guard come from the base agent.
+- A variant is a role. The repository binding is the place. Per-repository conventions stay in the binding. (V-OD3)
+- Every agent of `workbenchAgentNames()` can have variants: `swe@1`, `re@1`, `ops@1` and `plan@1`. A variant of `guard@1` is refused (V-OD4, K13). A variant of `pe@1` is refused too.
+- The display name holds 1 to 40 characters. It starts with a letter. It holds words of letters, digits, `_` and `-`, and one space separates two words.
+- A display name is unique case-insensitively across the catalog and the variants. A variant cannot take the display name of an agent or of another variant.
+- The instruction is not blank, and it holds at most 32768 UTF-8 bytes. No other rule limits it.
+- A used variant stays. Delete is refused while its session directory exists. A human renames the variant or rewrites its instruction (V-OD6).
+- A name or instruction change takes effect at the next agent session.
+- The dashboard shows variant rows and "New variant" on the Agents page. The variant page edits one variant, shows the conflict flow and holds Delete. New Session lists the variants of its agent.
+- A refused instruction shows one line under the editor. The line shows the limit 32768 as fixed text.
+- The Worker passes no variant until node targeting lands (V-OD2).
+
 ## Agent configuration
 
 - The component owns [agent enablement](agent.vocabulary.md#agent-enablement), [agent provider](agent.vocabulary.md#agent-provider) and [default configuration](agent.vocabulary.md#default-configuration).
@@ -247,15 +262,17 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 
 - A human controls the prompt of an agent session through three [prompt layers](agent.vocabulary.md#prompt-layer). Layer 1 is the KanthorD prompt, layer 2 is the Repository prompt and layer 3 is the Binding prompt. The framing and the prompt templates are KanthorD protocol, not a prompt layer.
 - The KanthorD prompt is a set of three files. `base.md` is the Standard that every agent reads. It holds only the rules that every agent shares, a non-coding agent included. `<agent_name>.md` is the Role of one agent. `workbench.md` is the Workbench behavior, and only a Workbench session reads it.
+- The `variant` part is the instruction of an [agent variant](#agent-variant). It belongs to the KanthorD prompt (layer 1). KanthorD stores it (origin `database`). It holds the instruction only. It has the power of an override file of `<agent_name>.md` and no more. Only a variant session reads it.
+- The L0 `identity` part renders the variant display name in a variant session (V-OD5).
 - The component ships the text of each file. The binary embeds it, and no command downloads it.
 - A file of the same name in the agent directory replaces the shipped text of that file whole. The agent directory is a path of the server host.
 - An empty agent directory selects the shipped texts only.
 - The Repository prompt of a [repository binding](project-service.md#repository-configuration-and-policy) has two parts, in this order. The first part is the [instruction file](agent.vocabulary.md#instruction-file), the repository file at the path `prompts.instruction_file`. The second part is the stored Repository prompt, the text of `prompts.repository`. Every agent that works on that repository reads both parts.
 - `prompts.instruction_file` is absent by default, and an absent path reads no file. The binding names exactly one file.
 - The Binding prompt is the text of `prompts.agents[<agent_name>]` in the configuration of a repository binding. `prompts.agents` holds one key for each catalog agent except an internal agent, so `guard@1` has no Binding prompt. Each of these keys holds its own text. A blank text is an absent text.
-- The server composes the system prompt for every consumer. The order is `base.md`, `<agent_name>.md` and `workbench.md` for a Workbench session. Then, for each repository binding in binding order, the instruction file, the stored Repository prompt and the Binding prompt follow. The framing closes the system prompt.
+- The server composes the system prompt for every consumer. The order is `base.md`, the identity part, `<agent_name>.md` and `workbench.md` for a Workbench session. Then, for each repository binding in binding order, the instruction file, the stored Repository prompt and the Binding prompt follow. The framing closes the system prompt. A variant session adds the variant instruction after `<agent_name>.md`. Its part order is `standard`, `identity`, `role`, `variant`, `workbench`, `framing`.
 - `swe@1` and `re@1` read layers 2 and 3 of every repository binding of the node at its pinned revision. `pe@1` reads layers 2 and 3 of the binding of its environment run, with the instruction file at the commit of that run.
-- The precedence from the highest is the framing, the Binding prompt, the stored Repository prompt, the instruction file, `workbench.md`, the Role and the Standard. A later text governs an earlier text. The messages follow the system prompt, and a later message governs an earlier one.
+- The precedence from the highest is the framing, the Binding prompt, the stored Repository prompt, the instruction file, `workbench.md`, the variant instruction, the Role and the Standard. A later text governs an earlier text. The messages follow the system prompt, and a later message governs an earlier one.
 - An instruction of one repository governs only the work on the files of that repository. It never governs the reply format that a message demands.
 - The Binding prompt of each agent is a separate text. A rule that the reviewer judges goes into the Repository prompt, so the coder reads it too. Use the Binding prompt of `re@1` only to relax the judgement of a rule.
 - KanthorD reads the one instruction file that a repository binding names, at the base commit that the attempt pins. It reads no nested instruction file, no `*.local.md` file and no file of a home directory.
@@ -271,7 +288,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - A reference resolves by its origin. A `database` reference reads the text of its binding revision, which never changes. A `repository` reference reads the file at its commit through the Project Service. A `binary` or `file` reference reads the current text.
 - Each resolved text passes a digest check. A text whose digest differs from the reference answers the state `changed` and no text.
 - A reference names no URL and no branch, because a branch moves and the node branch is the candidate.
-- The agent page shows each part of the KanthorD prompt as one read-only row, with its origin, its path and its digest. The binding sheet of a repository edits the instruction file path, the stored Repository prompt and the Binding prompt of each agent. The dashboard has no screen that edits a KanthorD prompt file.
+- The agent page shows each part of the KanthorD prompt as one read-only row, with its origin, its path and its digest. The binding sheet of a repository edits the instruction file path, the stored Repository prompt and the Binding prompt of each agent. The dashboard has no screen that edits a KanthorD prompt file. The variant page edits a variant instruction, which is no prompt file.
 - `agent get` with a node shows the parts that the agent of that node reads, at the commit that the attempt pins. `agent prompt resolve` rebuilds the system prompt that one execution served, from the references of its span. The trace prompt block lists the parts of each agent of the execution.
 - The server and every worker host run the same execution setup contract, so a deploy upgrades them together.
 
@@ -299,6 +316,9 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The `plan@1` subject plays Jeremy on the cases of `engine/eval/plan@1/`. A case passes only when the plan meets the [plan contract](agent.vocabulary.md#plan-contract) and the run calls no mutation.
 - An [eval run](agent.vocabulary.md#eval-run) executes every [eval case](agent.vocabulary.md#eval-case) of one subject `k` times. Each execution runs in a fresh sandbox, against a real model, with the key of `engine/.env.eval`.
 - A run writes `.dev/eval/<agent>/<run>.json`. No run file is committed.
+- A variant run plays every case of the base suite with one variant. It compares with the latest run of the history of the base agent.
+- A variant has no committed history. The variant run of `make eval` refuses `ACCEPT=1`, and it never writes a history file.
+- A case holds the key `variants` to create variants for its own session. The key `session_variant` names the variant of the session.
 - The [eval history](agent.vocabulary.md#eval-history) `docs/reference/agent/evals/<agent>.json` is committed. It holds the first recorded run and every later [accepted run](agent.vocabulary.md#accepted-run). Each run is appended, oldest first. No run is removed.
 - No database table and no `agent.eval.*` operation exist.
 - `make eval` compares a run with the latest entry of the history. It matches a case by its `case_digest`.

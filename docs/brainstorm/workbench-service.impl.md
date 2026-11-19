@@ -12,8 +12,20 @@ A mechanism here never overrides a rule there.
 
 - The identity of a workbench session is `workbench_session_<ulid>`. The service passes it to pi as the session `id`.
 - The workbench directory of an agent is `workbench/<agent name>/` of the state directory.
+- A [variant session](workbench-service.vocabulary.md#variant-session) stores its files in `<state>/pi/sessions/workbench/<agent_name>/<variant_id>/`, the variant session directory. Its header `cwd` is the base workbench directory `<state>/workbench/<agent_name>/`.
+- The base session directory never holds a variant session file, and the variant directory never holds a base session file.
+- `variantSessionPlace` makes the variant directory. `existingVariantPlaces` scans the base session directory of an agent and keeps only the directories whose name is an `agent_variant` identity. It skips `phases/` and every file.
+- `list` and `findSession` create no variant directory. They read the places that `existingVariantPlaces` answers.
+- The `create` body takes the optional `variant_id`.
+- The row read, the configuration check and the directory creation of `create` run in one transaction callback with no `await` (V-OD6). A variant that does not exist or belongs to another agent answers 404 `agent.variant.not_found`, and no directory exists. A refused configuration creates no directory. A failure of the runtime open removes the variant directory when it is empty and no open session uses it.
+- The fork reads the row and makes the variant directory in the same way, in one transaction callback with no `await`. The fork file lives in the directory of its source.
+- Only `create` and the fork create a variant directory.
+- A session of a variant composes the system prompt with the current variant row at each agent open. A new name or instruction applies at the next open, also after `workbench.session.configure`.
+- The greeting of the opening names the variant.
+- The agent open of a `plan@1` variant session passes the variant to each phase. The phase files stay in `phases/` of the base `plan@1` session directory.
 - The list calls `SessionManager.list` of pi with that directory.
 - Each item of the list answers `id`, `name`, `created`, `modified`, `message_count` and `first_message`.
+- Each item of the list also answers `variant_id`: the `agent_variant` identity of a variant session, or `null`. The answer of `workbench.session.get` and the session answer of `create` hold the same field.
 - Each item of the list also answers `forked_from`: the id of the source of a [fork](#fork), or `null`. The answer of `workbench.session.get` holds the same field.
 - Each item of the list also answers `run_active` and `pending_approval` from the in-memory run, the source of the snapshot. `pending_approval` holds `tool_call_id` and `operation_id`, or `null`, and never `input`.
 - A list with `agent_name` `guard@1` answers `{ items: [] }`, because `guard@1` holds no Workbench session. A create for `guard@1` answers 409 `workbench.session.agent_refused`.
@@ -89,7 +101,8 @@ A mechanism here never overrides a rule there.
 - Each item of `workbench.session.list` adds `host_session_id`, `display_name`, `participants` and `notice`. See [Completion notice](#completion-notice).
 - A host item answers `host_session_id: null`, its participants in `participants`, and the newest `modified` of its members as `modified`.
 - A participant item answers the id of its host in `host_session_id` and an empty `participants`. A participant is never a top-level item.
-- The filter `agent_name` selects the host agent.
+- The filter `agent_name` selects the host agent. It includes the variant sessions of that agent.
+- `display_name` of a variant host item is the current variant name. When the variant row is absent, it is the display name of the agent.
 
 ## Plan pipeline
 
@@ -536,6 +549,7 @@ The guest header of `guest-chat.tsx` shows these lines:
 
 - The workbench prompt is [assets/prompt/workbench.md](assets/prompt/workbench.md).
 - pi receives `base.md`, the Role of the agent, `workbench.md` and the Workbench framing as its system prompt, as plain text with no tag. The session pins no message.
+- A variant session adds the `variant` part after the `role` part. The Workbench Service calls `compose(agentName, { context, variant })` with the variant of the session, or `null`. The order is `standard`, `identity`, `role`, `variant`, `workbench`, `framing`.
 - `workbench.md` is part of the system prompt, not a pinned message.
 - The adapter keeps the system prompt pin across the compaction of pi.
 - The workbench directory of the agent is the working directory only. The session reads no file of it for the prompt.
@@ -601,7 +615,7 @@ The guest header of `guest-chat.tsx` shows these lines:
   - `workbench.guard.guest_scope: <operation_id> is not available in a run that a guest started.`
   - `workbench.guard.project_scope: The record is not available in this conversation.`
 - The approval card of `mission.import.apply` lists each entry of `input.body.entries` as "create" (no `id`) or "update" (with `id`).
-- `HUMAN_ONLY_OPERATIONS` is a second check behind the tool lists. It holds 93 ids. The list below gives the damage class of each id, R3 or C.
+- `HUMAN_ONLY_OPERATIONS` is a second check behind the tool lists. It holds 96 ids. The list below gives the damage class of each id, R3 or C.
 - Mission node, evidence, finding, follow-up and inbox acts:
   - R3: `mission.node.discard`, `mission.node.retire`, `mission.node.rebind`, `mission.evidence.delete`, `mission.evidence.asset.delete`.
   - C: `mission.node.override`, `mission.node.ready`, `mission.finding.create`, `mission.finding.decide`, `mission.finding.update`, `mission.followup.decide`, `mission.inbox_item.done`.
@@ -619,6 +633,8 @@ The guest header of `guest-chat.tsx` shows these lines:
 - Agent enablement acts:
   - R3: `agent.enablement.put`, `agent.enablement.remove`, `agent.enablement.provider.add`, `agent.enablement.provider.remove`.
   - C: `agent.enablement.enable`, `agent.enablement.disable`.
+- Agent variant acts:
+  - R3: `agent.variant.create`, `agent.variant.update`, `agent.variant.delete`.
 - Worker registration, instance and machine acts and the worker cleanup deletes:
   - R3: `worker.instance.archive`, `worker.instance.create`, `worker.instance.rotate`, `worker.instance.session.delete`, `worker.instance.tool_output.delete`, `worker.instance.workspace.delete`, `worker.machine.archive`, `worker.machine.create`, `worker.machine.rotate`, `worker.slot_image.delete`.
   - C: `worker.registration.resume`.
@@ -632,7 +648,7 @@ The guest header of `guest-chat.tsx` shows these lines:
 - A new human mutation fails the classification test until a ruling places it.
 - The force test asserts that every mutation with a body `force` is in the set.
 - The classification test asserts that every mutation whose access is in `HUMAN_POLICIES` is listed, human-only or secret.
-- The list test asserts that no tool list holds an id of the set.
+- The list test asserts that no tool list holds an id of the set. No tool list names an `agent.variant.*` id.
 - `REVERSIBLE_OPERATIONS` is the set of the nine R1 ids: `mission.node.pause`, `mission.node.resume`, `mission.node.check`, `mission.node.priority.set`, `mission.dependency.add`, `mission.dependency.remove`, `project.pause`, `project.resume` and `agent.cooldown.clear`. It is in `engine/src/workbench/guard.ts`.
 - The coverage test of `workbench/tools.test.ts` asserts that every mutation that a tool list holds is in `REVERSIBLE_OPERATIONS`, is decided by a floor rule, or holds at least one guard eval case with `expect: auto` and `danger: false` and at least one case with `danger: true`. The cases are the YAML files of `engine/eval/guard/`.
 - The snapshot of a long poll adds `pending_approval`: `{ tool_call_id, operation_id, input, guard, requested_by }`. `requested_by` is `{ kind, name }`, the author of the run that made the call. `guard` is `null` for an evidence card. Every other card holds `{ cause, reason, confidence }`. `reason` and `confidence` are `null` for every cause other than `classifier`.
@@ -868,7 +884,7 @@ Every operation has `human` access, except `workbench.invite.join` (`public`) an
 | Operation ID                             | Route                                                                                                                                                | Lifetime | Answer                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `workbench.session.list`                 | `GET /api/workbench/session` with an optional `agent_name`                                                                                           | `unary`  | The session list of every agent, or of one agent. Each item carries `agent_name`.                                                                                                                                                                                                                                                                                                                                             |
-| `workbench.session.create`               | `POST /api/workbench/session` with `{ agent_name, agent_provider, model_identifier, reasoning_effort }`                                              | `unary`  | The new session.                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `workbench.session.create`               | `POST /api/workbench/session` with `{ agent_name, variant_id?, agent_provider, model_identifier, reasoning_effort }`                                 | `unary`  | The new session.                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `workbench.session.get`                  | `GET /api/workbench/session/:session_id`                                                                                                             | `unary`  | The configuration, the entries of the completed runs, `run_active`, `resume_command` and `scope_requests`.                                                                                                                                                                                                                                                                                                                    |
 | `workbench.session.configure`            | `PUT /api/workbench/session/:session_id/configuration`                                                                                               | `unary`  | The new configuration. It takes a host or a participant session id, and its own file holds the change. 409 `workbench.session.run_active` while the conversation holds an active run.                                                                                                                                                                                                                                         |
 | `workbench.session.fork`                 | `POST /api/workbench/session/:session_id/fork` with the strict body `{ text }`. Human and owner only. Timeout `FORK_TIMEOUT_MS`.                     | `unary`  | 202 with `{ session_id, run_active: true }`. `session_id` is the fork. 502 `workbench.fork.summary_failed`. 409 `workbench.fork.summary_refused`.                                                                                                                                                                                                                                                                             |
@@ -957,7 +973,7 @@ Every operation has `human` access, except `workbench.invite.join` (`public`) an
 
 ## Session files
 
-- pi stores the session files of an agent under `pi/sessions/workbench/<agent name>/` of the state directory.
+- pi stores the session files of an agent under `pi/sessions/workbench/<agent name>/` of the state directory. A variant session uses its own [variant session directory](#workbench-session) below it.
 - pi writes a session file after the first assistant message. The list omits a session until its first reply.
 - A resumed session answers its stored configuration through `get` without validation, so the human sees and repairs a configuration that became invalid. A message and a configure validate it.
 
@@ -969,42 +985,43 @@ Every operation has `human` access, except `workbench.invite.join` (`public`) an
 
 ## Error codes
 
-| HTTP       | Code                                         | Condition                                                                                                                                       |
-| ---------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| 404        | `workbench.session.not_found`                | The session identity names no session.                                                                                                          |
-| 404        | `workbench.session.approval_not_found`       | The tool call of an approval waits for no approval, or the approval expired.                                                                    |
-| 404        | `workbench.session.action_not_found`         | The tool call of an action report names no action offer.                                                                                        |
-| 409        | `workbench.session.action_settled`           | An action report arrives for a card that holds a `done` result.                                                                                 |
-| 409        | `workbench.session.agent_refused`            | A create names a catalog agent with no operation tool, such as `pe@1` or `guard@1`.                                                             |
-| 409        | `workbench.session.not_host`                 | A host-only call names a participant session. Use the host session.                                                                             |
-| 502        | `workbench.fork.summary_failed`              | The summarizer call of a fork failed, timed out or gave no usable text.                                                                         |
-| 409        | `workbench.fork.summary_refused`             | The guard refused the fork summary. `details` holds `{ cause, reason }`.                                                                        |
-| 404        | `workbench.invite.not_found`                 | A join names an unknown or expired token, or a revoke names an unknown invite.                                                                  |
-| 400        | `workbench.invite.name_invalid`              | A join name or an invitee name is blank or holds more than 64 characters.                                                                       |
-| 400        | `workbench.invite.project_invalid`           | `project_ids` of an invite holds no id, more than 50 ids, a repeated id, a malformed id or an unknown id. `details` lists the refused ids.      |
-| 409        | `workbench.invite.scope_mismatch`            | The `project_ids` of an invite differ from the set of a live invite of the conversation.                                                        |
-| 400        | `workbench.invite.grant_invalid`             | `granted_operations` of an invite names an id that the host agent does not let a grant hold, or a repeated id. `details` lists the refused ids. |
-| 404        | `workbench.scope_request.not_found`          | The request is unknown, expired, running, settled or revoked, or the invite of a running approve ended.                                         |
-| 409        | `workbench.scope_request.name_mismatch`      | `project_name` of an approve differs from the name of the project. The request stays open.                                                      |
-| 400        | `workbench.scope_request.expected_invalid`   | The keys of `expected` differ from `expected_keys`, or the values fail the input of the act. The request stays open.                            |
-| 409        | `workbench.scope_request.refused`            | The act is no longer eligible, or its project is now shared or gone. The request is deleted.                                                    |
-| 409        | `workbench.guest.agent_refused`              | A guest message mentions an agent with a built-in tool. `details` holds `{ agent_name }`.                                                       |
-| 401        | `gateway.jwt.invite_ended`                   | A guest request or a stream open names a deleted or expired invite.                                                                             |
-| 409        | `workbench.evidence.name_mismatch`           | An approval of a danger card holds no `node_name`, or one that differs from the node name.                                                      |
-| 400        | `gateway.request.validation_failed`          | The `text` of a guest message holds more than 16384 UTF-8 bytes.                                                                                |
-| tool error | `workbench.action.operation_refused`         | `operation_id` of an offer is no act of `ACTION_CARD_OPERATIONS`.                                                                               |
-| tool error | `workbench.action.target_invalid`            | `target_id` of an offer is no identity of the target kind.                                                                                      |
-| tool error | `workbench.action.offer_limit`               | The run already offered one action card.                                                                                                        |
-| tool error | `workbench.action.target_refused`            | The credential of a `llm.credential.rotate` offer is archived.                                                                                  |
-| tool error | `workbench.evidence.asset_mismatch`          | The evidence of an `evidence_read` holds no asset `asset_id`.                                                                                   |
-| tool error | `workbench.evidence.not_granted`             | The owner did not grant the node of the evidence to the conversation.                                                                           |
-| tool error | `workbench.evidence.media_refused`           | The media type of the asset is no text media type.                                                                                              |
-| tool error | `workbench.evidence.shared_conversation`     | The owner approved a plain evidence card after an invite started. The call reads nothing and grants nothing.                                    |
-| 409        | `workbench.session.run_active`               | A configure arrives while a run is active.                                                                                                      |
-| 409        | `workbench.session.queue_full`               | A message, also a guest message, arrives while the session holds 10 queued messages.                                                            |
-| 404        | `workbench.session.queued_message_not_found` | The queued message identity names no queued message.                                                                                            |
-| 409        | `workbench.session.configuration_invalid`    | The stored entries of the session hold no readable configuration.                                                                               |
-| 409        | `workbench.session.setup_refused`            | The runtime refuses the setup of the session.                                                                                                   |
-| 403        | `workbench.authorization.refused`            | The Workbench Service refuses the credential release of the session.                                                                            |
-| local      | `workbench.lifecycle.stopped`                | A stopped service starts again.                                                                                                                 |
-| 404        | `agent.catalog.not_found`                    | No catalog agent for a create or a list, or no Workbench agent for a mention.                                                                   |
+| HTTP       | Code                                         | Condition                                                                                                                                                                                       |
+| ---------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 404        | `workbench.session.not_found`                | The session identity names no session.                                                                                                                                                          |
+| 404        | `agent.variant.not_found`                    | The `variant_id` of a `workbench.session.create` or of the source session of a `workbench.session.fork` names no variant, or a variant of another agent than `agent_name`. No directory exists. |
+| 404        | `workbench.session.approval_not_found`       | The tool call of an approval waits for no approval, or the approval expired.                                                                                                                    |
+| 404        | `workbench.session.action_not_found`         | The tool call of an action report names no action offer.                                                                                                                                        |
+| 409        | `workbench.session.action_settled`           | An action report arrives for a card that holds a `done` result.                                                                                                                                 |
+| 409        | `workbench.session.agent_refused`            | A create names a catalog agent with no operation tool, such as `pe@1` or `guard@1`.                                                                                                             |
+| 409        | `workbench.session.not_host`                 | A host-only call names a participant session. Use the host session.                                                                                                                             |
+| 502        | `workbench.fork.summary_failed`              | The summarizer call of a fork failed, timed out or gave no usable text.                                                                                                                         |
+| 409        | `workbench.fork.summary_refused`             | The guard refused the fork summary. `details` holds `{ cause, reason }`.                                                                                                                        |
+| 404        | `workbench.invite.not_found`                 | A join names an unknown or expired token, or a revoke names an unknown invite.                                                                                                                  |
+| 400        | `workbench.invite.name_invalid`              | A join name or an invitee name is blank or holds more than 64 characters.                                                                                                                       |
+| 400        | `workbench.invite.project_invalid`           | `project_ids` of an invite holds no id, more than 50 ids, a repeated id, a malformed id or an unknown id. `details` lists the refused ids.                                                      |
+| 409        | `workbench.invite.scope_mismatch`            | The `project_ids` of an invite differ from the set of a live invite of the conversation.                                                                                                        |
+| 400        | `workbench.invite.grant_invalid`             | `granted_operations` of an invite names an id that the host agent does not let a grant hold, or a repeated id. `details` lists the refused ids.                                                 |
+| 404        | `workbench.scope_request.not_found`          | The request is unknown, expired, running, settled or revoked, or the invite of a running approve ended.                                                                                         |
+| 409        | `workbench.scope_request.name_mismatch`      | `project_name` of an approve differs from the name of the project. The request stays open.                                                                                                      |
+| 400        | `workbench.scope_request.expected_invalid`   | The keys of `expected` differ from `expected_keys`, or the values fail the input of the act. The request stays open.                                                                            |
+| 409        | `workbench.scope_request.refused`            | The act is no longer eligible, or its project is now shared or gone. The request is deleted.                                                                                                    |
+| 409        | `workbench.guest.agent_refused`              | A guest message mentions an agent with a built-in tool. `details` holds `{ agent_name }`.                                                                                                       |
+| 401        | `gateway.jwt.invite_ended`                   | A guest request or a stream open names a deleted or expired invite.                                                                                                                             |
+| 409        | `workbench.evidence.name_mismatch`           | An approval of a danger card holds no `node_name`, or one that differs from the node name.                                                                                                      |
+| 400        | `gateway.request.validation_failed`          | The `text` of a guest message holds more than 16384 UTF-8 bytes.                                                                                                                                |
+| tool error | `workbench.action.operation_refused`         | `operation_id` of an offer is no act of `ACTION_CARD_OPERATIONS`.                                                                                                                               |
+| tool error | `workbench.action.target_invalid`            | `target_id` of an offer is no identity of the target kind.                                                                                                                                      |
+| tool error | `workbench.action.offer_limit`               | The run already offered one action card.                                                                                                                                                        |
+| tool error | `workbench.action.target_refused`            | The credential of a `llm.credential.rotate` offer is archived.                                                                                                                                  |
+| tool error | `workbench.evidence.asset_mismatch`          | The evidence of an `evidence_read` holds no asset `asset_id`.                                                                                                                                   |
+| tool error | `workbench.evidence.not_granted`             | The owner did not grant the node of the evidence to the conversation.                                                                                                                           |
+| tool error | `workbench.evidence.media_refused`           | The media type of the asset is no text media type.                                                                                                                                              |
+| tool error | `workbench.evidence.shared_conversation`     | The owner approved a plain evidence card after an invite started. The call reads nothing and grants nothing.                                                                                    |
+| 409        | `workbench.session.run_active`               | A configure arrives while a run is active.                                                                                                                                                      |
+| 409        | `workbench.session.queue_full`               | A message, also a guest message, arrives while the session holds 10 queued messages.                                                                                                            |
+| 404        | `workbench.session.queued_message_not_found` | The queued message identity names no queued message.                                                                                                                                            |
+| 409        | `workbench.session.configuration_invalid`    | The stored entries of the session hold no readable configuration.                                                                                                                               |
+| 409        | `workbench.session.setup_refused`            | The runtime refuses the setup of the session.                                                                                                                                                   |
+| 403        | `workbench.authorization.refused`            | The Workbench Service refuses the credential release of the session.                                                                                                                            |
+| local      | `workbench.lifecycle.stopped`                | A stopped service starts again.                                                                                                                                                                 |
+| 404        | `agent.catalog.not_found`                    | No catalog agent for a create or a list, or no Workbench agent for a mention.                                                                                                                   |

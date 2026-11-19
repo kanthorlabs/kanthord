@@ -210,6 +210,14 @@ erDiagram
         integer removed_at "Unix ms, set on a tombstone"
     }
 
+    agent_variant {
+        text id PK "agent_variant_ + ULID"
+        text agent_name "base agent of workbenchAgentNames(), no FK"
+        text display_name UK "unique, case-insensitive"
+        text instruction "variant instruction, 32768 UTF-8 bytes at most"
+        integer revision "starts at 1, grows by 1 at each update"
+    }
+
     mission_mission {
         text id PK "mission_ + ULID"
         text project_id UK "one mission per project"
@@ -343,7 +351,7 @@ erDiagram
     class credential custody
     class repository_host_key repository
     class project_project,project_binding project
-    class agent_enablement agent
+    class agent_enablement,agent_variant agent
     class worker_instance,worker_machine worker
     class mission_mission,mission_node,mission_node_revision,mission_dependency mission
     class scheduler_job,scheduler_queue_place scheduler
@@ -450,6 +458,18 @@ erDiagram
                       href="https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/agent.md#agent-enablement-record"
                       >agent enablement record</a
                     >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>agent_variant</code></td>
+                  <td>Agent component</td>
+                  <td>
+                    Derived from the
+                    <a
+                      href="https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.impl.md#the-agent-variant"
+                      >agent variant</a
+                    >
+                    record.
                   </td>
                 </tr>
                 <tr>
@@ -1128,6 +1148,18 @@ erDiagram
               binding names it. The write checks the new row, so a replacement
               that moves the default configuration to another provider and omits
               the old provider is valid.
+            </li>
+            <li>
+              <code>agent_variant</code> has one unique index,
+              <code>agent_variant_display_name</code>, on
+              <code>display_name COLLATE NOCASE</code>. It has no other index.
+            </li>
+            <li>
+              <code>agent_variant</code> holds no time column. An update
+              replaces <code>display_name</code> and <code>instruction</code> in
+              place and adds 1 to <code>revision</code>.
+              <code>agent_name</code> names a base agent of the catalog, and no
+              key enforces it.
             </li>
           </ul>
           <h3 id="mission-service">Mission Service</h3>

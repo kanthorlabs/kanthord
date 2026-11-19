@@ -127,6 +127,13 @@
             nested file, no <code>*.local.md</code> file and no file of a home
             directory.
           </p>
+          <p>
+            With the query <code>variant_id</code>, the read composes the
+            Workbench system prompt of that
+            <a href="variant.html">agent variant</a>. The prompt then holds the
+            part <code>variant</code>. The CLI has no option for
+            <code>variant_id</code>.
+          </p>
           <h2 id="expected-response">Expected response</h2>
           <p>
             The API returns HTTP <code>200</code> with the declaration. The CLI
@@ -427,10 +434,14 @@
               <code>standard</code>: <code>base.md</code>, for every agent.
             </li>
             <li>
-              <code>identity</code>: the display name of the agent, for every
-              agent that has a Workbench session.
+              <code>identity</code>: the display name of the agent, or of the
+              variant, for every agent that has a Workbench session.
             </li>
             <li><code>role</code>: <code>&lt;agent_name&gt;.md</code>.</li>
+            <li>
+              <code>variant</code>: the instruction of the variant, only with
+              the query <code>variant_id</code>.
+            </li>
             <li>
               <code>workbench</code>: <code>workbench.md</code>, only in the
               Workbench system prompt.
@@ -463,11 +474,12 @@
                   <td>integer or null</td>
                   <td>
                     The prompt layer: <code>1</code> for <code>standard</code>,
-                    <code>identity</code>, <code>role</code> and
-                    <code>workbench</code>, <code>2</code> for
-                    <code>instruction_file</code> and <code>repository</code>,
-                    <code>3</code> for <code>binding</code>.
-                    <code>null</code> for <code>framing</code>.
+                    <code>identity</code>, <code>role</code>,
+                    <code>variant</code> and <code>workbench</code>,
+                    <code>2</code> for <code>instruction_file</code> and
+                    <code>repository</code>, <code>3</code> for
+                    <code>binding</code>. <code>null</code> for
+                    <code>framing</code>.
                   </td>
                 </tr>
                 <tr>
@@ -475,9 +487,10 @@
                   <td>string</td>
                   <td>
                     <code>standard</code>, <code>identity</code>,
-                    <code>role</code>, <code>workbench</code>,
-                    <code>instruction_file</code>, <code>repository</code>,
-                    <code>binding</code> or <code>framing</code>.
+                    <code>role</code>, <code>variant</code>,
+                    <code>workbench</code>, <code>instruction_file</code>,
+                    <code>repository</code>, <code>binding</code> or
+                    <code>framing</code>.
                   </td>
                 </tr>
                 <tr>
@@ -485,7 +498,8 @@
                   <td>string</td>
                   <td>
                     The file name of a layer 1 part, for example
-                    <code>base.md</code>. The template name of
+                    <code>base.md</code>. The display name of the variant for
+                    <code>variant</code>. The template name of
                     <code>framing</code>, for example
                     <code>framing-worker</code>. The repository binding name of
                     a layer 2 or layer 3 part.
@@ -497,9 +511,9 @@
                   <td>
                     <code>binary</code> for a shipped text,
                     <code>file</code> for an override file,
-                    <code>database</code> for <code>repository</code> and
-                    <code>binding</code>, <code>repository</code> for
-                    <code>instruction_file</code>.
+                    <code>database</code> for <code>variant</code>,
+                    <code>repository</code> and <code>binding</code>,
+                    <code>repository</code> for <code>instruction_file</code>.
                   </td>
                 </tr>
                 <tr>
@@ -649,13 +663,23 @@
                     <code>view</code> is not <code>final</code>, only one of
                     <code>project_id</code> and <code>binding_id</code> is
                     present, <code>attempt</code> comes without
-                    <code>node_id</code>, or <code>node_id</code> comes with
-                    <code>project_id</code> or <code>binding_id</code>.
+                    <code>node_id</code>, <code>node_id</code> comes with
+                    <code>project_id</code> or <code>binding_id</code>,
+                    <code>variant_id</code> comes with <code>project_id</code>,
+                    <code>binding_id</code> or <code>node_id</code>, or
+                    <code>variant_id</code> is malformed.
                   </td>
                 </tr>
                 <tr>
                   <td><code>404 agent.catalog.not_found</code></td>
                   <td>The agent name is not in the catalog.</td>
+                </tr>
+                <tr>
+                  <td><code>404 agent.variant.not_found</code></td>
+                  <td>
+                    <code>variant_id</code> names no variant, or a variant of
+                    another agent than <code>agent_name</code>.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>404 project.binding.not_found</code></td>
@@ -822,6 +846,18 @@
                     <code>binding_id</code>
                   </td>
                   <td>Mission node whose agent stack the read answers.</td>
+                </tr>
+                <tr>
+                  <td><code>variant_id</code></td>
+                  <td>query</td>
+                  <td>
+                    No; excludes <code>project_id</code>,
+                    <code>binding_id</code> and <code>node_id</code>
+                  </td>
+                  <td>
+                    Agent variant of <code>agent_name</code> whose instruction
+                    joins the Workbench system prompt.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>attempt</code></td>
