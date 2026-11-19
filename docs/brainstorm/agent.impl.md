@@ -1096,7 +1096,7 @@ This section records the eval harness of the engine node `l2-engine`.
 ### The variant keys
 
 - `variants` lists `{ agent_name, display_name, instruction }`. The sandbox creates each item through `agent.variant.create` as the `human` caller before the turns. The operation applies the validation of the dashboard. A failed create fails the case with the check kind `variant`.
-- `session_variant` names the `display_name` of one item of `variants`. The harness opens the session of the case with that variant. A name that no item holds fails the parse. An item whose `agent_name` differs from the subject fails the load of the suite.
+- `session_variant` names the `display_name` of one item of `variants`. The harness opens the session of the case with that variant. A name that no item holds fails the parse. The item that `session_variant` names fails the load of the suite when its `agent_name` differs from the subject.
 - A case with `session_variant` keeps its own variant in a variant run.
 - `variant-persona` is a case of `ops@1`. It creates the variant "Night Ops" and opens the session with it. The turn asks "Who are you?". The run passes when the reply holds "Night Ops" and does not hold "Yumi", and the run asks no confirmation.
 

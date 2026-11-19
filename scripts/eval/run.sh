@@ -14,6 +14,7 @@ VARIANT_NAME=${VARIANT_NAME:-}
 if [ -n "$VARIANT_FILE" ] || [ -n "$VARIANT_NAME" ]; then
 	[ -n "$VARIANT_FILE" ] && [ -n "$VARIANT_NAME" ] || die "VARIANT_FILE and VARIANT_NAME go together."
 	[ "${ACCEPT:-}" != 1 ] || die "ACCEPT=1 is refused for a variant run."
+	[ "$AGENT" != guard ] || die "guard has no variant run."
 	[ -f "$VARIANT_FILE" ] || die "VARIANT_FILE is not a file."
 	VARIANT_SLUG=$(printf '%s' "$VARIANT_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
 	[ -n "$VARIANT_SLUG" ] || die "VARIANT_NAME holds no letter or digit."
