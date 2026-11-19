@@ -20,7 +20,7 @@ Update a step when its state changes. Record the pull request of each step.
   - [x] A7a. Live mode: the seed, `tasks_prepare` and `runPhase`, the CLI ports and capabilities, `--credential-stdin` and the frozen store, `--tree`, `--pass-env`, the output folder, the end mapping, SIGINT. Tests 1, 3, 7, 8, 9, 11, 12 and 15 of design section 5.7.
   - [x] A7b. Replay: the capture of `turns.jsonl`, the replay provider, the replay rule of open-world tools, `--verify` checks 1 to 8. Tests 4, 5, 13 and 16 of design section 5.7.
 - [x] A8. `worker tasks seed` and `worker tasks compare` (D31). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`.
-- [ ] A9. Pages `agent.impl.md` and `engine/docs/cli/worker.md`. Writer: Sonnet 5.5. Check: `crucible`.
+- [x] A9. Pages `agent.impl.md` and `engine/docs/cli/worker.md`. Writer: Sonnet 5.5. Check: `crucible`.
 
 ### A1 deviations
 
@@ -127,6 +127,11 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - `eslint.config.js` lets the worker contract import the mission contract, and lets the server tests import `src/apps/cli/worker-tasks.ts` and `tasks-test-support.ts`.
 - `seedDependencies` of `src/worker/execution-seed.ts` is exported for its direct test.
 
+### A9 deviations
+
+- The page `engine/docs/cli/worker.md` stated that `--pass-env` refuses each ambient credential variable, but the code accepted `AWS_PROFILE`. A9 fixes the code: `passEnvRefused` also refuses each name of `AMBIENT_CREDENTIAL_NAMES`.
+- The bash timeout cap is 599 s, not 600 s. The page states 599 s.
+
 ## Phase B: eval set baseline
 
 - [ ] B1. Select 8 to 12 seeds: open nodes for `worker tasks seed`, or new executions with the capture hook on. Ulrich selects. Aelita proposes candidates from the traces.
@@ -172,3 +177,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | A7a  | `engine`   | [#639](https://github.com/kanthorlabs/kanthord-engine/pull/639) | `ec48ca0b`   |
 | A7b  | `engine`   | [#641](https://github.com/kanthorlabs/kanthord-engine/pull/641) | `64f943cd`   |
 | A8   | `engine`   | [#643](https://github.com/kanthorlabs/kanthord-engine/pull/643) | `c8d4292d`   |
+| A9   | `engine`   | [#644](https://github.com/kanthorlabs/kanthord-engine/pull/644) | `65f8664d`   |

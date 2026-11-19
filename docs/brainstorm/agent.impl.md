@@ -28,6 +28,12 @@ A mechanism here never overrides a rule there.
 - `agent get` answers `prompt`, `configuration_schema`, `overridable_fields`, `tools`, `enablement`, `chain`, `active_position` and `cooling`.
 - `enablement` is null when no record exists.
 - `agent.get` is `GET /api/agent/:agent_name`, keyed by agent name. It answers `agent_name`, `configuration_schema`, `overridable_fields`, `prompt`, `tools`, `enablement`, the agent enablement or `null`, and the [chain view](#the-chain-view). An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
+- `locations` of a catalog entry in `engine/src/agent/catalog.ts` lists the input fields of the tool that hold a path or a URL. [Checkout confinement](#checkout-confinement) checks each listed field.
+- `read`, `edit`, `write`, `grep`, `find`, `ls` and `evidence-upload` declare `locations: ["path"]`.
+- `link_update_list`, `probe` and `environment_write` declare `locations: []`. `environment_write` nests its paths in a document, so the hook checks none.
+- `insideCheckout` in `engine/src/kernel/devcontainer.ts` checks the paths of the document lexically. `containedPath` in `engine/src/apps/server/environment-image.ts` resolves each real path and fails closed.
+- `probe` runs its command in a throwaway container, so its `ls <path>` reads no host path.
+- `bash` has no catalog entry. A confined session has no `bash`, so the hook never sees it.
 - Tests cover each human read, each unknown name, and null and disabled enablements.
 
 ## The prompt answer
@@ -348,6 +354,109 @@ The Agent component owns these keys of the section `agent`.
 - The adapter passes the session identity of the consumer as `id` to `SessionManager.create`.
 - A resume takes the file whose session id equals that identity, and it never calls `continueRecent`.
 - The Worker Service reads one entry by its `id` and `type` from the file whose name ends with `_<session id>.jsonl`.
+
+## The agent port
+
+- `agentPort` in `engine/src/agent/agent-port.ts` opens each guarded agent session of a Foundry host. It answers a `SessionPort`, and `open` answers a `PortSession`.
+- The input of `agentPort` holds `capabilities`, `modelRuntimeFactory`, `knownSecrets`, `trace`, `sessionRoot`, `budget`, `env` and `hostHome`. `agentPort` receives no credential.
+- `open` reads the first agent of `setup.agents`. It takes the working directory from `reviewWorkspace.directory`, or else from the checkout directory. With more than one checkout, it takes the parent directory of the first checkout.
+- `open` builds each session through the `AgentSessionRuntime` of pi (`openSessionRuntime` in `engine/src/agent/agent-session.ts`). pi emits `session_shutdown` in `runtime.dispose()` only, not in `session.dispose()`. `agentPort` therefore builds each session through `AgentSessionRuntime`.
+- The services of the runtime are the model runtime of the request, `SettingsManager.inMemory` and the resource loader of `agentPort`. `agentPort` never creates default services, so pi writes no `auth.json` and no settings file.
+- The resource loader sets `noExtensions`, `noSkills`, `noPromptTemplates`, `noThemes` and `noContextFiles`. Only the factories of the list below load.
+- `openSessionRuntime` calls `session.bindExtensions({})` after the runtime exists. pi emits `session_start` there. A failure closes the runtime.
+- Each build step has a deadline of `RUNTIME_SETUP_DEADLINE_MS` (30 s). After a `bindExtensions` failure, `closeRuntime` runs under a new 30 s context. A runtime that arrives after its deadline is closed when it arrives.
+- With a `sessionRoot`, the session file lives under `executionSessionDirectory(sessionRoot, execution_id)`. Without it, the session lives in memory. When the trace factory answers a trace, the trace gives the session id.
+
+### The guards and their order
+
+- The `tools` option of the session is the first guard. It holds `tools` and `host_tools` of the agent declaration. A tool outside the list is not active.
+- `engine/src/agent/hooks/tool-allowlist.ts` is the second guard. Its `tool_call` handler blocks each tool name outside that list.
+- `checkoutConfinement` is the third guard. `agentPort` adds it to each `re@1` session. [Checkout confinement](#checkout-confinement) holds the rules.
+- The project environment agent adds `checkoutConfinement` to the `env@1` session in `engine/src/project/environment-agent.ts`. Its root is the checkout. It does not use `agentPort`, and it adds no `toolAllowlist`.
+- `swe@1` has no confinement, because `bash` reaches each path.
+- The resource loader runs the extension factories in this order:
+  1. `homeRelativeCwd`
+  2. the redaction `restore` hook
+  3. `toolAllowlist`
+  4. `checkoutConfinement`, for a `re@1` session only
+  5. `pinnedLayers`
+  6. the `capabilities` of the host
+  7. the redaction `hook`
+- pi runs handlers in load order. A guard thus sees each tool call before a capability handler.
+- `pinnedLayers` pins the work prompt as the first user message. [Sensitive text redaction](#sensitive-text-redaction) holds the two redaction hooks.
+
+### Checkout confinement
+
+- `checkoutConfinement` in `engine/src/agent/hooks/checkout-confinement.ts` takes `cwd` and `roots`. Both hold absolute paths, and `roots` is not empty.
+- A `tool_call` handler reads the catalog entry of the tool. It resolves each field of `locations` and blocks the call when one path leaves every root.
+- A tool with no catalog entry is blocked with the reason `The tool <name> has no location rule in this session.`
+- A `locations` field that holds a value that is not a string is blocked. An absent field passes, so a call with no `path` takes `cwd`.
+- `agentPort` computes the roots (`engine/src/agent/review-roots.ts`). A `reviewWorkspace` gives its `directory` and its evidence directory: `<key>/evidence`, or `directory` when `key` equals `directory`.
+- A workspace with no checkout has `key` equal to `directory`, so `directory` is its only root. A `re@1` session with no `reviewWorkspace` has the working directory as its only root.
+- The hook copies the path rules of `resolveToCwd` of pi, because pi 1.1.0 does not export them: the `@` prefix, `~`, `~/`, `file://` and Unicode spaces.
+- The hook also checks the spelling variants that the pi `read` tool tries. The hook checks them for each path, not only for a path that does not exist. The variants are: a narrow no-break space before `AM.` or `PM.`, the NFD form, the curly quote, and the curly quote with NFD.
+- The hook follows symbolic links with `realpathSync` on the nearest existing parent. It refuses a dangling symbolic link, a path that it cannot resolve and an unreadable path.
+- After an accepted check, the hook freezes the tool input with `Object.freeze`. A later handler cannot change a checked path.
+- A refusal returns `block` with the reason `The path <path> is outside the checkout. Use a relative path inside the checkout.` The `<path>` is the value as the call gave it, for example `@/etc/passwd`.
+
+### Capabilities
+
+- A capability is one `InlineExtension` in `capabilities`. The design has no registry and no plugin format.
+- `executionEvidence` and `linkUpdates` in `engine/src/agent/capabilities/` take `SessionHostTools = (workspace) => HostTools`. Each registers one tool with `pi.registerTool`.
+- A tool takes the workspace from `ctx.cwd` of the call, so one capability list serves each execution.
+- Each tool declares `annotations.openWorldHint` explicitly. `evidence-upload` and `link_update_list` declare `false`.
+- `sessionTools` in `engine/src/agent/tool-table.ts` puts no capability tool in `customTools`. It puts only the wrapped `bash` there, and only for an agent with `bash`.
+- A capability factory receives only the pi extension API. That API exposes `pi.registerProvider` and `ctx.modelRegistry`, so the lint rule below forbids both. A capability receives no model runtime, no known secrets and no credential from `agentPort`.
+- Today no capability registers an MCP server. The MCP rules of design section 5.5 have no code.
+- The `eslint.config.js` entry for `src/agent/capabilities/**/*.ts` forbids `modelRegistry` and `registerProvider` as a member or a property. The message is `A capability reads no model registry and registers no provider.`
+- For a `Diagnostic`, `asToolError` throws an `Error` with the message `<code>: <message>`. Every other error passes unchanged.
+
+### The session close
+
+- `PortSession.close()` runs once. It cancels the context of the session, then calls `closeRuntime`. A second `close()` call returns at once and does nothing.
+- `closeRuntime` calls `session.abort()` first, then `runtime.dispose()`. The deadline comes from `budget.cleanupContext(parent)`. The `parent` is the context of the open.
+- When `session.abort()` or `runtime.dispose()` fails, or the deadline ends first, `closeRuntime` calls `session.dispose()`. A late `session_shutdown` handler or a stuck resource cannot block a revoke.
+- A failed open ends the trace with `SpanStatus.Error`, cancels the context and closes the runtime that exists with `closeRuntime`.
+
+### The bash environment
+
+- `sessionTools` wraps `bash` for an agent with `bash` in its `tools`. `exposeSessionEnvironment` is `false`.
+- The `spawnHook` sets the environment of the process to `childEnvironment({ ...env, PATH })`. `env` is the `env` of the `agentPort` input. `PATH` is the `PATH` of the pi spawn context (the shell `PATH`), or else `env.PATH`.
+- `exec` also applies `childEnvironment` to the options of the call. `childEnvironment` (`engine/src/agent/environment.ts`) removes the keys that `findEnvKeys` finds for each built-in pi provider.
+- It also removes `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_OAUTH_TOKEN`, `SSH_AUTH_SOCK`, `SSH_AGENT_PID`, `KANTHORD_WORKER_CONFIG`, `KANTHORD_MACHINE_CONFIG`, `KANTHORD_TOKEN` and `KANTHORD_ENDPOINT`. Other `KANTHORD_*` variables stay.
+- The limit is `floor((min(remaining budget, COMMAND_LIMIT_MS) - 1 ms) / 1000)` seconds, with `COMMAND_LIMIT_MS` = 600 s. The longest applied timeout is thus 599 s. The applied timeout is the lower of the requested timeout and that limit. A call with a limit below 1 second is refused with `resource budget ended`. `killGroupAtEnd` kills the process group.
+
+### Tests
+
+`engine/src/agent/hooks/checkout-confinement.test.ts`:
+
+- A path that leaves the checkout is blocked with a reason that names the path.
+- A relative path inside the checkout, a call with no `path` field and a path to a file that does not exist pass.
+- A tool with no catalog entry is blocked. A tool with no location field passes. A path field of another tool is checked.
+- `@`, a `file://` URL, a Unicode space and a spelling variant that leave the checkout are blocked.
+- An absolute path, an `@` path and a `file://` URL inside a root pass, also inside a second root.
+- A dangling symbolic link to a target outside the checkout is blocked as the last component and as a directory component.
+
+`engine/src/worker/unit/agent-port.test.ts`:
+
+- A `re@1` session refuses a read of `@absolute`, `~`, `file://` and a symbolic link that leave the review roots. It reads the checkout and the evidence directory.
+- A `re@1` session over a workspace with no checkout has the workspace directory as its only root.
+- A later handler that rewrites a checked path of a `re@1` session gets a blocked call.
+- The active tools equal the declared set. An undeclared capability tool is not active, and its direct and nested calls are blocked.
+- A capability tool outside the restore tools gets the marker and never the secret value.
+- A capability resource starts at the open and stops at the close. The session writes no `auth.json` and no settings file.
+- The close ends at the cleanup deadline when a capability does not stop.
+
+`engine/src/worker/unit/tool-table.test.ts`:
+
+- The child environment removes the provider keys. `bash` takes the session environment with the shell `PATH`. The `bash` timeout stays below the budget and the command limit.
+- `sessionTools` of `swe@1` names both host tools in the `tools` option and holds none in `customTools`. `re@1` names none.
+- `bash` records the requested and the applied timeout once. A rejected `exec` records nothing.
+- A `bash` call that times out or aborts leaves no process of its tree, also a process in its own group.
+
+`engine/src/worker/unit/host-tools.test.ts` covers `link_update_list`: the default page, the limit refusal and the tool error of a refused read.
+
+`engine/src/project/environment-agent.test.ts` covers the `env@1` confinement. A path outside the checkout answers a tool error that names the path. Each session tool runs, `probe` and `environment_write` included. The session redacts its JSON failure and keeps the confinement.
 
 ## Sensitive text redaction
 
