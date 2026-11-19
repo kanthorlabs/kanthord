@@ -134,11 +134,21 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 ## Phase B: eval set baseline
 
-- [ ] B1. Select 8 to 12 seeds: open nodes for `worker tasks seed`, or new executions with the capture hook on. Ulrich selects. Aelita proposes candidates from the traces.
-- [ ] B2. Export the seeds.
+- [x] B1. Select 8 to 12 seeds: open nodes for `worker tasks seed`, or new executions with the capture hook on. Ulrich selects. Aelita proposes candidates from the traces.
+- [x] B2. Export the seeds.
 - [ ] B3. Live record run of each seed.
 - [ ] B4. Baseline report.
 - [ ] B5. Replay of each seed against its own record.
+
+### B1 and B2 deviations
+
+- The seeds come from the capture hook, not from `worker tasks seed`. The source is the todoapp end-to-end run `b1-seeds-3` on a local server at `engine` `65f8664d`, with `KANTHORD_CAPTURE_TASKS=1`.
+- The set holds 11 coder seeds of 6 plan files: first runs, rework runs after a review, and restarts after an unblock. The capture hook serves the `implement` chain only, so the set holds no reviewer seed.
+- The set does not cover one unit, a merge conflict, a setup failure, a release gate failure or a budget end. Each seed has 2 units. Add a seed for each missing case when a run produces it.
+- `affectedTests` is empty in each seed.
+- `make e2e-start` sent no `resource_kind` for the poll inbound, and the server refused it. kanthord #433 sends `resource_kind: "repository"`.
+- The run stops at `External.Requested` until a human merges each pull request of the coder. A local loop merged them.
+- The eval set lives in `~/kanthord-evalset/worker-v2` with mode `0700`. `index.md` holds the execution id, the case and the `seed.json` digest of each seed.
 
 ## Phase C: behavior layers
 
@@ -178,3 +188,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | A7b  | `engine`   | [#641](https://github.com/kanthorlabs/kanthord-engine/pull/641) | `64f943cd`   |
 | A8   | `engine`   | [#643](https://github.com/kanthorlabs/kanthord-engine/pull/643) | `c8d4292d`   |
 | A9   | `engine`   | [#644](https://github.com/kanthorlabs/kanthord-engine/pull/644) | `65f8664d`   |
+| B1   | `kanthord` | [#433](https://github.com/kanthorlabs/kanthord/pull/433)        | `9872b3cb`   |
