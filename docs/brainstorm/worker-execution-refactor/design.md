@@ -1574,17 +1574,20 @@ Input:
 - An `oauth` credential is `{ "provider_id": "anthropic", "credential": { "type": "oauth", "refresh": "<token>", "access": "<token>", "expires": <epoch ms> } }`.
 - `credential` follows `piCredentialSchema` of `src/custody/contract.ts`: the same shapes, the same well-formed check and the same byte limit as a custody handover item.
 - `provider_id` must equal `piProviderId` of the effective provider of the agent selection, after `--model`. The command binds the credential to `credential_id` of the agent selection.
-- `cli.worker.tasks.credential_invalid`: standard input is a terminal, holds no JSON, fails the schema or names another provider. The diagnostic names the failed field path only, with no value and no schema message.
+- The optional key `metadata` holds the routing metadata of the provider, such as `base_url`. It follows `metadata_schema` of the provider in `LLM_PLATFORMS`. A provider with a metadata schema requires it. A provider with no metadata schema refuses it.
+- The routing metadata of the run comes only from standard input. The seed agent metadata must equal it as canonical JSON. A seed thus cannot send the credential to an endpoint that the credential owner did not give.
+- `cli.worker.tasks.credential_invalid`: standard input is a terminal, holds no JSON, fails the schema, names another provider, or holds `metadata` that differs from the seed agent metadata. The diagnostic names the failed field path only, with no value and no schema message.
 - `cli.worker.tasks.credential_expiring`: an `oauth` access token expires before the wall deadline of the run plus 5 minutes (`PI_OAUTH_REFRESH_WINDOW_MS`).
 - No option, no environment variable and no file takes a credential.
 - Replay mode reads no standard input. Its store holds the placeholder `{ type: "api_key", key: "replay" }`, which no provider receives.
 
 Lifetime:
 
+- The command checks the terminal with `isatty(0)` and does not touch `process.stdin`. A slow pipe writer thus gives the full object.
 - The command reads standard input into one `Buffer`, parses it, then fills the `Buffer` with zeros.
 - The credential lives only in process memory, in one `frozenStore` of `src/llm/refresh-watch.ts`, a `CredentialStore` of pi-ai.
 - `createModelRuntime` passes the store to `ModelRuntime.create`, so pi creates no `AuthStorage` and writes no `auth.json`.
-- The session uses `SettingsManager.inMemory` and `SessionManager.inMemory`, so no session file reaches the disk. The pi directory is `state/pi/` of the output folder.
+- The session uses `SettingsManager.inMemory` and `SessionManager.inMemory`, so no session file reaches the disk. The pi directory is `state/pi/` of the output folder. After `usePiDirectory`, the command checks that `piAgentDirectory()` is that directory, and else ends with `failed`. An `auth.json` in that directory fails with `credential_invalid`.
 - The credential never enters `process.env`.
 - Dispose runs at every end, after every failure and after SIGINT, and drops every reference to the credential. A JavaScript string has no overwrite, so the value leaves the heap at garbage collection.
 
@@ -1597,17 +1600,17 @@ OAuth refresh:
 
 Leak paths:
 
-| Path                                          | Rule                                                                                                                                                                                 |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `turns.jsonl`                                 | The recorder writes the request after the redaction hook of the session. It never writes the stream options, so it holds no `apiKey`.                                                |
-| `spans.jsonl`, stop details                   | Each credential value joins the known secrets of the CLI host: `knownSecrets` of `agentPort` and the port `secrets.redact`. The session trace and the stop detail thus redact it.    |
-| `outbox.json`                                 | The CLI ports and `localHostTools` hold no credential operation. The frozen store sends no report.                                                                                   |
-| `progress.json`, `outbox.json`, `uploads/`    | The writer redacts each known secret.                                                                                                                                                |
-| `result.json`, `context.json`, `metrics.json` | They record the mode, `provider_id` and the overrides. No override takes a credential. `context.json` omits `sshAccess`, `agent`, `baseHead` and `memo`, and it holds no credential. |
-| logs, diagnostics                             | No log field takes a credential. A diagnostic holds no embedded value.                                                                                                               |
-| child processes                               | The environment rule of "Calls outside the worker" applies.                                                                                                                          |
-| seed, capture, export                         | No credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.                                                          |
-| core dump                                     | The command page tells the developer to run `ulimit -c 0` first; `repository.impl.md` states the core-dump risk of a host install.                                                   |
+| Path                                          | Rule                                                                                                                                                                                      |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `turns.jsonl`                                 | The recorder writes the request after the redaction hook of the session. It never writes the stream options, so it holds no `apiKey`.                                                     |
+| `spans.jsonl`, stop details                   | Each credential value joins the known secrets of the CLI host: `knownSecrets` of `agentPort` and the port `secrets.redact`. The session trace and the stop detail thus redact it.         |
+| `outbox.json`                                 | The CLI ports and `localHostTools` hold no credential operation. The frozen store sends no report.                                                                                        |
+| `progress.json`, `outbox.json`, `uploads/`    | The writer redacts each known secret with the matcher of the session hook: exact, encoded and partial forms. It decodes an upload as UTF-8 text when it can, else it redacts exact bytes. |
+| `result.json`, `context.json`, `metrics.json` | They record the mode, `provider_id` and the overrides. No override takes a credential. `context.json` omits `sshAccess`, `agent`, `baseHead` and `memo`, and it holds no credential.      |
+| logs, diagnostics                             | No log field takes a credential. A diagnostic holds no embedded value.                                                                                                                    |
+| child processes                               | The environment rule of "Calls outside the worker" applies.                                                                                                                               |
+| seed, capture, export                         | No credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.                                                               |
+| core dump                                     | The command page tells the developer to run `ulimit -c 0` first; `repository.impl.md` states the core-dump risk of a host install.                                                        |
 
 SSH:
 
@@ -1629,32 +1632,32 @@ D32 changes these production behaviors of a worker session:
 
 **Seed format**
 
-`seed.json` requires: `claim` (the `MethodClaim`), `setup` (the `ExecutionSetup` as `execution.setup.get` answers it), `revision` (the pinned node revision) and `heads` (the seed head of each binding). Optional: `plan`, `affectedTests`, `prior`, `refreshed`, `link_updates`, `elapsed_ms`. The seed holds no credential, no SSH identity, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The seed writer removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. The local run applies neither map; a developer names a variable with `--pass-env`.
+`seed.json` requires: `claim` (the `MethodClaim`), `setup` (the `ExecutionSetup` as `execution.setup.get` answers it), `revision` (the pinned node revision) and `heads` (the seed head of each binding). Optional: `plan`, `affectedTests`, `prior`, `link_updates`, `elapsed_ms`. The schema is strict. `state.open` sets `refreshed` to no refresh before `units.plan`, so the seed holds no `refreshed`. The seed holds no credential, no SSH identity, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The seed writer removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. The local run applies neither map; a developer names a variable with `--pass-env`.
 
 A hand-written seed omits `prompt.final` and `templates` of `setup`. The run takes them from `--system-prompt` and `--templates`. Without those options, such a seed fails with `cli.worker.tasks.seed_invalid`.
 
-Each binding gets one tree source: `--tree <binding_id>=<path>`.
+Each binding gets one tree source: `--tree <binding_id>=<path>`. The command clones the path into the bare mirror `state/origin/<binding_id>.git`, removes its `origin` remote and makes the mirror read-only. No tree thus holds the path of the source, and no push reaches the source or the mirror. Dispose restores the write bits.
 
 **Defaults and preparation (`tasks_prepare`)**
 
 The command runs a preparation chain `tasks_prepare` before `tasks` with `runPhase`. The chain holds one phase `prepare`. The chain builder builds it as `[PAR] affected.declaration, setup.entries, agent.open`, then `[PAR] env.setup(live), units.plan`. A step whose key the seed holds is not in the chain. `env.setup(live)` always runs, because its effect lives in the tree.
 
-| Key                                | Source                                                                                                          |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `claim.created_at`                 | start of the run, minus `elapsed_ms` (default 0)                                                                |
-| `claim.expired_at`                 | new `created_at`, plus `expired_at` minus `created_at` of the seed                                              |
-| `checkouts`, `heads`, `gitPaths`   | prepared trees                                                                                                  |
-| `setupEntries`, `baseHead`         | `setup.entries` with a tree service that has no pool and puts the base tree under `state/base/`, always         |
-| `setupPending`, `setupInstruction` | `env.setup(live)` on the trees, always                                                                          |
-| `agent`                            | `agent.open` with local resources, always                                                                       |
-| `affectedTests`                    | `affected.declaration`, when the seed lacks the key                                                             |
-| `plan`                             | `units.plan`, when the seed lacks the key; reads `prior` (default: empty) and `refreshed` (default: no refresh) |
+| Key                                | Source                                                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `claim.created_at`                 | start of the run, minus `elapsed_ms` (default 0)                                                        |
+| `claim.expired_at`                 | new `created_at`, plus `expired_at` minus `created_at` of the seed                                      |
+| `checkouts`, `heads`, `gitPaths`   | prepared trees                                                                                          |
+| `setupEntries`, `baseHead`         | `setup.entries` with a tree service that has no pool and puts the base tree under `state/base/`, always |
+| `setupPending`, `setupInstruction` | `env.setup(live)` on the trees, always                                                                  |
+| `agent`                            | `agent.open` with local resources, always                                                               |
+| `affectedTests`                    | `affected.declaration`, when the seed lacks the key                                                     |
+| `plan`                             | `units.plan`, when the seed lacks the key; reads `prior` (default: empty) and `refreshed` (no refresh)  |
 
 **Capture hook**
 
 When the operator sets `KANTHORD_CAPTURE_TASKS=1`, `runChain` calls the capture hook once, after the last node of `start`. The hook writes `captures/<execution_id>/` in the state directory of the instance with mode `0700`:
 
-- `seed.json` with `claim`, `setup`, `revision`, `heads`, `prior`, `refreshed`, `affectedTests`, `plan` and `elapsed_ms`.
+- `seed.json` with `claim`, `setup`, `revision`, `heads`, `prior`, `affectedTests`, `plan` and `elapsed_ms`.
 
 The hook writes no credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The hook removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture with the instance data.
 
@@ -1666,7 +1669,11 @@ The hook writes no credential, no `ssh_identities`, no handover key and no value
 
 The phase reaches no kanthord server and no git remote: `base.fetch` reads the local `origin`. In live mode, the agent calls the LLM provider. `env.setup`, the verification commands and agent `bash` run on the host with its network, and the help text states it.
 
-Each child process receives `PATH`, `LANG` and `TMPDIR` of the command, and each variable that `--pass-env <name>` names. Each child process receives `HOME` set to `state/home/` of the output folder, not the developer home. No other variable of the shell reaches it. Each `--pass-env` value joins the known secrets of the run.
+Each child process receives `PATH`, `LANG` and `TMPDIR` of the command, and each variable that `--pass-env <name>` names. Each child process receives `HOME` set to `state/home/` of the output folder, not the developer home. Each child process receives `GIT_CONFIG_NOSYSTEM=1` and `GIT_SSH_COMMAND="ssh -F /dev/null -o IdentitiesOnly=yes -o IdentityFile=none"`, so no host credential helper and no host SSH key reaches git. No other variable of the shell reaches it. The pi tool install follows the same rule.
+
+`--pass-env` refuses an unset name, a fixed name and each name that `childEnvironment` removes. Each `--pass-env` value of 12 characters or more joins the known secrets of the run. The writer, `secrets.redact` and `agentPort` get the same list.
+
+Before pi loads, the command removes each variable that `childEnvironment` removes and each AWS, Google Cloud and Azure credential chain variable and each provider endpoint variable, such as `AZURE_OPENAI_BASE_URL` and `AWS_ENDPOINT_URL`, from its own process environment. It sets `HOME` to `state/home/`, `AWS_CONFIG_FILE` and `AWS_SHARED_CREDENTIALS_FILE` under `state/home/.aws/`, `AWS_EC2_METADATA_DISABLED=true` and `METADATA_SERVER_DETECTION=none`. No provider SDK thus finds an ambient credential or an ambient endpoint. The proxy variables `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY` stay, because a proxy does not change the endpoint and TLS keeps the credential from the proxy.
 
 SIGINT cancels the stop context with `worker_stopped`. The command then disposes the resources.
 
@@ -1687,7 +1694,7 @@ Overrides edit the seed before `tasks_prepare`. Replay mode refuses each overrid
 
 **Output**
 
-The command writes one output folder with mode `0700`. `result.json` records the `FoundryEnd` kind, the exit or stop, the step, the mode, `provider_id`, the overrides, the seed digest and the check results. `context.json` holds the input and the result of `FoundryEnd` with no resource key and no `sshAccess`. `progress.json` holds the last `progress` and the last `UnitCtx` of each unit. `metrics.json` holds unit metrics, step run times and phase totals. `outbox.json` holds each Foundry port write and each agent tool call with its operation, body, step and time. `turns.jsonl` holds each model request and answer in replay format with a version header. It also holds the recorded tool results of the replay rule below. `spans.jsonl` holds the spans. `uploads/` holds the files of `evidence-upload`. `state/` holds the trees, the base tree and the pi directory. The CLI port `releaseTrees.give` removes each release tree at its frame end.
+The command writes one output folder with mode `0700`. `--force` replaces an empty folder or a run folder, which holds both `result.json` and `state/`. It refuses any other folder with `output_exists`. After the output folder exists, the command writes `result.json` at every end. A diagnostic end records the end `diagnostic`, its code and exit code 1. A folder that a hard kill leaves has a read-only mirror, and the command page tells the developer to run `chmod -R u+w` before a manual delete. `result.json` records the `FoundryEnd` kind, the exit or stop, the step, the mode, `provider_id`, the overrides, the seed digest and the check results. `context.json` holds the input and the result of `FoundryEnd` with no resource key and no `sshAccess`. `progress.json` holds the last `progress` and the last `UnitCtx` of each unit. `metrics.json` holds unit metrics, step run times and phase totals. `outbox.json` holds each Foundry port write and each agent tool call with its operation, body, step and time. `turns.jsonl` holds each model request and answer in replay format with a version header. It also holds the recorded tool results of the replay rule below. `spans.jsonl` holds the spans. `uploads/` holds the files of `evidence-upload`. `state/` holds the trees, the base tree and the pi directory. The CLI port `releaseTrees.give` removes each release tree at its frame end.
 
 Replay rule (D32): a replay runs each agent tool again, and the result of an open-world capability tool changes over time.
 
@@ -1702,7 +1709,7 @@ End mapping of the CLI host:
 
 - `completed`, `budget_end` and `stop` keep their kind in `result.json`.
 - `cancelled` after SIGINT becomes the stop `worker_stopped`.
-- `failed` is an internal error. The command writes `result.json` with the end kind `failed`, prints the diagnostic `cli.worker.tasks.internal_error` and gives the internal-error exit code.
+- `failed` is an internal error. The command writes `result.json` with the end kind `failed`, writes one redacted log record `tasks failed` with the reason, prints the diagnostic `cli.worker.tasks.internal_error` and gives the internal-error exit code. An error after the `FoundryEnd`, such as a failed output write or a failed dispose, also ends with `failed`. Dispose closes each agent separately and always disposes the resources.
 
 With `--verify`, the command runs these checks and records each result in `result.json`:
 

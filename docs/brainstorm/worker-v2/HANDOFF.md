@@ -16,7 +16,9 @@ Update a step when its state changes. Record the pull request of each step.
   - Add the worker-only port `dependencies.read` and make `inputs.read(dependencies)` a `FoundryStep`. Replace the context key `env` with `input.env`.
 - [x] A6. Capabilities and guards (D32 layer 5). Implementer: Fable 5.2. Reviewer: Opus 5.5 and `/security-review`.
   - Build D27: `checkoutConfinement` with the `locations` rule in each `re@1` session, with the D27 test.
-- [ ] A7. CLI host and `worker tasks run` (D32 layer 6). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`.
+- [ ] A7. CLI host and `worker tasks run` (D32 layer 6). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`. Two pull requests, one after the other. Ruled 2026-11-18 by Aelita as owner.
+  - [x] A7a. Live mode: the seed, `tasks_prepare` and `runPhase`, the CLI ports and capabilities, `--credential-stdin` and the frozen store, `--tree`, `--pass-env`, the output folder, the end mapping, SIGINT. Tests 1, 3, 7, 8, 9, 11, 12 and 15 of design section 5.7.
+  - [ ] A7b. Replay: the capture of `turns.jsonl`, the replay provider, the replay rule of open-world tools, `--verify` checks 1 to 8. Tests 4, 5, 13 and 16 of design section 5.7.
 - [ ] A8. `worker tasks seed` and `worker tasks compare` (D31). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`.
 - [ ] A9. Pages `agent.impl.md` and `engine/docs/cli/worker.md`. Writer: Sonnet 5.5. Check: `crucible`.
 
@@ -87,6 +89,23 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - A6 builds no MCP capability, because the engine has no pi MCP package. The MCP rules and tests of section 5.5 come with the first MCP capability.
 - `agent-port.test.ts` and `tool-table.test.ts` stay in `src/worker/unit/`, because they use the worker test support.
 
+### A7a deviations
+
+- `ChainIo.capabilities` is required.
+- The bash tool of `src/agent/tool-table.ts` takes the session `env` through `childEnvironment`, with the `PATH` of pi, not `process.env`. The worker passes the `process.env` of its thread, so the worker result is the same. The serve path no longer passes `PI_OFFLINE` and `PI_CODING_AGENT_DIR` to bash.
+- `tasks_prepare` runs its steps in sequence and includes `state.open`, because the runner has no parallel group before C4. It uses `IMPLEMENT_HOST_PORTS`.
+- `claim.check` of the CLI host answers ok. C3 deletes the port.
+- The seed plan node has `judged: []`.
+- A budget end in `tasks_prepare` becomes the stop `budget_end/wall_time`.
+- A SIGINT during the tree preparation gives the stop `worker_stopped`, not `tree_invalid`.
+- `--pass-env` refuses a name that `childEnvironment` removes, with the new code `cli.worker.tasks.option_invalid`.
+- `progress.json` holds no `UnitCtx` of each unit, and `metrics.json` holds no step run time. Section 5.7 states both. A7b adds them.
+- An outbox entry has `step: null`, because a port does not know its step. A7b gives the step id to the ports.
+- `--verify` builds checks 3, 5, 6 and 7. Check 8 comes with A7b. Checks 1, 2 and 4 come with C2: no `unit_record.put` port and no `kanthord.git.commit` span attribute exist, and `report.coder` runs in `finish`.
+- The outbox records the `evidence.submit` draft with no redaction of base64 asset content. No step of the `tasks` phase calls `evidence.submit` today. A7b redacts the decoded content before the record.
+- `eslint.config.js` lets the `src/apps/cli/` tests and `tasks-test-support.ts` import the worker test support and `src/agent/{pi,pi-tools}.ts`. It lets `src/worker/unit/` and `src/apps/worker/` import `src/llm/refresh-watch.ts`.
+- `--unit` is checked after `tasks_prepare`, so `unit_unknown` comes after `env.setup`.
+
 ## Phase B: eval set baseline
 
 - [ ] B1. Select 8 to 12 executions. Ulrich selects. Aelita proposes candidates from the traces.
@@ -123,3 +142,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | A4   | `engine`   | [#626](https://github.com/kanthorlabs/kanthord-engine/pull/626) | `03dd90de`   |
 | A5   | `engine`   | [#627](https://github.com/kanthorlabs/kanthord-engine/pull/627) | `cd6397e7`   |
 | A6   | `engine`   | [#628](https://github.com/kanthorlabs/kanthord-engine/pull/628) | `caffd816`   |
+| A7a  | `engine`   | [#639](https://github.com/kanthorlabs/kanthord-engine/pull/639) | `ec48ca0b`   |
