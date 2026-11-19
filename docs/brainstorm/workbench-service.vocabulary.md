@@ -14,6 +14,13 @@ The term names no closed set.
 Ulrich picks `swe@1` on the Agents page and starts a workbench session in the chat.
 In that session, `swe@1` pulls "Add password reset", a dependency of "Account recovery", and reads the plan of "Billing".
 
+## variant session
+
+A workbench session that runs one [agent variant](agent.vocabulary.md#agent-variant) of its agent.
+It keeps its files in its own directory, and its working directory is that of the base agent. It carries `variant_id`.
+The term names no closed set.
+Ulrich starts a session with the variant "Night Ops" of Yumi. The chat shows "Night Ops", and Yumi keeps her tools and her guard.
+
 ## conversation
 
 The exchange of one human with the member agents that share one host Workbench session.
