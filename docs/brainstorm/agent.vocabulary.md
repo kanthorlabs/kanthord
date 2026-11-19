@@ -23,6 +23,19 @@ The unique name that a human uses to address an agent in a mention.
 The catalog holds `swe@1` as "SWE", `re@1` as "RE", `pe@1` as "PE", `ops@1` as "Yumi" and `plan@1` as "Jeremy".
 The mention `@yumi` matches "Yumi", and the mention `@YUMI` matches it too.
 
+## agent variant
+
+A named role of one Workbench session agent: a display name and a variant instruction.
+The tools, the enablement, the agent providers, the default configuration, the base prompt parts and the guard come from the base agent.
+A variant has no state value and no time.
+For `ops@1`, the variant "Night Ops" holds the instruction "Keep answers short and watch for blocked work." Yumi keeps her tools and her enablement.
+
+## variant instruction
+
+The text of an agent variant. It is non-blank and at most 32768 UTF-8 bytes.
+The variant part of the system prompt holds it, and it holds nothing else.
+The instruction of "Night Ops" is "Keep answers short and watch for blocked work."
+
 ## operation tool
 
 A KanthorD operation that an agent calls as a tool in a Workbench session.
@@ -160,6 +173,7 @@ Execution 1 of `swe@1` reads the KanthorD prompt, then the Repository prompt and
 
 Layer 1: the files that a human controls for every repository: `base.md` (the Standard of every agent), `<agent_name>.md` (the Role of one agent) and `workbench.md` (the Workbench behavior).
 A file of the same name in the agent directory replaces the shipped text of that file whole.
+The variant part of a variant session joins it, and it comes from the variant instruction, not from a file.
 The term names no closed set.
 Ulrich puts `swe@1.md` into the agent directory, so `swe@1` reads that file in place of the shipped `swe@1.md`, and still reads the shipped `base.md`.
 
@@ -192,14 +206,21 @@ The closed set is:
 
 - `standard`
 - `role`
+- `variant`
 - `workbench`
 - `instruction_file`
 - `repository`
 - `binding`
 - `framing`
 
-`standard`, `role` and `workbench` are layer 1. `instruction_file` and `repository` are layer 2. `binding` is layer 3. `framing` is in no layer.
+`standard`, `role`, `variant` and `workbench` are layer 1. `instruction_file` and `repository` are layer 2. `binding` is layer 3. `framing` is in no layer.
 `base.md` is the `standard` part of Execution 1, `swe@1.md` is its `role` part, `AGENTS.md` of `app` is its `instruction_file` part, and the text of `app` is its `binding` part.
+
+## variant part
+
+The `variant` prompt part: the variant instruction of a variant session, with the variant display name as `name`.
+Its layer is 1 and its origin is `database`. It stands after the `role` part and before the `workbench` part.
+In a session of "Night Ops", the variant part holds "Keep answers short and watch for blocked work." and has the name "Night Ops".
 
 ## prompt origin
 
