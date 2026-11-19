@@ -86,7 +86,7 @@ A mechanism here never overrides a rule there.
 
 ### List fields
 
-- Each item of `workbench.session.list` adds `host_session_id`, `display_name` and `participants`.
+- Each item of `workbench.session.list` adds `host_session_id`, `display_name`, `participants` and `notice`. See [Completion notice](#completion-notice).
 - A host item answers `host_session_id: null`, its participants in `participants`, and the newest `modified` of its members as `modified`.
 - A participant item answers the id of its host in `host_session_id` and an empty `participants`. A participant is never a top-level item.
 - The filter `agent_name` selects the host agent.
@@ -277,16 +277,18 @@ The constants are in `engine/src/workbench/contract.ts`:
 - `recordOf(entry)` answers the record of a Workbench record entry. It answers `null` for another entry or for invalid data, and it never throws.
 - The configuration entry `kanthord.workbench.configuration` keeps its own name and is no Workbench record.
 
-| Kind           | Fields                                              | Writer                            | Session file                    | Readers                                                                                                   | Guest view                |
-| -------------- | --------------------------------------------------- | --------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `action_offer` | `tool_call_id`, `operation_id`, `target_id`, `seen` | `offer_action`                    | The member that called the tool | The card merge of the dashboard and `actionReport`                                                        | Shown with no button (L7) |
-| `guard`        | `tool_call_id`, `operation_id`, `reason`, `grant?`  | The `tool_call` hook, `auto` only | The member that ran the call    | The tool row, the `auto` and `confirm` forms of the eval check `guard`, and the eval check `forbid_auto`. | Dropped                   |
-| `auto_mode`    | `enabled`                                           | `workbench.session.autoMode.set`  | The conversation                | `load()` of the host session. The last record wins, and no record means on.                               | Dropped                   |
-| `fork`         | `source_title`                                      | `workbench.session.fork`          | The fork host                   | The chat line and, from L7, the guest view                                                                | Shown (L7)                |
-| `note`         | `text`, `author`                                    | `note` of `WorkbenchService`      | The host                        | The relay, the fork material, the owner merged poll, the chat and the guest view                          | Shown (L7)                |
-| `author`       | `author`                                            | `appendAuthor` at the run launch  | The member that runs            | `guestRunMarks` of the relay and of the fork material, and the guest view                                 | Shown (L8)                |
-| `queue_clear`  | `count`, `cause`                                    | `clearQueue`                      | The session that clears         | The guest view                                                                                            | Shown as a line (L8)      |
-| `scope_stop`   | `tool_call_id`, `operation_id`                      | The settle of a stopped run       | The member that ran             | The chat line of the owner and the guest view                                                             | Shown as a line (L8a)     |
+| Kind           | Fields                                              | Writer                                           | Session file                    | Readers                                                                                                   | Guest view                       |
+| -------------- | --------------------------------------------------- | ------------------------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `action_offer` | `tool_call_id`, `operation_id`, `target_id`, `seen` | `offer_action`                                   | The member that called the tool | The card merge of the dashboard and `actionReport`                                                        | Shown with no button (L7)        |
+| `guard`        | `tool_call_id`, `operation_id`, `reason`, `grant?`  | The `tool_call` hook, `auto` only                | The member that ran the call    | The tool row, the `auto` and `confirm` forms of the eval check `guard`, and the eval check `forbid_auto`. | Dropped                          |
+| `auto_mode`    | `enabled`                                           | `workbench.session.autoMode.set`                 | The conversation                | `load()` of the host session. The last record wins, and no record means on.                               | Dropped                          |
+| `fork`         | `source_title`                                      | `workbench.session.fork`                         | The fork host                   | The chat line and, from L7, the guest view                                                                | Shown (L7)                       |
+| `note`         | `text`, `author`                                    | `note` of `WorkbenchService`                     | The host                        | The relay, the fork material, the owner merged poll, the chat and the guest view                          | Shown (L7)                       |
+| `author`       | `author`                                            | `appendAuthor` at the run launch                 | The member that runs            | `guestRunMarks` of the relay and of the fork material, and the guest view                                 | Shown (L8)                       |
+| `queue_clear`  | `count`, `cause`                                    | `clearQueue`                                     | The session that clears         | The guest view                                                                                            | Shown as a line (L8)             |
+| `scope_stop`   | `tool_call_id`, `operation_id`                      | The settle of a stopped run                      | The member that ran             | The chat line of the owner and the guest view                                                             | Shown as a line (L8a)            |
+| `watch`        | `node_ids`                                          | The server, at a completed create or import call | The host                        | `watch.ts`                                                                                                | Dropped                          |
+| `notice`       | `watch_entry_id`, `projects`                        | The watch check                                  | The host                        | The chat, the guest view, the relay, the fork material, `watch.ts` and the session list                   | Shown without `project_id` (L10) |
 
 - `author` of a `note` is the strict object `{ kind, name }`. `kind` is `owner` or `guest`. `name` holds 1 to 64 characters.
 - The `author` record binding rule: `appendAuthor` appends it only for a guest-started run, before the relay and the prompt. It labels the next user message of the same session file.
@@ -297,8 +299,38 @@ The constants are in `engine/src/workbench/contract.ts`:
 - The `scope_stop` write rule: the settle of a run appends the record when `Run.scopeStop` is set. It writes one record for each run, to the file of the member that ran.
 - The guest lines of a `queue_clear` are "The owner stopped the run. N queued messages were cleared." and "The owner replaced the run. N queued messages were cleared."
 - The owner chat shows no line for a `queue_clear`. `clearQueue` answers the owner items only, so a cleared guest item never returns to the owner composer.
+- `node_ids` of a `watch` record holds at least one node id.
+- `projects` of a `notice` record is `[{ project_id, name, nodes: [{ node_id, name, state, ended_at }] }]`. `state` is `Completed` or `Discarded`. It holds one block per project of the watched nodes.
 - `seen` of a node target is `{ name, state, attempt }`. `seen` of a project target is `{ name, paused }`.
 - `seen` of a credential target is `{ revision }`, the newest live revision. `seen` of an agent target is `{ revision }`, the enablement revision. `seen` of a binding set target is `{ version }`, the binding set version.
+
+### Completion notice
+
+This section realizes the completion notice of [Workbench session](workbench-service.md#workbench-session). `engine/src/workbench/watch.ts` holds the mechanism.
+
+- Triggers: a completed `mission--node--create` or `mission--import--apply` call of any member appends `{ kind: "watch", node_ids }` to the host session. The call is auto or approved.
+- The created-node rule: `node_ids` are the `node_id` of each item of `revisions` (node create) or `changes.revisions` (import apply) whose `change.previous_revision` is null.
+- A task is content of a node and is never watched.
+- A call that creates no node, a rejected call and a blocked call append no record.
+- The open-watch rule: the open watch is the union of `node_ids` of every `watch` record after the record that `watch_entry_id` of the last `notice` names. With no notice, every `watch` record is open.
+- With an open watch, the check of a conversation starts at most once per `WORKBENCH_WATCH_CHECK_MS` = 60000. The throttle is in memory.
+- One check runs at a time for each conversation. A second caller awaits the running check.
+- Reads: the check calls `mission.node.get` through the registry under the owner identity of the read. `name` is `content.name`.
+- `ended_at` is `created_at` of the newest outcome from `mission.outcome.list` with `limit: 1`.
+- The project comes from the mission service lookup `projectOf("node", id)`. Its name comes from `projectNames(ids)`.
+- The terminal set is `Completed` and `Discarded`.
+- The retired-node rule: a node with `retired_at` set leaves the notice. A watch whose read nodes are all retired gives no notice and stays open.
+- The failed read: a failed Mission or Project read ends the check with no notice and no record. The next check after 60 s reads again.
+- The writer: when every node of the open watch that is not retired is terminal, and one node or more is not retired, the check appends one `notice`.
+- `watch_entry_id` of the `notice` names the last `watch` record that the check read. A `watch` record appended during the read stays open.
+- A read appends a notice: owner `get` and `events` of a conversation run its check. `workbench.session.list` runs the check of each host conversation with an open watch.
+- Guest reads, a read under a read-only identity, the relay and the fork run no check.
+- The list field: each host item of `workbench.session.list` answers `notice: string | null`. `null` means no pending notice.
+- The value is not null while no owner message and no owner note follow the last `notice` record of that conversation. A guest note and the first message of a guest-started run do not clear it. No seen mark is stored.
+- The list text holds each project block of the last `notice` record as `<project name> · <stats>`, joined by "; ". For example: "shop · 2 Completed; api · 1 Discarded".
+- `noticeSummary` of `engine/src/workbench/watch.ts` builds the list text.
+- Participant items and items whose load fails answer `notice: null`.
+- Relay and fork material: each notice block renders as one line `Completed: <project> · <stats>`. The fork copies no `watch` or `notice` record.
 
 ## Shared conversation
 
@@ -466,13 +498,14 @@ The guest header of `guest-chat.tsx` shows these lines:
 | `author`        | `author`                                    | An `author` record.                                                                     |
 | `queue_clear`   | `count`, `cause`, `text`                    | A `queue_clear` record. `text` is the guest line of the cause and the count.            |
 | `scope_stop`    | `operation_id`                              | A `scope_stop` record, with no `tool_call_id`.                                          |
+| `notice`        | `watch_entry_id`, `projects`                | A `notice` record. Each project block holds no `project_id`.                            |
 
-- `GUEST_RECORD_KINDS` holds the Workbench record kinds that the view shows: `note`, `action_offer` and `fork` in L7, `author` and `queue_clear` in L8, and `scope_stop` in L8a.
+- `GUEST_RECORD_KINDS` holds the Workbench record kinds that the view shows: `note`, `action_offer` and `fork` in L7, `author` and `queue_clear` in L8, `scope_stop` in L8a, and `notice` in L10.
 - The view drops these entries:
   - The tool result, the input of a tool call and the thinking block.
   - The tool call block of `request_owner_act`.
   - The relay and the `kanthord.workbench.configuration` entry.
-  - The `guard` and `auto_mode` records.
+  - The `guard`, `auto_mode` and `watch` records.
   - Every entry of a phase session.
 - The view reads `mergeEntries`, so it hides the opening entries as the owner view does. A guest reads the greeting and never the opening text.
 - A guest never reads evidence content. The view has no evidence row and no tool result.

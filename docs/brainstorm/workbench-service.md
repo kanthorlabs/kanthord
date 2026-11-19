@@ -83,6 +83,14 @@ It describes no mechanism of another service.
 - The fork carries one text, the summary. No transcript, tool result, approval, queue, card, record or evidence grant carries over. The source does not change.
 - Every fork starts with auto mode on, whatever the value of the source.
 - Only the owner forks. The operation is human only, and no tool list holds it.
+- When the nodes that a conversation created finish, the server writes one completion notice into the conversation at the next owner read of the conversation or of Home. No agent run writes it.
+- The notice covers the nodes that a completed `mission--node--create` or `mission--import--apply` call created, auto or approved alike. A rejected or blocked call adds nothing.
+- The notice shows one block per project. The header holds the project name and its stats, for example "shop · 2 Completed, 1 Discarded".
+- The header leaves out a state with a count of zero, for example "shop · 3 Completed".
+- One row per created node follows. The row holds the node name as plain text, its final state, and the date and time it ended.
+- A footer link "Open project" shows to the owner only. A guest sees the blocks and the rows with no footer.
+- The owner sees the notice in the conversation and on Home. Guests see it in the conversation only.
+- A fork carries no watch and no notice of its source. Its summary material holds one line per notice block.
 - A [workbench session implementation](workbench-service.impl.md#workbench-session) declares the workbench directory and the list.
 
 ## Plan pipeline
