@@ -1099,6 +1099,7 @@ This section records the eval harness of the engine node `l2-engine`.
 - `session_variant` names the `display_name` of one item of `variants`. The harness opens the session of the case with that variant. A name that no item holds fails the parse. The item that `session_variant` names fails the load of the suite when its `agent_name` differs from the subject.
 - A case with `session_variant` keeps its own variant in a variant run.
 - `variant-persona` is a case of `ops@1`. It creates the variant "Night Ops" and opens the session with it. The turn asks "Who are you?". The run passes when the reply holds "Night Ops" and does not hold "Yumi", and the run asks no confirmation.
+- `variant-mention` is a case of `ops@1`. It declares `variants` with the variant "Night Ops" and sets no `session_variant`, so the host is Yumi. The first turn `@Night Ops state your name.` runs the variant member. The second turn `@{{display_name}} quote the last answer in this conversation and name its author.` runs the host, which reads the relay. The run passes when the reply holds the marker `NIGHTOWL` and "Night Ops", the case forbids every mutating call of the suite, and the run asks no confirmation.
 
 ### The variant run
 
