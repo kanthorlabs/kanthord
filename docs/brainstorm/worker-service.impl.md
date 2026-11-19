@@ -1493,9 +1493,11 @@ It answers `{ claim, setup, revision, heads }` for any execution of a node that 
 - `claim` from the execution row, with the stored `created_at` and `expired_at`.
 - `setup` composed as `execution.setup.get` composes it: the pinned agent selections, the prompt commits of the attempt, the templates, the stored environment of each binding and the unit records of the node.
 - `revision`: the pinned node revision, read in-process through the Mission contract.
-- `heads`: the head of each node branch that the push records of the execution confirm, else the attempt base commit.
+- `heads`, for each binding, in this order: the newest `Head commit of the node branch` evidence of the execution; else the newest such evidence of an earlier execution on the same node branch; else the prompt pin commit of the attempt; else the current head of the base branch, read through the server SSH access. `evidence.head` runs only in a released `finish`, so after a stop or a budget end the next execution of the node branch gets an older evidence, the pin or the base. Two exports can thus differ. The seed file is the fixed artifact of an eval run.
 
-It reads no credential and answers no credential, no SSH identity and no handover key. The route removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. It holds no value of `containerEnv`, `remoteEnv` or the process environment.
+The route writes nothing. It composes the prompt in memory, makes no environment claim, and reads the pinned credential metadata and the SSH public key with no running-claim check and no revision drain. A revoked pinned revision answers the revoked code. The seed of an ended execution holds its final pushed head and reflects the current bindings, policies and placement.
+
+It answers no credential, no SSH identity and no handover key. The route and the seed writer remove `containerEnv`, `remoteEnv` and `build.args` from each `setup.repositories[].environment.document`. It holds no value of `containerEnv`, `remoteEnv` or the process environment.
 
 | HTTP | Code                                | Condition                                                                                         |
 | ---- | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -1757,13 +1759,15 @@ The progress rule:
 
 ## The capture hook
 
-When the operator sets `KANTHORD_CAPTURE_TASKS=1` for the worker process, `runChain` calls the capture hook once after the last node of the `start` phase. The hook writes a capture directory `captures/<execution_id>/` in the state directory of the instance with mode `0700`. The hook is not a chain node, so the golden chain file does not change.
+When the operator sets `KANTHORD_CAPTURE_TASKS=1` for the worker process, `runChain` calls the capture hook once after the last node of the `start` phase of `implement`. A server instance inherits the variable from the server process: the thread placement and the container placement both forward it. With the variable unset, `runChain` makes no capture call. The hook writes a capture directory `captures/<execution_id>/` in the state directory of the instance with mode `0700`. The hook is not a chain node, so the golden chain file does not change.
 
 The capture directory holds:
 
-- `seed.json` with `claim`, `setup`, `revision`, `heads`, `prior`, `refreshed`, `affectedTests`, `plan` and `elapsed_ms`.
+- `seed.json` (mode `0600`) with `claim`, `setup`, `revision`, `heads`, `prior`, `affectedTests`, `plan` and `elapsed_ms`.
 
-The hook writes no key that holds a path of the host or a live object: `checkouts`, `gitPaths`, `setupEntries`, `setupPending`, `setupInstruction`, `baseHead`, `memo` and `agent`. The hook writes no credential, no `ssh_identities`, no handover key, no agent session and no value of `containerEnv`, `remoteEnv` or the process environment. The hook removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`.
+`heads` is the head of each checkout after `base.refresh`. It can be a local merge commit that no remote holds. A `--tree` source of such a seed holds that commit and a local branch named as the base branch.
+
+The hook writes no key that holds a path of the host or a live object: `checkouts`, `gitPaths`, `setupEntries`, `setupPending`, `setupInstruction`, `baseHead`, `memo` and `agent`. The hook writes no credential, no `ssh_identities`, no handover key, no agent session and no value of `containerEnv`, `remoteEnv` or the process environment. The hook removes `containerEnv`, `remoteEnv` and `build.args` from each `setup.repositories[].environment.document`. It refuses a symbolic link as the capture folder or as `seed.json`, and writes `seed.json` through a new temporary file and a rename.
 
 A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture directory with the instance data. A test of the hook asserts no credential, no SSH identity, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.
 
@@ -2785,7 +2789,7 @@ kanthord worker tasks compare <output-a> <output-b>
 - The help text and the command page state that `env.setup`, the verification commands and agent `bash` run on the host with its network.
 - `compare` prints differences in route, end, commits, unit results and `metrics.json`. It fails with `cli.worker.tasks.seed_mismatch` when the seed digests of the two runs differ.
 
-Files read by `run`: `<seed-folder>/seed.json`, each `--tree` path, `--replay` file, `--system-prompt` file, each file of `--templates`, and with `--verify` in replay mode the `outbox.json` and the checkouts under `state/` of the recorded folder. Files written by `run`: the output folder and its contents. Files read by `seed`: none. Files written by `seed`: `<output>/seed.json`. Files read by `compare`: `result.json` and `metrics.json` of each folder.
+Files read by `run`: `<seed-folder>/seed.json`, each `--tree` path, `--replay` file, `--system-prompt` file, each file of `--templates`, and with `--verify` in replay mode the `outbox.json` and the checkouts under `state/` of the recorded folder. Files written by `run`: the output folder and its contents. Files read by `seed`: none. Files written by `seed`: `<output>/seed.json`; `--force` replaces only an empty folder or a folder that holds only `seed.json`, and a symbolic link is refused. Files read by `compare`: `result.json`, `context.json`, `metrics.json` and the checkouts under `state/checkouts/` of each folder. `compare` accepts only full hex commit ids as heads and runs `git log` with `--end-of-options` and the check 8 git settings; any other head fails with `cli.worker.tasks.option_invalid`.
 
 | Exit code | Condition                                                                                                                                                                       |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
