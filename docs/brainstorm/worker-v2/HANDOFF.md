@@ -13,7 +13,7 @@ Update a step when its state changes. Record the pull request of each step.
   - Add an optional stop detail to the `failed` variant of `PortResult`. Remove the `run.stopOf` call from the worker ports. The step builds its stop from the answer. Ruled 2026-11-17 by Aelita as owner.
   - Give a budget end of a port call its own answer. The worker `agent.open` and the step then decide the budget end once, not twice.
 - [x] A5. Boundary of the Foundry (D32 layer 4). Implementer: Opus 5.5. Reviewer: Fable 5.2.
-  - Add the worker-only port `dependencies.read` and make `inputs.read(dependencies)` a `FoundryStep`. Replace the context key `env` with `input.env`.
+  - Add the worker-only port `dependencies.read` and make `inputs.read(dependencies)` a `FoundryStep`. Replace the context key `env` with `input.env`. C4 deletes the port.
 - [x] A6. Capabilities and guards (D32 layer 5). Implementer: Fable 5.2. Reviewer: Opus 5.5 and `/security-review`.
   - Build D27: `checkoutConfinement` with the `locations` rule in each `re@1` session, with the D27 test.
 - [x] A7. CLI host and `worker tasks run` (D32 layer 6). Implementer: Opus 5.5. Reviewer: Fable 5.2 and `/security-review`. Two pull requests, one after the other. Ruled 2026-11-18 by Aelita as owner.
@@ -30,7 +30,7 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - Three steps hold more than one catalogue step: `base.refresh` holds the merge, the `Conflict` turn and gate G. `unit.turn` holds the turn and gate G. `release.verify` holds the release trees, the setup, `verify.all`, `affected.run` and the give of the trees. A2 to A5 and C1 split them.
 - The steps `state.open`, `budget.check`, `unit.leave` and `unit.runner` have no catalogue entry. `done_record.put` becomes `unit_record.put` in C2.
 - `runChain` throws the stop, and `executionBoundary` releases it. The budget-end mapping stays inside each step that has it today. The runner has no `stopMapped`.
-- The `examine` chain holds only `workspace.review(base)` in `prepare`, so that each later budget end releases with `further_work: true`, as today.
+- The `examine` chain holds `[PAR] prepare.inputs` (`inputs.read(revision, dependencies)` and `workspace.review(base)`) in `prepare`. A budget end in these reads releases with `further_work: true` and the stop `budget_end/wall_time` (C4).
 - The phase spans of `implement` are one-frame loops. The runner opens no `worker.step` span. C5 adds it.
 - Accepted change: the dispose stack releases the node workspace after a failed give of the base tree. The stop keeps the code of the first error.
 
@@ -61,7 +61,7 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - `ImplementPorts` holds a worker-only port `claim.check` over `run.checkClaim()`. `unit.turn` calls it at the place of today. C3 deletes it with the claim check.
 - `env` is a context key that the runner seeds from the host. A5 replaces it with `input.env`.
-- `inputs.read(dependencies)` of `evaluation` and `examine` stays a host `Step` with `io.run` inside `tasks`. A5 adds a worker-only port `dependencies.read`, so that the step becomes a `FoundryStep`. C4 deletes the port when the read moves to `prepare`. Ruled 2026-11-17 by Aelita as owner.
+- `inputs.read(dependencies)` of `evaluation` and `examine` stays a host `Step` with `io.run` inside `tasks`. `inputs.read(dependencies)` runs in `prepare` as part of `inputs.read` (C4). The port `dependencies.read` is deleted.
 - The host stores a stop of `tasks` when the walk ends, before the dispose of the resources. In `evaluation` and `examine`, today's code stored a thrown stop after the dispose. The release body, the spans and the server calls are the same.
 - The walker returns `cancelled` when a step ends normally under an `operationContext` that a stored stop or a requested stop aborted. Under any other abort, the walk goes on as today.
 - A worker port maps each caught error to `failed`. An unstored `ExecutionStop` with another reason inside a port becomes `operation_failed`. No port has such a throw today.
@@ -74,13 +74,12 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - `EvaluationInput` holds the context keys that the steps read today: `reviewWorkspace`, `testedInput`, `baseHead`, `setupFailure`, `placed` and `reviewRound`. `EvaluationResult` holds the three evidence keys and `dependencies`, not `evidenceIds`.
 - `ExamineResult` holds `nodeVerification`. `ExamineInput` has no `dependencies`, because the step reads them in `tasks`.
 - A result holds each key that the walk reached. The host merges it before it maps the end.
-- The ports add `releaseTrees.giveBase`, `claim.check` (C3 deletes it) and `dependencies.read` (C4 deletes it). The implement host phase gets `agent.open`. `foundryImplement` does not.
+- The ports add `releaseTrees.giveBase`, `claim.check` (C3 deletes it). The implement host phase gets `agent.open`. `foundryImplement` does not.
 - The module test forbids the directories `src/custody/`, `src/gateway/`, `src/apps/` and `src/repository/` (except `contract.ts`), a list of host modules, the secret-handling modules `src/kernel/hpke.ts`, `src/kernel/handover.ts` and `src/kernel/key-derivation.ts`, the package `@hpke/core`, and the names `RepositoryTransport`, `MethodClients`, `ExecutionRun`, `hostToolsOf`, `hkdf`, `hkdfSync`, `createCipheriv`, `createDecipheriv` and `createPrivateKey`. It follows the imports of each `contract.ts`, and it fails on a relative import that does not resolve.
 - To keep secret handling out of the Foundry closure, the credential shapes moved from `src/custody/contract.ts` to `src/kernel/credential-shapes.ts`, the sealed object shape from `hpke.ts` to `src/kernel/sealed-object.ts`, the handover envelope shape from `handover.ts` to `src/kernel/handover-envelope.ts`, and `deriveKey` from `json.ts` to `src/kernel/key-derivation.ts`. Ruled 2026-11-17 by Aelita as owner, under the credential rule of Ulrich.
 - The host steps `report.coder`, `evidence.head` and `env.setup(live)` have no `ports` field, so the golden file prints no `port:` mark for them. Phase C moves them into `tasks`.
 - A timeout of the leftover give inside the first `takeBase` maps to `operation_failed`, as the take does.
 - `BaseHead.giveBack` gives only the trees that it took. Leftover trees under `base/` stay until the next first `takeBase`, which gives them with the address check.
-- `inputs.read(dependencies)` of `evaluation` maps a `budget_end` answer of `dependencies.read` to a budget end. Today `readDependencies` never answers it.
 
 ### A6 deviations
 
@@ -93,7 +92,7 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - `ChainIo.capabilities` is required.
 - The bash tool of `src/agent/tool-table.ts` takes the session `env` through `childEnvironment`, with the `PATH` of pi, not `process.env`. The worker passes the `process.env` of its thread, so the worker result is the same. The serve path no longer passes `PI_OFFLINE` and `PI_CODING_AGENT_DIR` to bash.
-- `tasks_prepare` runs its steps in sequence and includes `state.open`, because the runner has no parallel group before C4. It uses `IMPLEMENT_HOST_PORTS`.
+- `tasks_prepare` runs `[PAR] workspace.static`, then `state.open`, then `[PAR] start.inputs`. It uses `IMPLEMENT_HOST_PORTS`. The test harness `prepareStepsWorkspace` runs no live setup.
 - `claim.check` of the CLI host answered ok. C3 deleted the port.
 - The seed plan node has `judged: []`.
 - A budget end in `tasks_prepare` becomes the stop `budget_end/wall_time`.
@@ -168,7 +167,7 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - Git processes per checkout per turn: unchanged 14 to 1, changed 17 or 18 to 5 or 6, agent committed 18 or 19 to 8 or 9. The restore after a live verification: 9 to 4.
 - The replay of the 10 replay seeds on engine `049a22f2` ends `completed` with checks 3, 5, 6 and 8 passed.
 - A `.git` that is not a directory resolves `gitPaths` again for that call, so the gate keeps its code, commit and push. A staged gitlink of a submodule with `ignore = all` passes invariant I. The `branch_changed` detail names full refs.
-- The checkouts stay serial (C4). On `onExit`, the gate still aborts an open merge (C5).
+- On `onExit`, the gate still aborts an open merge (C5).
 - The live run of the 11 seeds on engine `049a22f2` (`runs-c1/` of the eval set) ends `completed` with checks 3, 5 and 6 passed: 262 turns, $0.98, 63.3 tasks minutes, against 338 turns, $1.98 and 82.4 minutes of the baseline. The C0 redaction rule gives most of the cut, in `T8TWV9P5`. The other seeds vary in both directions with the model output.
 - [x] C2. Unit record and trailer removal (D21 layer 2). Replay.
 
@@ -197,7 +196,20 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - A pause or an archive of a pool-run instance holds the claim until the unit stops or the hold deadline passes. A human act never sends `revoked` as the first order to a pool-run node. Only the restart recovery and the hold deadline send it.
 - `worker_instance.archive_actor` goes into the existing worker migration, by the migration rule of `AGENTS.md`. The stop orders stay in memory.
 - After a revoke, the fence answers false and the stop release sends no release, also after a requested stop.
-- [ ] C4. Parallel groups and fail-early order (D21 layer 5). Replay.
+- [x] C4. Parallel groups and fail-early order (D21 layer 5). Replay.
+
+### C4 deviations
+
+- The runner had no parallel group before C4, so C4 builds it. The first end that is not `next` cancels the siblings that still run. The first stop in time wins. A budget end merges the writes of each branch that ended with `next`.
+- `SpanRecorder` keeps the open span in an `AsyncLocalStorage`, so a step span of a branch has the span that is open at the group start as its parent.
+- A streamed reviewer asset that a deadline or a stop cuts deletes its partial file and keeps the stop code of the context.
+- The replay against `runs-c2/` equals the baseline on the 8 replay seeds: the same commit trees and messages, and the same outbox apart from times and commit ids.
+- `examine` keeps `setup.entries(examine)` and `env.setup(examine)` in `tasks`, so the golden file differs from section 4 there. Owner: C5, with the budget-end stop of `examine` in `prepare`.
+- `workspace.node` takes its trees serially under the pool lock. Only `gitPaths` and the restore run in parallel. Owner: a later step.
+- `units.plan` plans the checkouts serially. Owner: a later step.
+- The release tree verification, `markers.check`, the coder report per unit, the split of the release gate steps and `conflict.revisions` belong to C5, C6 or later steps.
+- A sibling cancel does not reach `workspace.node`, `units.plan` and `run.call`, because they use `operationContext` or `state.cancel`. The group waits for them. Owner: a later step.
+- The first failed download starts no new download, but the running downloads go on until they end or the deadline passes. Owner: a later step.
 - [ ] C5. Checkpoint merge, telemetry and stop detail (D21 layer 6). Replay.
 - [ ] C6. The `Conflict` prompt (D22). Replay plus live run.
 

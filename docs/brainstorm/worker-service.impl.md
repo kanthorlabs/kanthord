@@ -1722,10 +1722,10 @@ The flow of one execution:
 
 1. Read the pinned revision. Read the verdict or the cleared assessment under [The unblock reads](#the-unblock-reads). Read the link updates under [The link update read](#the-link-update-read). The reads run in parallel on the client, and no server operation joins them.
 2. Prepare each checkout under [Workspace](#workspace), then run the restore sequence of [Gate G](#gate-g) to the head that the checkout step read. Validate the affected declaration of each checkout at `origin/<base branch>`; an invalid file stops with `environment_failed` `affected_invalid` before the first turn.
-3. Open the `swe@1` session. The session opens before merge step M, because a conflict turn needs it.
+3. Open the `swe@1` session. The session opens in step 2, beside the affected declaration and the setup entries, before merge step M, because a conflict turn needs it.
 4. Run merge step M under [The base merge](#the-base-merge). A conflict turn runs with no live setup.
 5. Run the live environment setup on the merged heads under [The environment setup](#the-environment-setup).
-6. Plan the units under [The unit record](#the-unit-record) and [The verdict unit](#the-verdict-unit).
+6. Plan the units under [The unit record](#the-unit-record) and [The verdict unit](#the-verdict-unit). Steps 5 and 6 run in parallel.
 7. For each pending unit, in plan order: run a work turn or a revision turn, run gate G in write mode, apply the progress rule, verify the own commands of the unit in the live checkout and run the restore sequence. On a pass, write the unit record and submit the coder report of the unit. A code failure sends a revision turn.
 8. Run the verdict unit when step 6 planned one.
 9. Run [The release gate](#the-release-gate). A routed failure goes back to step 7 with one unit.
@@ -1832,7 +1832,7 @@ The steps for each checkout:
 - A submodule with `ignore = all` keeps an unchanged turn: status lists nothing, `git diff --cached --raw` hides its gitlink, so the gate makes no commit, and invariant I accepts the staged gitlink.
 - Status reads: `git status --porcelain=v2 --branch --no-ahead-behind -z --untracked-files=all` runs once before G1 and once in G8. `workspace.node` resolves `gitPaths` with one `git rev-parse --git-path` per checkout. The Foundry receives them in `ImplementInput.gitPaths`, and the standalone tasks run resolves them in `prepareTrees`.
 - Git processes per checkout per turn: unchanged 1; changed 6, or 5 with no `M` path; agent committed 9, or 8 with no `M` path. A conversion-only path adds 1.
-- Parallel run: all checkouts run rows G1 to G3 in parallel. The gate collects all branch results first, then calls `run.stop` once with the code of the lowest-index violation (section 2, rule 6 and section 5.3 rule 4). A violation restores every checkout to `before`. Today the checkouts run serially in binding order; Worker V2 step C4 builds the parallel run.
+- Parallel run: all checkouts run rows G1 to G3 in parallel. The gate collects all branch results first, then calls `run.stop` once with the code of the lowest-index violation (section 2, rule 6 and section 5.3 rule 4). A violation restores every checkout to `before`.
 - A turn with `changed` true sets the unchanged-turn counter to zero.
 - The gated agent keeps the set of commits that its gate made. [The unit record](#the-unit-record) reads it.
 
@@ -2049,7 +2049,7 @@ Tests assert that the action performer does not reuse an open pull request of th
 - The execution setup answers `environment` for each repository binding of the node, from the current revision of that binding at the claim: `{ source: "stored", document, digest }`, `{ source: "repository", digest }` at the `container` placement, `{ source: "detected" | "universal", document, digest }` at the `image` target, or null.
 - `digest` is the current digest of the group in the [Onboarding component](project-service.impl.md#the-digest-and-the-tag).
 - `worker/unit/environment-setup.ts` runs the setup of each checkout: each script of `updateContentCommand`, then each script of `postCreateCommand`. The object form runs its values one after another in key order.
-- The live setup of an `implement` execution runs after merge step M at the claim, on the merged heads. The setup also runs in each release tree, in the reviewer checkouts and in the examine checkouts. A stop or a budget end of the live setup restores each checkout to its merged head, pushes the node branch and releases. The budget end releases with further work and the stop `budget_end`.
+- The live setup of an `implement` execution runs after merge step M at the claim, on the merged heads. The setup also runs in each release tree, in the reviewer checkouts and in the examine checkouts. A stop or a budget end of the live setup restores each checkout to its merged head before `onStop` or `onExit` runs, pushes the node branch and releases. A `revoked` stop skips the restore. The budget end releases with further work and the stop `budget_end`.
 - Each command has the command limit of a verification, and the setup uses the wall deadline of the execution. Its time counts toward the budget of the execution.
 - At the `server` and the `worker` placements, only the setup commands of a stored environment run. The repository devcontainer reaches the worker only at the `container` placement, and the worker reads it at `origin/<base branch>` of its checkout. A non-regular entry counts as absent.
 - After a setup passes in a checkout, the worker appends each untracked path to `.git/info/exclude`, so no task commit takes the setup output.
@@ -2546,7 +2546,7 @@ The execution enforces the turn budget on pi turn events and aborts the agent wh
 An agent that reaches its wall-time deadline ends the wall-time budget of the execution. The execution then takes the budget end, not a failure.
 The bash timeout of an agent command stays below the remaining wall-time budget and below the 10-minute command limit of a verification item. A lower timeout that the model sets stays.
 After the agent stops at budget end, the execution code, not the agent, runs gate G in checkpoint mode, pushes and releases with further work.
-Every budget end releases with further work. Only the release gate and a complete examine report release with no further work. A budget end of an `examine` steps execution releases with the stop `budget_end` and the limit as `code`. New: a complete examine turn keeps its report when the last assistant message has no tool call and no abort, and the last text is nonempty; the execution continues to the report submit of `examine.turn` and releases with `further_work: false`.
+Every budget end releases with further work. Only the release gate and a complete examine report release with no further work. A budget end of an `examine` steps execution releases with the stop `budget_end` and the limit as `code`. This includes a budget end during the reads of `prepare`. New: a complete examine turn keeps its report when the last assistant message has no tool call and no abort, and the last text is nonempty; the execution continues to the report submit of `examine.turn` and releases with `further_work: false`.
 Every cleanup command, including the push, is bounded by `expired_at`, not by the remaining budget.
 A stop for a reason other than `revoked` aborts the agent and runs the same cleanup under a fresh context bounded by `expired_at`.
 A steps execution runs gate G in checkpoint mode, which commits the uncommitted work, pushes and releases with `further_work: true` and `stop: { reason, code, detail?, cause }`.
