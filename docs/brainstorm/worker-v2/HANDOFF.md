@@ -161,7 +161,14 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 ## Phase C: behavior layers
 
-- [ ] C1. Gate G and restore reduction (D21 layer 1). Replay plus live run.
+- [ ] C1. Gate G and restore reduction (D21 layer 1). Replay plus live run. Built and replayed; the live run waits for the cost approval of Ulrich.
+
+### C1 deviations
+
+- Git processes per checkout per turn: unchanged 14 to 1, changed 17 or 18 to 5 or 6, agent committed 18 or 19 to 8 or 9. The restore after a live verification: 9 to 4.
+- The replay of the 10 replay seeds on engine `049a22f2` ends `completed` with checks 3, 5, 6 and 8 passed.
+- A `.git` that is not a directory resolves `gitPaths` again for that call, so the gate keeps its code, commit and push. A staged gitlink of a submodule with `ignore = all` passes invariant I. The `branch_changed` detail names full refs.
+- The checkouts stay serial (C4). On `onExit`, the gate still aborts an open merge (C5).
 - [ ] C2. Unit record and trailer removal (D21 layer 2). Replay.
 - [ ] C3. `ClaimWatch` and push fence (D21 layer 3). Replay.
 - [ ] C4. Parallel groups and fail-early order (D21 layer 5). Replay.
@@ -206,3 +213,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | B1   | `kanthord` | [#433](https://github.com/kanthorlabs/kanthord/pull/433)        | `9872b3cb`   |
 | B5   | `engine`   | [#646](https://github.com/kanthorlabs/kanthord-engine/pull/646) | `66b45da5`   |
 | C0   | `engine`   | [#650](https://github.com/kanthorlabs/kanthord-engine/pull/650) | `cd52d454`   |
+| C1   | `engine`   | [#653](https://github.com/kanthorlabs/kanthord-engine/pull/653) | `049a22f2`   |
