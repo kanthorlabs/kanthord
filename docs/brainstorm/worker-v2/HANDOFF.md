@@ -217,7 +217,18 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - A final step writes a zero-length `worker.step` span. The CLI host opens the tasks phase span of `worker tasks run`.
 - `setup.entries(examine)` and `env.setup(examine)` run in the `workspace` branch of `prepare`. The golden file matches section 4 for `examine`.
 - The replay against `runs-c2/` equals the baseline on the 8 replay seeds: the same commit trees and messages, and the same outbox apart from times and commit ids. `turns.jsonl` differs only in drift text of `bash` results.
-- [ ] C6. The `Conflict` prompt (D22). Replay plus live run.
+- [x] C6. The `Conflict` prompt (D22). Replay plus live run. Approved 2026-11-20 by Ulrich.
+
+### C6 deviations
+
+- One `base.refresh` step can run several conflict turns, so the record is a `worker.conflict` span, not the step span.
+- `worker tasks run` has no `base.refresh(claim)`, so a local run meets a conflict only at the release gate.
+- The eval set gets 5 conflict variants: `conflicts.tsv` and `conflicts.md` of the eval set, trees in `.dev/v2-c6-trees/`. The other 6 seeds have a node head equal to the base, so no conflict is possible there.
+- The replay against `runs-c2/` equals the baseline on the 8 replay seeds. One replay of `J6A4H8NA` stopped at turn 9 with `request_differs`: a recorded `read` error became file content. Two later replays and a C5 control replay pass.
+- Live comparison on engine `05f02e21` (`runs-c6-shipped/` and `runs-c6-candidate/` of the eval set), one run per seed and variant:
+  - Shipped: 3 of 5 correct. `MYD0WTSC` keeps the old intro line that the base replaced. `XHDK27G1` leaves markers and stops with `worker.merge.markers_left`. Conflict model turns 5, 4, 7, 2, 8; 84 model requests.
+  - Candidate: 5 of 5 correct, every judge of `conflicts.md` passes. Conflict model turns 5, 5, 5, 3, 9; 82 model requests.
+  - The release gate flag is `false` in every run that reached the release gate.
 
 ## Open items
 
@@ -258,6 +269,14 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - [ ] Open, Worker Service, credential rule. A failed gate G writes the git error text on the `worker.gate` span (`gateFailure`). The text predates C5. Rule whether to redact it with `secrets.redact` or to drop it.
 
+- [ ] Open, owner ruling. Make the candidate `Conflict` template the default: move `{{base_changes}}` into `static/prompt/template/conflict.md`. Evidence: C6 deviations. A default change changes the prompt of every conflict turn.
+
+- [ ] Open, before D24. The owner read of a conflict takes the unit id from the commit body. D24 removes that id; move the read to the unit records or the commit attribution span.
+
+- [ ] Open, Worker Service. The patch diffs `diffText` and `changePatch` of `local-git.ts` run `git diff` with no `--no-ext-diff --no-textconv`, so the checkout config can change their output.
+
+- [ ] Open, eval set. A replay can stop with `request_differs` when a recorded built-in tool error becomes a result: the drift rule covers only the text, not `isError`. Seen once in `J6A4H8NA` turn 9.
+
 ## Pull requests
 
 | Step | Repository | Pull request                                                    | Merge commit |
@@ -281,3 +300,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | C3b  | `engine`   | [#664](https://github.com/kanthorlabs/kanthord-engine/pull/664) | `87989394`   |
 | C4   | `engine`   | [#665](https://github.com/kanthorlabs/kanthord-engine/pull/665) | `c4cff043`   |
 | C5   | `engine`   | [#666](https://github.com/kanthorlabs/kanthord-engine/pull/666) | `2c1d71af`   |
+| C6   | `engine`   | [#669](https://github.com/kanthorlabs/kanthord-engine/pull/669) | `44c581a9`   |

@@ -1787,7 +1787,8 @@ Merge step M brings `origin/<base_branch>` into the node branch of each checkout
 - Otherwise the step runs `git merge --no-edit --no-ff --message <merge message> origin/<base_branch>`. The merge message comes from [Commit attribution](#commit-attribution).
 - A merge with no conflict ends the step, and the merge commit is the new head.
 - A conflict sends one conflict turn with the `conflict` template: the binding, the directory, the base branch and the unmerged files. The template states that the worker commits.
-- After each conflict turn, the marker check scans only the unmerged paths of step M with `git grep --no-index -l -E '^(<{7}|>{7})( |$)'`.
+- After each conflict turn, the marker check scans only the unmerged paths of step M with `git grep --literal-pathspecs --no-index -z -l -E '^(<{7}|>{7})( |$)'`.
+- The worker reads the unmerged paths with `git diff -z --name-only` and reads each path as a literal name in every git call. A non-ASCII name or a name such as `:!x` therefore selects only that file.
 - No marker: gate G runs in conflict mode with the merged commit and the unmerged files of the step, and commits the merge.
 - Markers left: the merge stays open, the worker commits nothing, and the next conflict turn lists the files that still hold markers.
 - A conflict turn that leaves the same marker files with the same content as the check before adds one to the marker counter of this merge. At 2, the resolution fails.
@@ -1796,6 +1797,11 @@ Merge step M brings `origin/<base_branch>` into the node branch of each checkout
 - A modify/delete conflict or a binary conflict holds no marker. At a budget end, such a merge gets `resolved: false`, so the checkpoint aborts it.
 - Today `base.refresh` runs this marker check, and no separate `markers.check` step exists. `openMerge` is a field of the steps state, not a context key.
 - Today a conflict turn in normal conflict mode that ends with no action passes the marker check for a modify/delete or a binary conflict.
+- The `conflict` template can use `{{base_changes}}`. For each conflicted file, it holds `git log --format='%h %s'` and `git diff --no-ext-diff --no-textconv` from the merge base to the merged commit. The value is cut on a line edge at 16384 bytes and ends with a cut line. The worker computes it only when the active template uses it, under the `merge_base` git step. The value passes the prompt redaction.
+- Today the shipped `conflict` template does not use `{{base_changes}}`. The candidate template `static/prompt/candidate/conflict.md` uses it.
+- Each conflict turn opens one `worker.conflict` span, a sibling of `agent.turn` under the step span. Its end holds `kanthord.conflict.file_count`, `kanthord.conflict.model_turns` and `kanthord.conflict.end` (`resolved`, `markers_left`, `budget_end` or `stop`). The span holds no file name, no content and no error text.
+- At a conflict, `git log --literal-pathspecs --no-merges HEAD ^<merged commit> -- <conflicted files>` reads the unit ids of the node-side commits, in batches of names. Only bodies equal to a unit id of the revision count. A failure that is not a cancel leaves the owner set unknown and does not change the merge.
+- The first release gate after a conflict sets `kanthord.conflict.owner_failed` on `worker.release_gate`: true when the first failed command belongs to an owner unit. An unknown owner set, a budget end in the conflict turn and a stop before `release.route` give no flag. The owner set lives in memory only.
 - A failed resolution submits the conflict report, runs `git merge --abort` and stops with `conflict_unresolved`.
 - The conflict report is one evidence with one `produced` asset. It holds the content of each conflicted file and the list of the files that still hold markers.
 - The conflict report holds no repository asset, so it never becomes the review snapshot and never counts as the head commit evidence.
@@ -2807,6 +2813,7 @@ kanthord worker tasks compare <output-a> <output-b>
 - The help text and the command page state that `env.setup`, the verification commands and agent `bash` run on the host with its network.
 - The seed `setup` takes an optional `unit_records`; an absent field means none. A seed `plan` decides the pending units, and the run then reads no `unit_records`.
 - A local run answers `worker.execution.unit_record.put` and appends `{ operation: "worker.execution.unit_record.put", body }` to `outbox.json`.
+- `metrics.json` holds `conflicts`: one entry for each conflict turn with `file_count`, `model_turns`, `end` and `release_owner_failed` (`true`, `false` or `null`).
 - `compare` prints differences in route, end, commits, unit results and `metrics.json`. It fails with `cli.worker.tasks.seed_mismatch` when the seed digests of the two runs differ.
 
 Files read by `run`: `<seed-folder>/seed.json`, each `--tree` path, `--replay` file, `--system-prompt` file, each file of `--templates`, and with `--verify` in replay mode the `outbox.json` and the checkouts under `state/` of the recorded folder. Files written by `run`: the output folder and its contents. Files read by `seed`: none. Files written by `seed`: `<output>/seed.json`; `--force` replaces only an empty folder or a folder that holds only `seed.json`, and a symbolic link is refused. Files read by `compare`: `result.json`, `context.json`, `metrics.json` and the checkouts under `state/checkouts/` of each folder. `compare` accepts only full hex commit ids as heads and runs `git log` with `--end-of-options` and the check 8 git settings; any other head fails with `cli.worker.tasks.option_invalid`.
