@@ -236,7 +236,17 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - `static/prompt/candidate/` is removed. A `conflict` override template without `{{base_changes}}` runs no base-side git process.
 
-- [ ] C7. Worker Service fixes before the merge into `main`: the gate error text, the diff options, the release stop span, the examine stop at a budget end and the modify/delete conflicts. Ruled 2026-11-20 by Aelita as owner.
+- [x] C7. Worker Service fixes before the merge into `main`: the gate error text, the diff options, the release stop span, the examine stop at a budget end and the modify/delete conflicts. Ruled 2026-11-20 by Aelita as owner.
+
+### C7 deviations
+
+- Closes five open items: the `execution.release(stop)` span, the `examine` stop at a budget end, the modify/delete and binary conflicts in normal mode, the git error text of `worker.gate`, and the diff options of the patch diffs.
+- `worker.gate` keeps `error.type`, the code of a coded error. The `error_types` facet of the trace summary shows it.
+- `execution.release(stop)` opens its own `on_stop` phase span when no `onStop` node ran, also for a stop before the end of `prepare`.
+- `roundPatch` also gets `--no-ext-diff --no-textconv`. `diffText` is removed, because no code calls it.
+- Conflict mode stages with `git add --all` after the unmerged check. A `git rm --cached` of a file with no marker therefore keeps the file in the merge commit.
+- S39 is built: a complete examine report at a budget end is kept. Complete means the stop reason `stop`, no tool call and a nonempty text.
+- The replay against `runs-c2/` (`replays-c7b-vsC2/`) equals the baseline on the 8 replay seeds.
 
 ## Open items
 
@@ -269,19 +279,13 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - [ ] Open, at each pi upgrade. `src/agent/hooks/checkout-confinement.ts` holds a copy of the path rules of pi (`normalizePath`, `resolvePath` and the `read` spelling variants of pi 1.1.0). Compare the copy with the new pi version before the upgrade lands.
 
-- [ ] Open, Worker Service. `execution.release(stop)` runs in `executionBoundary` outside the walker, so it writes no `worker.step` span. Open the span there. Owner: C6 or later.
-
-- [ ] Open, Worker Service. An `examine` release on `onExit` after a budget end sends no stop, although design section 2 rule 5 names `budget_end/<limit>`. This gap existed before C5. Owner: a later step.
-
-- [ ] Open, Worker Service. A conflict turn in normal conflict mode that ends with no action passes the marker check for a modify/delete or a binary conflict, so gate G commits the "ours" side. Record the conflicted files with no marker at the merge, and refuse them until the agent acts. Owner: C6 (D22) or D23.
-
-- [ ] Open, Worker Service, credential rule. A failed gate G writes the git error text on the `worker.gate` span (`gateFailure`). The text predates C5. Rule whether to redact it with `secrets.redact` or to drop it.
-
 - [ ] Open, before D24. The owner read of a conflict takes the unit id from the commit body. D24 removes that id; move the read to the unit records or the commit attribution span.
 
-- [ ] Open, Worker Service. The patch diffs `diffText` and `changePatch` of `local-git.ts` run `git diff` with no `--no-ext-diff --no-textconv`, so the checkout config can change their output.
-
 - [ ] Open, eval set. A replay can stop with `request_differs` when a recorded built-in tool error becomes a result: the drift rule covers only the text, not `isError`. Seen once in `J6A4H8NA` turn 9.
+
+- [ ] Open, Worker Service telemetry. The `on_stop` phase span ends `Ok` when its nodes succeed. Design S41 ends each open phase span with `Error` on a stop. Owner: a later telemetry step.
+
+- [ ] Open, Worker Service telemetry. After an `onStop` run, the step span `execution.release(stop)` starts after its parent `on_stop` phase span ends. A module `WeakMap` of `chain-runner.ts` carries the span id. Keep the id on `ExecutionRun` in a later cleanup.
 
 ## Pull requests
 
@@ -308,3 +312,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | C5   | `engine`   | [#666](https://github.com/kanthorlabs/kanthord-engine/pull/666) | `2c1d71af`   |
 | C6   | `engine`   | [#669](https://github.com/kanthorlabs/kanthord-engine/pull/669) | `44c581a9`   |
 | C6b  | `engine`   | [#671](https://github.com/kanthorlabs/kanthord-engine/pull/671) | `68872c05`   |
+| C7   | `engine`   | [#672](https://github.com/kanthorlabs/kanthord-engine/pull/672) | `25b67ad7`   |

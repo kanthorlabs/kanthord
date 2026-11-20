@@ -1054,7 +1054,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Work: LLM (`Examine`). After the turn, the step builds the report with `reportFacts` and submits the evidence with the subject `Report on current dependency outcomes`. The worker port bounds the server call by `expired_at` through `run.call`, not by the wall deadline.
 - Port: `evidence.submit`, for the report.
 - Stops: `report_absent` on an empty last text, `provider_failed/*`, budget end, `operation_failed/<server code>` on a submit failure.
-- Budget end: a budget end inside the turn exits with `budget_end`. New: a turn that completes with a nonempty last text keeps the report, also when the budget is exhausted after the turn; the chain continues to the final step and releases with `further_work` false. New: the step keeps the report only when the last assistant message has no tool call and no abort, and the last text is nonempty. With an exhausted budget and any other end, the step returns `budget_end`. `report_absent` applies only when the budget is not exhausted.
+- Budget end: a budget end inside the turn exits with `budget_end`. New: a turn that completes with a nonempty last text keeps the report, also when the budget is exhausted after the turn; the chain continues to the final step and releases with `further_work` false. New: the step keeps the report only when the last assistant message ends with the stop reason `stop`, has no tool call, and the last text is nonempty. With an exhausted budget and any other end, the step returns `budget_end`. `report_absent` applies only when the budget is not exhausted.
 - Budget checks: the turn call returns the budget end before the send (rule 5). A budget end in `prepare` is the stop `budget_end/wall_time`.
 - Fail-early: F3.
 
@@ -1199,7 +1199,7 @@ chain examine
     [PAR] tasks.inputs
       step agent.open                       port: agent.open
       step verify.node(examine)             node commands only; no flaky rerun, copy or baseline; infra rerun once; skipped with no checkout; exit budget_end
-    step examine.turn                       [LLM] Examine; stop report_absent; exit budget_end; kept report when complete, no tool call, no abort; port: evidence.submit for the report
+    step examine.turn                       [LLM] Examine; stop report_absent; exit budget_end; kept report when complete: stop reason stop, no tool call; port: evidence.submit for the report
   phase finish
     step execution.release                  [cleanup] further_work false
   onExit budget_end
