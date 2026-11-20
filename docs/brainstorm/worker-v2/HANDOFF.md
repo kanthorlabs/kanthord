@@ -265,3 +265,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | C2   | `engine`   | [#655](https://github.com/kanthorlabs/kanthord-engine/pull/655) | `90d2293d`   |
 | C3   | `engine`   | [#660](https://github.com/kanthorlabs/kanthord-engine/pull/660) | `382ecb07`   |
 | C3b  | `engine`   | [#664](https://github.com/kanthorlabs/kanthord-engine/pull/664) | `87989394`   |
+| C4   | `engine`   | [#665](https://github.com/kanthorlabs/kanthord-engine/pull/665) | `c4cff043`   |
