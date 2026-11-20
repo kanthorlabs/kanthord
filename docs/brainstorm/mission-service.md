@@ -524,7 +524,7 @@ The start point of an `examine` attempt has no effect, because an `examine` node
 An `implement` attempt that records `base_branch` gets a new node branch name, and the Mission Service stores that name on the attempt.
 An attempt that records `node_branch` continues the node branch of the attempt before it.
 The Mission Service never gives one node branch name out twice for one repository.
-The transaction that opens an attempt with the start point `base_branch` deletes the unit records of the node under [the Worker Service](worker-service.md).
+The unblock transaction that opens an attempt with the start point `base_branch` deletes the unit records of the node under [the Worker Service](worker-service.md). Attempt 1 holds no unit record, so its opening deletes nothing.
 The transaction that moves the node to `Completed` or `Discarded`, or that retires it, deletes them too.
 An execution pins the attempt that it starts under.
 The required external actions of an attempt are the configured actions of the repository bindings that its pinned `implement` revision names.

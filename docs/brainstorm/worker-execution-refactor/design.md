@@ -396,20 +396,25 @@ interface UnitRecordPort {
   ): Promise<PortResult<null>>;
 }
 
+interface PortCall {
+  context: Context;
+  deadline: number;
+}
+
 interface RepositoryPort {
-  fetchBase(
-    checkout: CheckoutRef,
-    context: CancellationContext,
-    deadline: number,
-  ): Promise<PortResult<null>>;
+  fetchBase(checkout: CheckoutRef, call: PortCall): Promise<PortResult<null>>;
 }
 
 interface ReleaseTreePort {
   take(
     checkout: CheckoutRef,
     head: Commit,
-    context: CancellationContext,
-    deadline: number,
+    call: PortCall,
+  ): Promise<PortResult<CommandTree>>;
+  takeBase(
+    checkout: CheckoutRef,
+    commit: Commit,
+    call: PortCall,
   ): Promise<PortResult<CommandTree>>;
   give(tree: CommandTree): Promise<void>;
 }
@@ -451,6 +456,12 @@ interface CommonPorts {
 interface FoundryHost<P extends CommonPorts> {
   capabilities: readonly InlineExtension[];
   ports: P;
+  steps?: StepWatch;
+}
+
+interface StepWatch {
+  started(step: string): void;
+  ended(step: string, scope: unknown): void;
 }
 
 interface ImplementPorts extends CommonPorts {
@@ -569,7 +580,7 @@ declare function foundryExamine(
 ): Promise<FoundryEnd<ExamineResult>>;
 ```
 
-`EvidenceDraft` is the body of `mission.evidence.submit` with no execution identity and no idempotency key. `UnitRecordDraft` is `{ unit_id, content_digest, commits }` (section 5.1). `NativeAgent` implements `AgentSession`. `env` is the environment of each child process, which the Foundry host already filtered.
+`EvidenceDraft` is `Omit<EvidenceSubmit, keyof ExecutionContext>` of `src/mission/contract.ts`: `subject`, `assets` and an optional `verification`. The worker port fills `node_id` from the claim and gives the idempotency key as a client option. `PortCall` holds the context and the deadline of a git or tree call. `takeBase` serves the base tree of `BaseHead`, which the `tasks` phase takes for the baseline of a command-absent exit, the affected run on the base and the node-failure fallback of the release setup. `UnitRecordDraft` is `{ unit_id, content_digest, commits }` (section 5.1). `NativeAgent` implements `AgentSession`. `env` is the environment of each child process, which the Foundry host already filtered.
 
 The interfaces `EvidencePort`, `UnitRecordPort`, `RepositoryPort` and `AgentPort` answer `PortResult`. `ReleaseTreePort.take` answers `PortResult` too. Four port functions do not: `releaseTrees.give` answers nothing, `secrets.redact` answers the text or `null`, `telemetry` is a `SpanRecorder`, and `log` answers nothing.
 
@@ -610,20 +621,22 @@ Rules of the Foundry:
 16. **Unknown error.** The walker of a `tasks` function catches a throw. It returns `FoundryEnd` kind `failed` with the error and the result of the last completed step. The Foundry gives the error no stop reason. The Foundry host merges the result, then maps the error: the worker host with `run.stopOf`, the CLI host with the mapping of section 5.7.
 17. **Redaction.** A `FoundryStep` that puts tool output or git output into a stop detail or a log redacts it through `secrets.redact` first.
 18. **Logs.** A `FoundryStep` writes each log message of section 3 through the port `log`.
+19. **Step watch.** The walker calls `host.steps.started` before each step and `host.steps.ended` with the step scope after it. The watch makes no decision and returns nothing. `runPhase` gets the same watch through the optional `ChainIo.steps`, which `walkStep` calls. Only the CLI host sets either field. The worker host passes no watch. The CLI host uses it for the step of each outbox entry, the step run times and the last `UnitCtx` of each unit. It assumes that steps run in sequence.
 
 Port implementations:
 
-| Port                   | Worker host                                                                                                                                               | CLI host                                                                                                                                   |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `evidence.submit`      | `mission.evidence.submit` through `run.call` with the D28 retry. With `halt: false`, it uses the no-halt call of section 5.1.                             | Appends the draft to `outbox.json` and copies each asset to `uploads/`. Answers a synthetic identity whose ULID encodes the call position. |
-| `unitRecords.put`      | `worker.execution.unit_record.put` through the no-halt call of section 5.1. An execution-end answer calls `run.revoke()`; the port then answers `failed`. | Appends the record to `outbox.json`. Answers `ok`.                                                                                         |
-| `repository.fetchBase` | `transport.fetchBase` with the signer of `ssh.access` for the binding, inside `worker.git` with the git step mark `fetch_base`.                           | `git fetch --prune origin` from the mirror `state/origin/<binding_id>.git`. It holds no signer.                                            |
-| `releaseTrees.take`    | Command pool take, else `clonePacked` from the live checkout.                                                                                             | `clonePacked` to `state/release/<binding_id>/`, with no pool.                                                                              |
-| `releaseTrees.give`    | Gives the tree back to the Command pool and removes the release directory.                                                                                | Removes the directory.                                                                                                                     |
-| `agent.open`           | `agentPort` of section 5.5 over the custody model runtime and the telemetry trace. It registers the close on the dispose stack of the host.               | `agentPort` over the frozen store or the replay provider, and the `spans.jsonl` trace.                                                     |
-| `telemetry`            | `SpanRecorder` over the telemetry sink of the execution.                                                                                                  | `SpanRecorder` over a sink that writes `spans.jsonl`.                                                                                      |
-| `secrets.redact`       | `run.reasonOf` with the secret list of the execution (D14).                                                                                               | Redaction over the standard-input credential and each `--pass-env` value.                                                                  |
-| `log`                  | `run.log` of the execution.                                                                                                                               | The log of the command.                                                                                                                    |
+| Port                    | Worker host                                                                                                                                               | CLI host                                                                                                                                   |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `evidence.submit`       | `mission.evidence.submit` through `run.call` with the D28 retry. With `halt: false`, it uses the no-halt call of section 5.1.                             | Appends the draft to `outbox.json` and copies each asset to `uploads/`. Answers a synthetic identity whose ULID encodes the call position. |
+| `unitRecords.put`       | `worker.execution.unit_record.put` through the no-halt call of section 5.1. An execution-end answer calls `run.revoke()`; the port then answers `failed`. | Appends the record to `outbox.json`. Answers `ok`.                                                                                         |
+| `repository.fetchBase`  | `transport.fetchBase` with the signer of `ssh.access` for the binding, inside `worker.git` with the git step mark `fetch_base`.                           | `git fetch --prune origin` from the mirror `state/origin/<binding_id>.git`. It holds no signer.                                            |
+| `releaseTrees.take`     | Command pool take, else `clonePacked` from the live checkout.                                                                                             | `clonePacked` to `state/release/<binding_id>/`, with no pool.                                                                              |
+| `releaseTrees.takeBase` | Base tree pool take of `BaseHead`, for the baseline, the affected run on the base and the setup fallback.                                                 | `clonePacked` of the base commit under `state/base/`, with no pool.                                                                        |
+| `releaseTrees.give`     | Gives the tree back to the Command pool and removes the release directory.                                                                                | Removes the directory.                                                                                                                     |
+| `agent.open`            | `agentPort` of section 5.5 over the custody model runtime and the telemetry trace. It registers the close on the dispose stack of the host.               | `agentPort` over the frozen store or the replay provider, and the `spans.jsonl` trace.                                                     |
+| `telemetry`             | `SpanRecorder` over the telemetry sink of the execution.                                                                                                  | `SpanRecorder` over a sink that writes `spans.jsonl`.                                                                                      |
+| `secrets.redact`        | `run.reasonOf` with the secret list of the execution (D14).                                                                                               | Redaction over the standard-input credential and each `--pass-env` value.                                                                  |
+| `log`                   | `run.log` of the execution.                                                                                                                               | The log of the command.                                                                                                                    |
 
 The LLM provider call, the credential lease and the turn telemetry need no port. pi owns them behind `AgentSession`: `session.prompt()`, the `ModelRuntime` of the host and `session.subscribe()`.
 
@@ -1041,7 +1054,7 @@ Fail-early class: F0 static, F1 server or git, F2 shell, F3 LLM, F4 publish.
 - Work: LLM (`Examine`). After the turn, the step builds the report with `reportFacts` and submits the evidence with the subject `Report on current dependency outcomes`. The worker port bounds the server call by `expired_at` through `run.call`, not by the wall deadline.
 - Port: `evidence.submit`, for the report.
 - Stops: `report_absent` on an empty last text, `provider_failed/*`, budget end, `operation_failed/<server code>` on a submit failure.
-- Budget end: a budget end inside the turn exits with `budget_end`. New: a turn that completes with a nonempty last text keeps the report, also when the budget is exhausted after the turn; the chain continues to the final step and releases with `further_work` false. New: the step keeps the report only when the last assistant message has no tool call and no abort, and the last text is nonempty. With an exhausted budget and any other end, the step returns `budget_end`. `report_absent` applies only when the budget is not exhausted.
+- Budget end: a budget end inside the turn exits with `budget_end`. New: a turn that completes with a nonempty last text keeps the report, also when the budget is exhausted after the turn; the chain continues to the final step and releases with `further_work` false. New: the step keeps the report only when the last assistant message ends with the stop reason `stop`, has no tool call, and the last text is nonempty. With an exhausted budget and any other end, the step returns `budget_end`. `report_absent` applies only when the budget is not exhausted.
 - Budget checks: the turn call returns the budget end before the send (rule 5). A budget end in `prepare` is the stop `budget_end/wall_time`.
 - Fail-early: F3.
 
@@ -1186,7 +1199,7 @@ chain examine
     [PAR] tasks.inputs
       step agent.open                       port: agent.open
       step verify.node(examine)             node commands only; no flaky rerun, copy or baseline; infra rerun once; skipped with no checkout; exit budget_end
-    step examine.turn                       [LLM] Examine; stop report_absent; exit budget_end; kept report when complete, no tool call, no abort; port: evidence.submit for the report
+    step examine.turn                       [LLM] Examine; stop report_absent; exit budget_end; kept report when complete: stop reason stop, no tool call; port: evidence.submit for the report
   phase finish
     step execution.release                  [cleanup] further_work false
   onExit budget_end
@@ -1282,7 +1295,7 @@ Setup once per checkout per execution, in `workspace.node`:
 git rev-parse --git-path rebase-merge --git-path rebase-apply/applying --git-path rebase-apply --git-path CHERRY_PICK_HEAD --git-path REVERT_HEAD --git-path MERGE_HEAD
 ```
 
-The result goes to `gitPaths`. Each gate then uses `lstat` on `.git` (must be a directory, else an invariant failure) and `existsSync` on the six paths, with no process. These six paths are per-worktree state, so a later `commondir` or config change does not move them.
+The result goes to `gitPaths`. Each gate and restore uses `lstat` on `.git`. When `.git` is a directory, the gate uses `existsSync` on the six cached paths, with no process. When `.git` is not a directory, one `git rev-parse --git-path` resolves the six paths again for that call, so a turn that writes a gitdir file keeps its commit and its push. These six paths are per-worktree state, so a later `commondir` or config change does not move them.
 
 Before, write mode, per checkout, per agent turn (`turn-gate.ts`, `local-git.ts`):
 
@@ -1331,9 +1344,9 @@ The totals leave out `update-index` (row 10 before, row 8 after). It adds 1 proc
 Rules of the new gate:
 
 1. Status 1 gives `# branch.head`, `# branch.oid`, the entries, the `u` lines and the `?` lines. `--no-ahead-behind` stops the commit walk against the upstream that `checkout -B <b> origin/<ref>` sets.
-2. Fast path (write mode, and checkpoint mode with no `openMerge`): `branch.head` is the node branch, `branch.oid` equals `before`, no entry, no `?` line and no operation path exists. Status lists each path that `add --all` stages, so `add --all` would stage nothing. The turn is unchanged, and the gate ends. An entry with only a worktree-side change takes the slow path.
+2. Fast path (write mode, and checkpoint mode with no `openMerge`): `branch.head` is the node branch, `branch.oid` equals `before`, no entry, no `?` line and no operation path exists. Status lists each path that `add --all` stages, so `add --all` would stage nothing. The turn is unchanged, and the gate ends. An entry with only a worktree-side change takes the slow path. With a submodule whose `ignore` is `all`, status lists nothing while `add --all` stages the gitlink; `diff --cached --raw` hides that gitlink, so the outcome is the same: no commit and an unchanged turn.
 3. Violation checks run in the order of today. The first match names the code:
-   1. `branch.head` is not the node branch (also `(detached)`): `worker.turn.branch_changed`.
+   1. `branch.head` is not the node branch (also `(detached)`): `worker.turn.branch_changed`. The detail names `refs/heads/<branch>`, or the ref of one `git symbolic-ref --quiet HEAD` when `branch.head` is `(null)`.
    2. `branch.oid` differs from `before`, and command 2 fails: `worker.turn.history_rewritten`.
    3. `branch.oid` differs from `before`, and command 3 lists a merge with a parent that is not `before` and not the commit of `openMerge`: `worker.turn.foreign_merge`.
    4. Conflict mode: the cached `MERGE_HEAD` file does not hold the commit of `openMerge`: `worker.turn.merge_missing`.
@@ -1344,7 +1357,7 @@ Rules of the new gate:
 4. All checkouts run step 3 in parallel (D7). The gate waits for every checkout. On a violation, it restores every checkout to `before` and returns one stop with the code of the lowest checkout index. In `onStop`, it restores and returns.
 5. With no violation and `branch.oid` not `before`, command 4 resets.
 6. Command 6 lists the staged set. The `M` entries with the same regular mode are the conversion candidates for command 7. The staged set minus the conversion-only paths decides the commit, and gives the changed paths for the span. This replaces `diff --cached --quiet` and `diff --name-only`.
-7. Status 10 is invariant I: `branch.head` is the node branch, `branch.oid` is the new head, no `u` line, no entry with an index-side change (X is not `.`), no `?` line, and no operation path exists. It also gives the new `heads` value. A conversion-only path can show a worktree-side change (Y), as today, and does not fail the invariant.
+7. Status 10 is invariant I: `branch.head` is the node branch, `branch.oid` is the new head, no `u` line, no `?` line, and no operation path exists. No entry has an index-side change (X is not `.`), apart from a gitlink entry whose three modes are `160000`. It also gives the new `heads` value. A conversion-only path can show a worktree-side change (Y), as today, and does not fail the invariant.
 8. Conflict mode runs only after `markers.check` found no marker (D23). `concludeMerge` (commands 5 to 9) then commits the merge.
 9. Checkpoint mode on `onExit`: the gate concludes an `openMerge` with `resolved: true` by running the conflict-mode checks (D13). It aborts each other `MERGE_HEAD`, as today. An `openMerge` with no `MERGE_HEAD` counts as no merge. Checkpoint mode on `onStop`: the gate aborts every `MERGE_HEAD`.
 
@@ -1390,7 +1403,7 @@ Credential rules of the Foundry (D32):
 
 Credential rules of a capability (D32):
 
-1. A capability factory gets no handover result, no `sshAccess` and no model runtime. `agentPort` gives it nothing; the Foundry host builds it.
+1. A capability factory gets no handover result, no `sshAccess` and no model runtime. `agentPort` gives it nothing; the Foundry host builds it. pi gives each extension `ctx.modelRegistry`, which can answer a provider key, and pi has no option to hide it. A lint rule forbids `modelRegistry` and `registerProvider` in `src/agent/capabilities/`.
 2. A capability that needs a secret gets the value from custody through the host. The host adds the value to the known secrets before the open, as S43 does.
 3. A capability secret never enters `process.env` or the environment of `bash`; `childEnvironment` stays. A stdio MCP server gets only the `childEnvironment` result and the `env` of its config (section 5.5).
 4. The CLI host takes a capability secret only through the standard-input object of section 5.7. No option, no environment variable and no file takes it.
@@ -1399,14 +1412,14 @@ Credential rules of a capability (D32):
 
 ### 5.5 Agent tooling
 
-| Part            | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Tool set        | `agent.open` reads the declaration of the agent (`getAgentDeclaration`). `swe@1`: `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash`, plus the agent tools `evidence-upload` and `link_update_list`. `re@1` and `env@1`: `read`, `grep`, `find`, `ls`.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `bash`          | Wrapped by `tool-table.ts`: timeout `min(remaining budget, 600 s)`, refused below 1 s; `childEnvironment` strips the provider environment; `killGroupAtEnd` kills the process group; each call records the requested and applied timeout.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Agent tools     | `evidence-upload` and `link_update_list` are agent tools. Each Foundry host registers them through a capability (D32, below). In the worker, they call the server through `hostToolsOf` with the execution context. The proof hook of the transport (section 5.2) covers each agent tool call. An execution-end answer calls `run.revoke()`, in place of `state.revoked` and the cancel of the host context.                                                                                                                                                                                                                                                                                              |
-| Hooks, in order | `homeRelativeCwd`, redaction restore, the guards, `pinnedLayers` (the work prompt as the first user message), the capabilities of the Foundry host, redaction. The resource loader loads no extension, skill, prompt template, theme or context file.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Confinement     | `re@1` in the evaluation chain gets `checkoutConfinement` (D27). The hook resolves each `path` with the path function of pi (`resolveToCwd`: `@` prefix, `~`, `file://`, Unicode spaces), then follows symbolic links. The hook accepts the path when the result is inside one root. The hook refuses a path that it cannot resolve. A call with no `path` takes the agent root. With two checkouts the agent root is `review/checkouts`; the roots are the agent root and the `evidence` directory. A workspace with no checkout has the workspace directory as its root. `swe@1` stays unconfined, because `bash` reaches every path anyway. `toolApproval` stays a hook of the Workbench session only. |
-| Revoke          | `ClaimWatch` cancels `operationContext`. `stopOnEnd` aborts the session, and `killGroupAtEnd` ends a running `bash` group.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Part            | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool set        | `agent.open` reads the declaration of the agent (`getAgentDeclaration`). `swe@1`: `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash`, plus the agent tools `evidence-upload` and `link_update_list`. `re@1` and `env@1`: `read`, `grep`, `find`, `ls`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `bash`          | Wrapped by `tool-table.ts`: timeout `min(remaining budget, 600 s)`, refused below 1 s; `childEnvironment` strips the provider environment; `killGroupAtEnd` kills the process group; each call records the requested and applied timeout.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Agent tools     | `evidence-upload` and `link_update_list` are agent tools. Each Foundry host registers them through a capability (D32, below). In the worker, they call the server through `hostToolsOf` with the execution context. The proof hook of the transport (section 5.2) covers each agent tool call. An execution-end answer calls `run.revoke()`, in place of `state.revoked` and the cancel of the host context.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Hooks, in order | `homeRelativeCwd`, redaction restore, the guards, `pinnedLayers` (the work prompt as the first user message), the capabilities of the Foundry host, redaction. The resource loader loads no extension, skill, prompt template, theme or context file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Confinement     | Each `re@1` session gets `checkoutConfinement` (D27), in the evaluation chain and in the examine chain. The hook resolves each `path` with a copy of the rules of the pi path function (`resolveToCwd`: `@` prefix, `~`, `file://`, Unicode spaces), because pi 1.1.0 does not export it. It also checks, for each path, each spelling variant that the pi `read` tool tries. It then follows symbolic links and refuses a dangling link. After the check, it freezes the tool input, so a later handler cannot change a checked path. The hook accepts the path when the result is inside one root. The hook refuses a path that it cannot resolve. A call with no `path` takes the agent root. With two checkouts the agent root is `review/checkouts`; the roots are the agent root and the `evidence` directory. A workspace with no checkout has the workspace directory as its root. `swe@1` stays unconfined, because `bash` reaches every path anyway. `toolApproval` stays a hook of the Workbench session only. |
+| Revoke          | `ClaimWatch` cancels `operationContext`. `stopOnEnd` aborts the session, and `killGroupAtEnd` ends a running `bash` group.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 **Host tools (D32)**
 
@@ -1427,8 +1440,10 @@ pi owns the validation, the `tool_call` and `tool_result` pipeline, the parallel
 **Composition (D32)**
 
 ```ts
-declare function executionEvidence(tools: HostTools): InlineExtension;
-declare function linkUpdates(tools: HostTools): InlineExtension;
+type SessionHostTools = (workspace: string) => HostTools;
+
+declare function executionEvidence(tools: SessionHostTools): InlineExtension;
+declare function linkUpdates(tools: SessionHostTools): InlineExtension;
 
 declare function agentPort(input: {
   capabilities: readonly InlineExtension[];
@@ -1439,20 +1454,20 @@ declare function agentPort(input: {
   budget: ExecutionBudget;
   env: Readonly<Record<string, string>>;
   hostHome: string;
-}): AgentPort;
+}): SessionPort;
 ```
 
-- A capability is one inline extension factory in the list that `openSession` gives to `DefaultResourceLoader`. The design adds no registry, no plugin format and no tool interface.
-- `executionEvidence` is `(pi) => pi.registerTool(evidenceUploadTool(tools))`. `evidenceUploadTool` and `linkUpdateListTool` keep their `ToolDefinition` and the `HostTools` interface.
+- A capability is one inline extension factory in the list that `openSessionRuntime` gives to `DefaultResourceLoader`. The design adds no registry, no plugin format and no tool interface.
+- `executionEvidence` is `(pi) => pi.registerTool(evidenceUploadTool(tools))`. `evidenceUploadTool` and `linkUpdateListTool` keep their `ToolDefinition` and the `HostTools` interface. A capability tool takes the workspace from `ctx.cwd` of the call, because `FoundryHost.capabilities` is one list for each execution.
 - Each capability tool declares `annotations.openWorldHint` explicitly. `evidence-upload` and `link_update_list` declare `openWorldHint: false`.
 - The two tools are not in the `customTools` list of `sessionTools`. The wrapped `bash` stays in `customTools`.
-- `agentPort` is shared code in `engine/src/agent/`. Both Foundry hosts build `ports.agent` with it, and `input.agent` of implement comes from it.
+- `agentPort` is shared code in `engine/src/agent/`. It answers a `SessionPort`, whose `open` gives the guarded pi session. The host code `openNativeAgent` wraps that session into the `AgentSession` of the Foundry, because `src/agent/` imports no worker module. Both Foundry hosts build `ports.agent` with it, and `input.agent` of implement comes from it.
 - The Foundry host gives `agentPort` the model runtime factory, the known secrets, the budget, the host home and `env`. `env` is the same filtered environment as `input.env`. `agentPort` gets no credential.
-- `agentPort` calls `openSession` with the factory order of the table above. pi runs handlers in load order, so a guard sees each call before a capability handler.
+- `agentPort` calls `openSessionRuntime` with the factory order of the table above. pi runs handlers in load order, so a guard sees each call before a capability handler.
 - `agentPort` calls `session.bindExtensions({})` after the session exists. pi emits `session_start` there, and an MCP capability connects its servers on that event.
 - `AgentSession.close()` ends the session through `AgentSessionRuntime.dispose()` of pi. That path emits `session_shutdown` and then calls `session.dispose()`. `session.dispose()` alone emits no `session_shutdown`, so `agentPort` builds each session through `AgentSessionRuntime`.
 - `agentPort` passes its own `modelRuntime`, an in-memory `settingsManager` and its `resourceLoader` as the services of the runtime. It never calls `createAgentSessionServices` with defaults, so pi writes no `auth.json` and no settings file.
-- `AgentSession.close()` runs under the cleanup deadline. A revoke thus does not wait on a `session_shutdown` handler or on the close of an MCP server.
+- `AgentSession.close()` aborts the session first, then disposes the runtime under the cleanup deadline. The cleanup context has the context of the open as its parent. A revoke thus does not wait on a `session_shutdown` handler or on the close of an MCP server. A failed open closes its runtime the same way.
 - `noExtensions`, `noSkills`, `noPromptTemplates`, `noThemes` and `noContextFiles` stay set. The session loads no pi package, no skill and no project resource. Only factories that the KanthorD build compiles in can load, because an extension runs inside the worker process.
 
 | Part                                          | Worker host                                                            | CLI host                                                                              |
@@ -1465,15 +1480,15 @@ declare function agentPort(input: {
 
 A guard is a pi extension factory that `agentPort` adds to each session that it opens. A Foundry host cannot leave a guard out. The project environment agent and the Workbench call `openSession` with their own hooks and get no guard of `agentPort`.
 
-The `tools` option of `createAgentSession` is the first tool guard. `openSession` passes `tools` plus `host_tools` of the agent declaration. pi registers no tool that the list does not name, and it keeps an MCP tool that the list does not name inactive. The model thus sees no undeclared tool.
+The `tools` option of `createAgentSession` is the first tool guard. `openSessionRuntime` passes `tools` plus `host_tools` of the agent declaration. pi registers no tool that the list does not name, and it keeps an MCP tool that the list does not name inactive. The model thus sees no undeclared tool.
 
 Every model call of a tool passes the `tool_call` handlers. This holds for a registered tool, an MCP tool and a nested call through `ctx.executeTool()`. A `tool_call` handler that fails blocks the call. A guard thus needs no knowledge of a later tool.
 
-| Guard                      | pi mechanism                                                                                  | Rule for every tool                                                                                                                                                                                                                                                                                                                        |
-| -------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tool allowlist (new)       | `tool_call` handler that returns `block`                                                      | Second tool guard. The handler blocks each tool name that is not in `tools` or `host_tools` of the agent declaration.                                                                                                                                                                                                                      |
-| Checkout confinement (D27) | `tool_call` handler that returns `block` (`agent/hooks/checkout-confinement.ts`)              | A guard of a confined session only: each `re@1` session. The catalog entry of each tool declares `locations`: the input fields that hold a path or a URL. The handler checks each declared field with the resolution of D27. It blocks a tool with no catalog entry. A `file://` URL of a later tool thus gets the same check as a `path`. |
-| Sensitive-text redaction   | `context`, `message_end` and `tool_call` handlers (`agent/hooks/sensitive-text-redaction.ts`) | The redaction works on messages, not on tool names, so it redacts the result of each tool. The restore of a marker into a tool input stays limited to `RESTORE_TOOLS`. Another tool gets the marker, never the secret value.                                                                                                               |
+| Guard                      | pi mechanism                                                                                  | Rule for every tool                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tool allowlist (new)       | `tool_call` handler that returns `block`                                                      | Second tool guard. The handler blocks each tool name that is not in `tools` or `host_tools` of the agent declaration.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Checkout confinement (D27) | `tool_call` handler that returns `block` (`agent/hooks/checkout-confinement.ts`)              | A guard of a confined session only: each `re@1` session. The catalog entry of each tool declares `locations`: the input fields that hold a path or a URL. The handler checks each declared field with the resolution of D27. It blocks a tool with no catalog entry. A `file://` URL of a later tool thus gets the same check as a `path`. A tool whose path fields are nested, such as `environment_write`, declares `locations: []`. Its document check is lexical, and `containedPath` of the image build resolves each real path and fails closed. |
+| Sensitive-text redaction   | `context`, `message_end` and `tool_call` handlers (`agent/hooks/sensitive-text-redaction.ts`) | The redaction works on messages, not on tool names, so it redacts the result of each tool. The restore of a marker into a tool input stays limited to `RESTORE_TOOLS`. Another tool gets the marker, never the secret value.                                                                                                                                                                                                                                                                                                                           |
 
 `agentPort` adds `checkoutConfinement` with the `locations` rule to each `re@1` session in one change (D27). The Foundry gives `reviewWorkspace`; `agentPort` computes the roots. The Foundry cannot open a `re@1` session without the hook.
 
@@ -1566,17 +1581,20 @@ Input:
 - An `oauth` credential is `{ "provider_id": "anthropic", "credential": { "type": "oauth", "refresh": "<token>", "access": "<token>", "expires": <epoch ms> } }`.
 - `credential` follows `piCredentialSchema` of `src/custody/contract.ts`: the same shapes, the same well-formed check and the same byte limit as a custody handover item.
 - `provider_id` must equal `piProviderId` of the effective provider of the agent selection, after `--model`. The command binds the credential to `credential_id` of the agent selection.
-- `cli.worker.tasks.credential_invalid`: standard input is a terminal, holds no JSON, fails the schema or names another provider. The diagnostic names the failed field path only, with no value and no schema message.
+- The optional key `metadata` holds the routing metadata of the provider, such as `base_url`. It follows `metadata_schema` of the provider in `LLM_PLATFORMS`. A provider with a metadata schema requires it. A provider with no metadata schema refuses it.
+- The routing metadata of the run comes only from standard input. The seed agent metadata must equal it as canonical JSON. A seed thus cannot send the credential to an endpoint that the credential owner did not give.
+- `cli.worker.tasks.credential_invalid`: standard input is a terminal, holds no JSON, fails the schema, names another provider, or holds `metadata` that differs from the seed agent metadata. The diagnostic names the failed field path only, with no value and no schema message.
 - `cli.worker.tasks.credential_expiring`: an `oauth` access token expires before the wall deadline of the run plus 5 minutes (`PI_OAUTH_REFRESH_WINDOW_MS`).
 - No option, no environment variable and no file takes a credential.
 - Replay mode reads no standard input. Its store holds the placeholder `{ type: "api_key", key: "replay" }`, which no provider receives.
 
 Lifetime:
 
+- The command checks the terminal with `isatty(0)` and does not touch `process.stdin`. A slow pipe writer thus gives the full object.
 - The command reads standard input into one `Buffer`, parses it, then fills the `Buffer` with zeros.
 - The credential lives only in process memory, in one `frozenStore` of `src/llm/refresh-watch.ts`, a `CredentialStore` of pi-ai.
 - `createModelRuntime` passes the store to `ModelRuntime.create`, so pi creates no `AuthStorage` and writes no `auth.json`.
-- The session uses `SettingsManager.inMemory` and `SessionManager.inMemory`, so no session file reaches the disk. The pi directory is `state/pi/` of the output folder.
+- The session uses `SettingsManager.inMemory` and `SessionManager.inMemory`, so no session file reaches the disk. The pi directory is `state/pi/` of the output folder. After `usePiDirectory`, the command checks that `piAgentDirectory()` is that directory, and else ends with `failed`. An `auth.json` in that directory fails with `credential_invalid`.
 - The credential never enters `process.env`.
 - Dispose runs at every end, after every failure and after SIGINT, and drops every reference to the credential. A JavaScript string has no overwrite, so the value leaves the heap at garbage collection.
 
@@ -1589,17 +1607,17 @@ OAuth refresh:
 
 Leak paths:
 
-| Path                                          | Rule                                                                                                                                                                                 |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `turns.jsonl`                                 | The recorder writes the request after the redaction hook of the session. It never writes the stream options, so it holds no `apiKey`.                                                |
-| `spans.jsonl`, stop details                   | Each credential value joins the known secrets of the CLI host: `knownSecrets` of `agentPort` and the port `secrets.redact`. The session trace and the stop detail thus redact it.    |
-| `outbox.json`                                 | The CLI ports and `localHostTools` hold no credential operation. The frozen store sends no report.                                                                                   |
-| `progress.json`, `outbox.json`, `uploads/`    | The writer redacts each known secret.                                                                                                                                                |
-| `result.json`, `context.json`, `metrics.json` | They record the mode, `provider_id` and the overrides. No override takes a credential. `context.json` omits `sshAccess`, `agent`, `baseHead` and `memo`, and it holds no credential. |
-| logs, diagnostics                             | No log field takes a credential. A diagnostic holds no embedded value.                                                                                                               |
-| child processes                               | The environment rule of "Calls outside the worker" applies.                                                                                                                          |
-| seed, capture, export                         | No credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.                                                          |
-| core dump                                     | The command page tells the developer to run `ulimit -c 0` first; `repository.impl.md` states the core-dump risk of a host install.                                                   |
+| Path                                          | Rule                                                                                                                                                                                                                         |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `turns.jsonl`                                 | The recorder writes the request after the redaction hook of the session. It never writes the stream options, so it holds no `apiKey`. Each line passes the writer redaction. A tool line holds only `content` and `isError`. |
+| `spans.jsonl`, stop details                   | Each credential value joins the known secrets of the CLI host: `knownSecrets` of `agentPort` and the port `secrets.redact`. The session trace and the stop detail thus redact it.                                            |
+| `outbox.json`                                 | The CLI ports and `localHostTools` hold no credential operation. The frozen store sends no report.                                                                                                                           |
+| `progress.json`, `outbox.json`, `uploads/`    | The writer redacts each known secret with the matcher of the session hook: exact, encoded and partial forms. It decodes an upload as UTF-8 text when it can, else it redacts exact bytes.                                    |
+| `result.json`, `context.json`, `metrics.json` | They record the mode, `provider_id` and the overrides. No override takes a credential. `context.json` omits `sshAccess`, `agent`, `baseHead` and `memo`, and it holds no credential.                                         |
+| logs, diagnostics                             | No log field takes a credential. A diagnostic holds no embedded value.                                                                                                                                                       |
+| child processes                               | The environment rule of "Calls outside the worker" applies.                                                                                                                                                                  |
+| seed, capture, export                         | No credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment.                                                                                                  |
+| core dump                                     | The command page tells the developer to run `ulimit -c 0` first; `repository.impl.md` states the core-dump risk of a host install.                                                                                           |
 
 SSH:
 
@@ -1621,50 +1639,59 @@ D32 changes these production behaviors of a worker session:
 
 **Seed format**
 
-`seed.json` requires: `claim` (the `MethodClaim`), `setup` (the `ExecutionSetup` as `execution.setup.get` answers it), `revision` (the pinned node revision) and `heads` (the seed head of each binding). Optional: `plan`, `affectedTests`, `prior`, `refreshed`, `link_updates`, `elapsed_ms`. The seed holds no credential, no SSH identity, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The seed writer removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. The local run applies neither map; a developer names a variable with `--pass-env`.
+`seed.json` requires: `claim` (the `MethodClaim`), `setup` (the `ExecutionSetup` as `execution.setup.get` answers it), `revision` (the pinned node revision) and `heads` (the seed head of each binding). Optional: `plan`, `affectedTests`, `prior`, `link_updates`, `elapsed_ms`. The schema is strict. `state.open` sets `refreshed` to no refresh before `units.plan`, so the seed holds no `refreshed`. The seed holds no credential, no SSH identity, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The seed writer removes `containerEnv`, `remoteEnv` and `build.args` from each `setup.repositories[].environment.document`. The local run applies none of them; a developer names a variable with `--pass-env`.
 
 A hand-written seed omits `prompt.final` and `templates` of `setup`. The run takes them from `--system-prompt` and `--templates`. Without those options, such a seed fails with `cli.worker.tasks.seed_invalid`.
 
-Each binding gets one tree source: `--tree <binding_id>=<path>`.
+Each binding gets one tree source: `--tree <binding_id>=<path>`. The command clones the path into the bare mirror `state/origin/<binding_id>.git`, removes its `origin` remote and makes the mirror read-only. No tree thus holds the path of the source, and no push reaches the source or the mirror. Dispose restores the write bits.
 
 **Defaults and preparation (`tasks_prepare`)**
 
 The command runs a preparation chain `tasks_prepare` before `tasks` with `runPhase`. The chain holds one phase `prepare`. The chain builder builds it as `[PAR] affected.declaration, setup.entries, agent.open`, then `[PAR] env.setup(live), units.plan`. A step whose key the seed holds is not in the chain. `env.setup(live)` always runs, because its effect lives in the tree.
 
-| Key                                | Source                                                                                                          |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `claim.created_at`                 | start of the run, minus `elapsed_ms` (default 0)                                                                |
-| `claim.expired_at`                 | new `created_at`, plus `expired_at` minus `created_at` of the seed                                              |
-| `checkouts`, `heads`, `gitPaths`   | prepared trees                                                                                                  |
-| `setupEntries`, `baseHead`         | `setup.entries` with a tree service that has no pool and puts the base tree under `state/base/`, always         |
-| `setupPending`, `setupInstruction` | `env.setup(live)` on the trees, always                                                                          |
-| `agent`                            | `agent.open` with local resources, always                                                                       |
-| `affectedTests`                    | `affected.declaration`, when the seed lacks the key                                                             |
-| `plan`                             | `units.plan`, when the seed lacks the key; reads `prior` (default: empty) and `refreshed` (default: no refresh) |
+| Key                                | Source                                                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `claim.created_at`                 | start of the run, minus `elapsed_ms` (default 0)                                                        |
+| `claim.expired_at`                 | new `created_at`, plus `expired_at` minus `created_at` of the seed                                      |
+| `checkouts`, `heads`, `gitPaths`   | prepared trees                                                                                          |
+| `setupEntries`, `baseHead`         | `setup.entries` with a tree service that has no pool and puts the base tree under `state/base/`, always |
+| `setupPending`, `setupInstruction` | `env.setup(live)` on the trees, always                                                                  |
+| `agent`                            | `agent.open` with local resources, always                                                               |
+| `affectedTests`                    | `affected.declaration`, when the seed lacks the key                                                     |
+| `plan`                             | `units.plan`, when the seed lacks the key; reads `prior` (default: empty) and `refreshed` (no refresh)  |
 
 **Capture hook**
 
-When the operator sets `KANTHORD_CAPTURE_TASKS=1`, `runChain` calls the capture hook once, after the last node of `start`. The hook writes `captures/<execution_id>/` in the state directory of the instance with mode `0700`:
+When the operator sets `KANTHORD_CAPTURE_TASKS=1`, `runChain` calls the capture hook once, after the last node of `start`. The hook writes `captures/<execution_id>/` in the data directory of the instance with mode `0700`:
 
-- `seed.json` with `claim`, `setup`, `revision`, `heads`, `prior`, `refreshed`, `affectedTests`, `plan` and `elapsed_ms`.
+- `seed.json` with `claim`, `setup`, `revision`, `heads`, `prior`, `affectedTests`, `plan` and `elapsed_ms`.
 
-The hook writes no credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The hook removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture with the instance data.
+The hook writes no credential, no `ssh_identities`, no handover key and no value of `containerEnv`, `remoteEnv` or the process environment. The hook removes `containerEnv`, `remoteEnv` and `build.args` from each `setup.repositories[].environment.document`. A capture failure logs `tasks capture failed` and does not stop the execution. The instance deletes the capture with the instance data.
 
 **Seed export**
 
-`worker.execution.seed.get` is a `human` read of `unary` lifetime at `GET /api/worker/execution/:execution_id/seed`, with the access policy of `scheduler.execution.get`. It answers `{ claim, setup, revision, heads }` for any execution of a node that is not closed. An export of a closed node answers 409 `worker.execution.seed_unavailable`. The route answers no credential, no SSH identity and no handover key. The route removes `containerEnv` and `remoteEnv` from each `setup.repositories[].environment.document`. It holds no value of `containerEnv`, `remoteEnv` or the process environment. `worker-service.impl.md` holds the full route spec.
+`worker.execution.seed.get` is a `human` read of `unary` lifetime at `GET /api/worker/execution/:execution_id/seed`, with the access policy of `scheduler.execution.get`. It answers `{ claim, setup, revision, heads }` for any execution of a node that is not closed. `heads` comes from the head evidence of the execution, else of an earlier execution on the same node branch, else the prompt pin, else the current base head. The route writes nothing. An export of a closed node answers 409 `worker.execution.seed_unavailable`. The route answers no credential, no SSH identity and no handover key. The route removes `containerEnv`, `remoteEnv` and `build.args` from each `setup.repositories[].environment.document`. It holds no value of `containerEnv`, `remoteEnv` or the process environment. `worker-service.impl.md` holds the full route spec.
 
 **Calls outside the worker**
 
 The phase reaches no kanthord server and no git remote: `base.fetch` reads the local `origin`. In live mode, the agent calls the LLM provider. `env.setup`, the verification commands and agent `bash` run on the host with its network, and the help text states it.
 
-Each child process receives `PATH`, `LANG` and `TMPDIR` of the command, and each variable that `--pass-env <name>` names. Each child process receives `HOME` set to `state/home/` of the output folder, not the developer home. No other variable of the shell reaches it. Each `--pass-env` value joins the known secrets of the run.
+Each child process receives `PATH`, `LANG` and `TMPDIR` of the command, and each variable that `--pass-env <name>` names. Each child process receives `HOME` set to `state/home/` of the output folder, not the developer home. Each child process receives `GIT_CONFIG_NOSYSTEM=1` and `GIT_SSH_COMMAND="ssh -F /dev/null -o IdentitiesOnly=yes -o IdentityFile=none"`, so no host credential helper and no host SSH key reaches git. No other variable of the shell reaches it. The pi tool install follows the same rule.
+
+`--pass-env` refuses an unset name, a fixed name, each name that `childEnvironment` removes and each ambient credential or endpoint variable that the command removes before pi loads. Each `--pass-env` value of 12 characters or more joins the known secrets of the run. The writer, `secrets.redact` and `agentPort` get the same list.
+
+Before pi loads, the command removes each variable that `childEnvironment` removes and each AWS, Google Cloud and Azure credential chain variable and each provider endpoint variable, such as `AZURE_OPENAI_BASE_URL` and `AWS_ENDPOINT_URL`, from its own process environment. It sets `HOME` to `state/home/`, `AWS_CONFIG_FILE` and `AWS_SHARED_CREDENTIALS_FILE` under `state/home/.aws/`, `AWS_EC2_METADATA_DISABLED=true` and `METADATA_SERVER_DETECTION=none`. No provider SDK thus finds an ambient credential or an ambient endpoint. The proxy variables `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY` stay, because a proxy does not change the endpoint and TLS keeps the credential from the proxy.
 
 SIGINT cancels the stop context with `worker_stopped`. The command then disposes the resources.
 
 **Overrides**
 
-Overrides edit the seed before `tasks_prepare`. Replay mode refuses each override with `cli.worker.tasks.mode_invalid`.
+Overrides edit the seed before `tasks_prepare`. The `turns.jsonl` header records each override of the live run. Replay mode takes the overrides from the header:
+
+- A non-file override (`--model`, `--reasoning`, `--unit`, `--budget-turns`, `--budget-wall`, `--skip-release-gate`) comes from the header. Replay refuses each of these options on its command line with `cli.worker.tasks.mode_invalid`.
+- The header records `--system-prompt` and `--templates` as content digests. Replay requires each file option that the header names, and only those. A missing option, an extra option or a digest that differs fails with `cli.worker.tasks.replay_invalid`.
+- A seed digest that differs from the header fails with `cli.worker.tasks.replay_invalid`.
+- Each check runs before the output folder exists.
 
 | Option                       | Effect                                                                                                  |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -1679,7 +1706,7 @@ Overrides edit the seed before `tasks_prepare`. Replay mode refuses each overrid
 
 **Output**
 
-The command writes one output folder with mode `0700`. `result.json` records the `FoundryEnd` kind, the exit or stop, the step, the mode, `provider_id`, the overrides, the seed digest and the check results. `context.json` holds the input and the result of `FoundryEnd` with no resource key and no `sshAccess`. `progress.json` holds the last `progress` and the last `UnitCtx` of each unit. `metrics.json` holds unit metrics, step run times and phase totals. `outbox.json` holds each Foundry port write and each agent tool call with its operation, body, step and time. `turns.jsonl` holds each model request and answer in replay format with a version header. It also holds the recorded tool results of the replay rule below. `spans.jsonl` holds the spans. `uploads/` holds the files of `evidence-upload`. `state/` holds the trees, the base tree and the pi directory. The CLI port `releaseTrees.give` removes each release tree at its frame end.
+The command writes one output folder with mode `0700`. `--force` replaces an empty folder or a run folder, which holds both `result.json` and `state/`. It refuses any other folder with `output_exists`. After the output folder exists, the command writes `result.json` at every end. A diagnostic end records the end `diagnostic`, its code and exit code 1. A folder that a hard kill leaves has a read-only mirror, and the command page tells the developer to run `chmod -R u+w` before a manual delete. `result.json` records the `FoundryEnd` kind, the exit or stop, the step, the mode, `provider_id`, the overrides, the seed digest and the check results. `context.json` holds the input and the result of `FoundryEnd` with no resource key and no `sshAccess`. `progress.json` holds the last `progress` and the last `UnitCtx` of each unit. `metrics.json` holds unit metrics, step run times and phase totals. `outbox.json` holds each Foundry port write and each agent tool call with its operation, body, step and time. `turns.jsonl` holds each model request and answer in replay format with a version header. It also holds the recorded tool results of the replay rule below. `spans.jsonl` holds the spans. `uploads/` holds the files of `evidence-upload`. `state/` holds the trees, the base tree and the pi directory. The CLI port `releaseTrees.give` removes each release tree at its frame end.
 
 Replay rule (D32): a replay runs each agent tool again, and the result of an open-world capability tool changes over time.
 
@@ -1687,16 +1714,27 @@ Replay rule (D32): a replay runs each agent tool again, and the result of an ope
 - The CLI host wraps `execute` of each capability tool with `openWorldHint: true`.
 - In live mode, the wrapper records the result of each call in `turns.jsonl`.
 - In replay mode, the wrapper answers the recorded result and does not call the tool.
-- pi registers an MCP tool itself, with the hints of its server, so the CLI host has no `execute` to wrap. The CLI host records and answers each call of an open-world MCP tool through `options.createTransport`. An MCP tool with no `openWorldHint` counts as open world.
+- pi registers an MCP tool itself, with the hints of its server, so the CLI host has no `execute` to wrap. The CLI host records and answers each call of an open-world MCP tool through `options.createTransport`. An MCP tool with no `openWorldHint` counts as open world. Today no MCP capability exists, so the CLI host builds no MCP record.
 - A replay runs every other tool again: each pi built-in tool, `evidence-upload`, `link_update_list` and each capability tool with `openWorldHint: false`.
+- A replay runs the recorded tool calls on the host with the `--pass-env` values. The command page tells the developer to replay only a `turns.jsonl` that the developer recorded.
+
+`turns.jsonl` format: the first line is the header `{ kind: "header", version, seed_digest, overrides }`. Each request line holds the provider, the model id and the messages after the redaction hook. Each answer line holds the assistant message. Each tool line holds the name, the call id and the result or the error of an open-world capability tool. The recorder replaces the output folder path with a token, and removes the message `timestamp`, `durationMs` and `details`.
+
+Replay compares each request with the recorded request. The comparison maps every redaction marker form to `<redacted:<rule>>` and every `pi-bash-<hex>.log` path to one token. When the writer redaction changes an answer line or a tool line, the recorder marks the line `redacted: true` and keeps only the redacted text. A replay stops at a marked answer with `redacted_record`. A marked tool line replays its redacted result. `cli.worker.tasks.replay_diverged` names the `turn`, the `step` and one reason: `request_differs`, `request_extra`, `tool_unrecorded`, `redacted_record` or `turns_unused`. A completed replay that leaves a recorded request or tool line unused fails with `turns_unused`.
+
+A request that differs from the record only in the `text` of a text part of a pi built-in tool result is a drift, not a divergence. A built-in tool runs again on the host, so its output can hold a time or a duration. Everything else must stay equal, also the result of `evidence-upload`, `link_update_list` and each capability tool, because the worker composes it. The replay answers the recorded answer and records each drifted tool call once in `result.json` as `drift: [{ turn, step, message_index, tool_call_id, tool_name }]`. `drift` is `null` in live mode.
+
+The replay output folder must not equal, contain or lie inside the folder of the `--replay` file, compared by real path. Otherwise the command fails with `cli.worker.tasks.option_invalid`.
 
 End mapping of the CLI host:
 
 - `completed`, `budget_end` and `stop` keep their kind in `result.json`.
 - `cancelled` after SIGINT becomes the stop `worker_stopped`.
-- `failed` is an internal error. The command writes `result.json` with the end kind `failed`, prints the diagnostic `cli.worker.tasks.internal_error` and gives the internal-error exit code.
+- `failed` is an internal error. The command writes `result.json` with the end kind `failed`, writes one redacted log record `tasks failed` with the reason, prints the diagnostic `cli.worker.tasks.internal_error` and gives the internal-error exit code. An error after the `FoundryEnd`, such as a failed output write or a failed dispose, also ends with `failed`. Dispose closes each agent separately and always disposes the resources.
 
 With `--verify`, the command runs these checks and records each result in `result.json`:
+
+Today the command runs checks 3, 5, 6, 7 and 8. Checks 1, 2 and 4 need the unit record port, the coder report in `tasks` and the commit span attribute of C2.
 
 1. Each pass of a task unit, or of the node unit of a node with no task, that leaves a gate commit of the pass as a checkout head has one `worker.execution.unit_record.put` after it. Its `content_digest` equals the digest of the unit content, and its `commits` name each such head (section 5.1).
 2. Each pass of a unit with non-empty final text has one coder report after it, with the subject `Coder report of unit <unit id>` (D29). The verdict unit uses the node id.
@@ -1705,7 +1743,7 @@ With `--verify`, the command runs these checks and records each result in `resul
 5. With the end `completed`, each tree has a clean status: no index change, no untracked file and no operation path.
 6. With the end `completed`, the route is `passed`. With `--skip-release-gate`, the route is absent.
 7. A stop code is in the `stops` list of the step that `result.json` names, or it is `revoked`, `operation_failed/<server code>` or `provider_failed/*` (section 3), or it is a requested stop of rule 4a.
-8. In replay mode, the outbox and the commits equal those of the recorded run in the folder of the `--replay` file. The comparison replaces each commit id with its tree id and its message. The replay rule gives each open-world capability tool call its recorded result.
+8. In replay mode, the outbox and the commits equal those of the recorded run in the folder of the `--replay` file. The comparison replaces each commit id with its tree id and its message. The replay rule gives each open-world capability tool call its recorded result. Check 8 reads the recorded checkouts with `git log` under `isolatedGitEnvironment`, plus `log.showSignature=false` and `gpg.program`, `gpg.ssh.program` and `gpg.x509.program` set to `false`, so a config of a recorded tree runs no program.
 
 **Commands**
 

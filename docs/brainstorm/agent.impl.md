@@ -28,6 +28,12 @@ A mechanism here never overrides a rule there.
 - `agent get` answers `prompt`, `configuration_schema`, `overridable_fields`, `tools`, `enablement`, `chain`, `active_position` and `cooling`.
 - `enablement` is null when no record exists.
 - `agent.get` is `GET /api/agent/:agent_name`, keyed by agent name. It answers `agent_name`, `configuration_schema`, `overridable_fields`, `prompt`, `tools`, `enablement`, the agent enablement or `null`, and the [chain view](#the-chain-view). An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
+- `locations` of a catalog entry in `engine/src/agent/catalog.ts` lists the input fields of the tool that hold a path or a URL. [Checkout confinement](#checkout-confinement) checks each listed field.
+- `read`, `edit`, `write`, `grep`, `find`, `ls` and `evidence-upload` declare `locations: ["path"]`.
+- `link_update_list`, `probe` and `environment_write` declare `locations: []`. `environment_write` nests its paths in a document, so the hook checks none.
+- `insideCheckout` in `engine/src/kernel/devcontainer.ts` checks the paths of the document lexically. `containedPath` in `engine/src/apps/server/environment-image.ts` resolves each real path and fails closed.
+- `probe` runs its command in a throwaway container, so its `ls <path>` reads no host path.
+- `bash` has no catalog entry. A confined session has no `bash`, so the hook never sees it.
 - Tests cover each human read, each unknown name, and null and disabled enablements.
 
 ## The prompt answer
@@ -349,6 +355,109 @@ The Agent component owns these keys of the section `agent`.
 - A resume takes the file whose session id equals that identity, and it never calls `continueRecent`.
 - The Worker Service reads one entry by its `id` and `type` from the file whose name ends with `_<session id>.jsonl`.
 
+## The agent port
+
+- `agentPort` in `engine/src/agent/agent-port.ts` opens each guarded agent session of a Foundry host. It answers a `SessionPort`, and `open` answers a `PortSession`.
+- The input of `agentPort` holds `capabilities`, `modelRuntimeFactory`, `knownSecrets`, `trace`, `sessionRoot`, `budget`, `env` and `hostHome`. `agentPort` receives no credential.
+- `open` reads the first agent of `setup.agents`. It takes the working directory from `reviewWorkspace.directory`, or else from the checkout directory. With more than one checkout, it takes the parent directory of the first checkout.
+- `open` builds each session through the `AgentSessionRuntime` of pi (`openSessionRuntime` in `engine/src/agent/agent-session.ts`). pi emits `session_shutdown` in `runtime.dispose()` only, not in `session.dispose()`. `agentPort` therefore builds each session through `AgentSessionRuntime`.
+- The services of the runtime are the model runtime of the request, `SettingsManager.inMemory` and the resource loader of `agentPort`. `agentPort` never creates default services, so pi writes no `auth.json` and no settings file.
+- The resource loader sets `noExtensions`, `noSkills`, `noPromptTemplates`, `noThemes` and `noContextFiles`. Only the factories of the list below load.
+- `openSessionRuntime` calls `session.bindExtensions({})` after the runtime exists. pi emits `session_start` there. A failure closes the runtime.
+- Each build step has a deadline of `RUNTIME_SETUP_DEADLINE_MS` (30 s). After a `bindExtensions` failure, `closeRuntime` runs under a new 30 s context. A runtime that arrives after its deadline is closed when it arrives.
+- With a `sessionRoot`, the session file lives under `executionSessionDirectory(sessionRoot, execution_id)`. Without it, the session lives in memory. When the trace factory answers a trace, the trace gives the session id.
+
+### The guards and their order
+
+- The `tools` option of the session is the first guard. It holds `tools` and `host_tools` of the agent declaration. A tool outside the list is not active.
+- `engine/src/agent/hooks/tool-allowlist.ts` is the second guard. Its `tool_call` handler blocks each tool name outside that list.
+- `checkoutConfinement` is the third guard. `agentPort` adds it to each `re@1` session. [Checkout confinement](#checkout-confinement) holds the rules.
+- The project environment agent adds `checkoutConfinement` to the `env@1` session in `engine/src/project/environment-agent.ts`. Its root is the checkout. It does not use `agentPort`, and it adds no `toolAllowlist`.
+- `swe@1` has no confinement, because `bash` reaches each path.
+- The resource loader runs the extension factories in this order:
+  1. `homeRelativeCwd`
+  2. the redaction `restore` hook
+  3. `toolAllowlist`
+  4. `checkoutConfinement`, for a `re@1` session only
+  5. `pinnedLayers`
+  6. the `capabilities` of the host
+  7. the redaction `hook`
+- pi runs handlers in load order. A guard thus sees each tool call before a capability handler.
+- `pinnedLayers` pins the work prompt as the first user message. [Sensitive text redaction](#sensitive-text-redaction) holds the two redaction hooks.
+
+### Checkout confinement
+
+- `checkoutConfinement` in `engine/src/agent/hooks/checkout-confinement.ts` takes `cwd` and `roots`. Both hold absolute paths, and `roots` is not empty.
+- A `tool_call` handler reads the catalog entry of the tool. It resolves each field of `locations` and blocks the call when one path leaves every root.
+- A tool with no catalog entry is blocked with the reason `The tool <name> has no location rule in this session.`
+- A `locations` field that holds a value that is not a string is blocked. An absent field passes, so a call with no `path` takes `cwd`.
+- `agentPort` computes the roots (`engine/src/agent/review-roots.ts`). A `reviewWorkspace` gives its `directory` and its evidence directory: `<key>/evidence`, or `directory` when `key` equals `directory`.
+- A workspace with no checkout has `key` equal to `directory`, so `directory` is its only root. A `re@1` session with no `reviewWorkspace` has the working directory as its only root.
+- The hook copies the path rules of `resolveToCwd` of pi, because pi 1.1.0 does not export them: the `@` prefix, `~`, `~/`, `file://` and Unicode spaces.
+- The hook also checks the spelling variants that the pi `read` tool tries. The hook checks them for each path, not only for a path that does not exist. The variants are: a narrow no-break space before `AM.` or `PM.`, the NFD form, the curly quote, and the curly quote with NFD.
+- The hook follows symbolic links with `realpathSync` on the nearest existing parent. It refuses a dangling symbolic link, a path that it cannot resolve and an unreadable path.
+- After an accepted check, the hook freezes the tool input with `Object.freeze`. A later handler cannot change a checked path.
+- A refusal returns `block` with the reason `The path <path> is outside the checkout. Use a relative path inside the checkout.` The `<path>` is the value as the call gave it, for example `@/etc/passwd`.
+
+### Capabilities
+
+- A capability is one `InlineExtension` in `capabilities`. The design has no registry and no plugin format.
+- `executionEvidence` and `linkUpdates` in `engine/src/agent/capabilities/` take `SessionHostTools = (workspace) => HostTools`. Each registers one tool with `pi.registerTool`.
+- A tool takes the workspace from `ctx.cwd` of the call, so one capability list serves each execution.
+- Each tool declares `annotations.openWorldHint` explicitly. `evidence-upload` and `link_update_list` declare `false`.
+- `sessionTools` in `engine/src/agent/tool-table.ts` puts no capability tool in `customTools`. It puts only the wrapped `bash` there, and only for an agent with `bash`.
+- A capability factory receives only the pi extension API. That API exposes `pi.registerProvider` and `ctx.modelRegistry`, so the lint rule below forbids both. A capability receives no model runtime, no known secrets and no credential from `agentPort`.
+- Today no capability registers an MCP server. The MCP rules of design section 5.5 have no code.
+- The `eslint.config.js` entry for `src/agent/capabilities/**/*.ts` forbids `modelRegistry` and `registerProvider` as a member or a property. The message is `A capability reads no model registry and registers no provider.`
+- For a `Diagnostic`, `asToolError` throws an `Error` with the message `<code>: <message>`. Every other error passes unchanged.
+
+### The session close
+
+- `PortSession.close()` runs once. It cancels the context of the session, then calls `closeRuntime`. A second `close()` call returns at once and does nothing.
+- `closeRuntime` calls `session.abort()` first, then `runtime.dispose()`. The deadline comes from `budget.cleanupContext(parent)`. The `parent` is the context of the open.
+- When `session.abort()` or `runtime.dispose()` fails, or the deadline ends first, `closeRuntime` calls `session.dispose()`. A late `session_shutdown` handler or a stuck resource cannot block a revoke.
+- A failed open ends the trace with `SpanStatus.Error`, cancels the context and closes the runtime that exists with `closeRuntime`.
+
+### The bash environment
+
+- `sessionTools` wraps `bash` for an agent with `bash` in its `tools`. `exposeSessionEnvironment` is `false`.
+- The `spawnHook` sets the environment of the process to `childEnvironment({ ...env, PATH })`. `env` is the `env` of the `agentPort` input. `PATH` is the `PATH` of the pi spawn context (the shell `PATH`), or else `env.PATH`.
+- `exec` also applies `childEnvironment` to the options of the call. `childEnvironment` (`engine/src/agent/environment.ts`) removes the keys that `findEnvKeys` finds for each built-in pi provider.
+- It also removes `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_OAUTH_TOKEN`, `SSH_AUTH_SOCK`, `SSH_AGENT_PID`, `KANTHORD_WORKER_CONFIG`, `KANTHORD_MACHINE_CONFIG`, `KANTHORD_TOKEN` and `KANTHORD_ENDPOINT`. Other `KANTHORD_*` variables stay.
+- The limit is `floor((min(remaining budget, COMMAND_LIMIT_MS) - 1 ms) / 1000)` seconds, with `COMMAND_LIMIT_MS` = 600 s. The longest applied timeout is thus 599 s. The applied timeout is the lower of the requested timeout and that limit. A call with a limit below 1 second is refused with `resource budget ended`. `killGroupAtEnd` kills the process group.
+
+### Tests
+
+`engine/src/agent/hooks/checkout-confinement.test.ts`:
+
+- A path that leaves the checkout is blocked with a reason that names the path.
+- A relative path inside the checkout, a call with no `path` field and a path to a file that does not exist pass.
+- A tool with no catalog entry is blocked. A tool with no location field passes. A path field of another tool is checked.
+- `@`, a `file://` URL, a Unicode space and a spelling variant that leave the checkout are blocked.
+- An absolute path, an `@` path and a `file://` URL inside a root pass, also inside a second root.
+- A dangling symbolic link to a target outside the checkout is blocked as the last component and as a directory component.
+
+`engine/src/worker/unit/agent-port.test.ts`:
+
+- A `re@1` session refuses a read of `@absolute`, `~`, `file://` and a symbolic link that leave the review roots. It reads the checkout and the evidence directory.
+- A `re@1` session over a workspace with no checkout has the workspace directory as its only root.
+- A later handler that rewrites a checked path of a `re@1` session gets a blocked call.
+- The active tools equal the declared set. An undeclared capability tool is not active, and its direct and nested calls are blocked.
+- A capability tool outside the restore tools gets the marker and never the secret value.
+- A capability resource starts at the open and stops at the close. The session writes no `auth.json` and no settings file.
+- The close ends at the cleanup deadline when a capability does not stop.
+
+`engine/src/worker/unit/tool-table.test.ts`:
+
+- The child environment removes the provider keys. `bash` takes the session environment with the shell `PATH`. The `bash` timeout stays below the budget and the command limit.
+- `sessionTools` of `swe@1` names both host tools in the `tools` option and holds none in `customTools`. `re@1` names none.
+- `bash` records the requested and the applied timeout once. A rejected `exec` records nothing.
+- A `bash` call that times out or aborts leaves no process of its tree, also a process in its own group.
+
+`engine/src/worker/unit/host-tools.test.ts` covers `link_update_list`: the default page, the limit refusal and the tool error of a refused read.
+
+`engine/src/project/environment-agent.test.ts` covers the `env@1` confinement. A path outside the checkout answers a tool error that names the path. Each session tool runs, `probe` and `environment_write` included. The session redacts its JSON failure and keeps the confinement.
+
 ## Sensitive text redaction
 
 - Sensitive text redaction is the first [session hook](agent.vocabulary.md#session-hook). It replaces each [sensitive text](agent.vocabulary.md#sensitive-text) of an agent session with a [redaction marker](agent.vocabulary.md#redaction-marker).
@@ -618,6 +727,7 @@ Rule 6 finds a private key by its header: a PEM header, the PGP header `-----BEG
 
 - No per-project allowlist, no baseline file, no inline pragma in version 1: one standard configuration. Ulrich adds exceptions later.
 - In `write` and `edit`, the restore puts the real text back, so a false positive costs only the view of the model.
+- Model text gets rule 0 only. So the model sees its own earlier text, for example a test value that it wrote, and does not copy a marker of it.
 - In `bash`, a marker blocks the call. So a false positive that the model copies into `bash` blocks that call.
 - The tag keeps a literal marker in a file harmless. A foreign marker stays text.
 - The entropy floor keeps a common word of the free-value rules out of rule 0b. Only a word that the model used in a tool input spreads.
@@ -684,7 +794,8 @@ The two-pass scan applies to `message_end`, `text()` and the `context` handler:
 - Pass 1 runs rules 1 to 17 over every string of the message and over each escaped view. It adds each new value to the table after the merge.
 - Pass 2 runs rules 0 and 0b over every string, each escaped view and each run of the wrapped view, with the updated table.
 - Then the merged spans of both passes are replaced, and each final merged span enters the table.
-- So a value that a rule finds on line 2 is also masked on line 1. The same holds for another string of the message and for a second tool call.
+- So a value that a rule finds on line 2 is also masked on line 1. The same holds for another string of the message.
+- For an `assistant` message, pass 1 and rule 0b run only over the keys outside `content`. The `content` gets rule 0 in pass 2.
 - Pass 2 does not change a kept thinking block.
 
 ### The handlers
@@ -710,6 +821,7 @@ The `context` handler and the `custom` messages:
 
 - The restore writes a value back only into the input of `write` and `edit`.
 - A marker of this session in a `bash` call blocks the call. So no command receives a masked value. This closes the path of a prompt injection that sends a value with `curl`.
+- A value that the model types into a command is model text, and the command receives it.
 - A marker of the LLM credential blocks the call in every tool.
 - Every other tool, for example `read`, `grep`, a workbench operation tool or a custom tool, receives the marker text unchanged.
 
@@ -751,19 +863,26 @@ Strings that the `message_end` handler redacts:
 - On the message object and on each content block, the handler skips the structural keys. The keys are `type`, `role`, `id`, `toolCallId`, `toolName`, `customType`, `api`, `provider`, `model` and `stopReason`.
 - More structural keys: `timestamp`, `mimeType`, `textSignature`, `thinkingSignature`, `thoughtSignature`, `namespace` and `responseId`. The handler also skips the `data` of an image block.
 - Inside `arguments`, `details`, `nestedCalls`, `sections`, `toolsAdded` and custom `content`, the handler redacts every string at any depth.
+- The `content` of an `assistant` message is model text. The handler applies only rule 0 to it: no pattern rule and no rule 0b. Model text adds no value to the table.
+- Every other key of an `assistant` message, for example `errorMessage`, gets every rule.
 - For a `toolResult` message, the handler walks every string of every key, not only `content` and `details`. pi 1.1.0 drops `structuredContent` from the message (`pi-agent-core/agent-loop.js`). A later pi version that keeps it gets the same redaction, and a test pins the persisted keys.
 
 Thinking blocks:
 
 The handler applies the first thinking rule that matches, in this order:
 
-1. A block of `openai-completions` whose `thinkingSignature` is a reasoning field name is redacted. pi replays its text in that field with no signature check (`pi-ai/api/openai-completions.js`).
-2. A block with `redacted: true` or a non-empty `thinkingSignature` stays whole, and each finding in it counts as `thinking_kept`.
-3. Every other block is redacted.
+1. A block of `openai-completions` whose `thinkingSignature` is a reasoning field name is redacted with rule 0. pi replays its text in that field with no signature check (`pi-ai/api/openai-completions.js`).
+2. A block with `redacted: true` or a non-empty `thinkingSignature` stays whole, and each rule 0 finding in it counts as `thinking_kept`.
+3. Every other block is redacted with rule 0, as all model text.
 
 - Each redacted block keeps its `thinkingSignature`.
 - Rule 3 redacts an unsigned Google block and an unsigned Bedrock block (`pi-ai/api/google-generative-ai.js`; `pi-ai/api/bedrock-converse-stream.js`).
-- For a kept block, the handler scans its text and its signature. It adds each finding to the table and counts it as `thinking_kept`. Rule 0b then masks each later occurrence.
+- For a kept block, the handler scans its text and its signature with rule 0, and counts each finding as `thinking_kept`.
+
+The final assistant text:
+
+- `lastText` of the worker agent returns `redaction.modelOutput` of the last assistant text. The coder report, the examine assessment and the judgement read it, and the evidence holds it.
+- `modelOutput` applies every rule with the session markers. It adds no value to the known set, so a later tool result does not mask a value of the model text.
 
 Hook order:
 
@@ -783,8 +902,9 @@ Hook order:
 | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | User message (work prompt, instruction, workbench human text, `env@1` JSON failure)               | `message_end`, escaped view; the worker also redacts before `session.prompt`                                                | Covered                                                                                                                                                                                          |
 | System message (prompt sections, `toolsAdded`), with the instruction file and the Binding prompts | `message_end`; `openSession` redacts the loader input                                                                       | Covered                                                                                                                                                                                          |
-| Assistant text, tool call arguments, `errorMessage`                                               | `message_end`                                                                                                               | Covered                                                                                                                                                                                          |
-| Thinking with a provider signature                                                                | Scanned, kept whole, counted, values added to the table                                                                     | Kept                                                                                                                                                                                             |
+| Assistant text, thinking and tool call arguments                                                  | `message_end`, rule 0 only                                                                                                  | Kept. The provider made this text. The session file keeps a pattern value of model text. The tracer and the `turns.jsonl` writer apply rule 0 and rules 1 to 17 to their copies.                 |
+| Assistant `errorMessage`                                                                          | `message_end`                                                                                                               | Covered                                                                                                                                                                                          |
+| Thinking with a provider signature                                                                | Scanned with rule 0, kept whole, counted                                                                                    | Kept                                                                                                                                                                                             |
 | Tool result content, `details` and every other key of every tool                                  | `message_end` of the `toolResult` message; rules 0 and 0b                                                                   | Covered                                                                                                                                                                                          |
 | Restored value in a later tool output                                                             | Rule 0b for a restored value that spreads; the result of the same call for a shorter value                                  | Covered, except a later output of a short value                                                                                                                                                  |
 | Truncated, encoded or wrapped LLM credential                                                      | Rule 0 forms, parts and the wrapped view                                                                                    | Covered                                                                                                                                                                                          |
@@ -838,7 +958,7 @@ The worker writes seven attributes at the end of the `agent.session` span (`engi
 - The `message_end` handler catches every error itself, because pi persists the unchanged message after a handler error (`pi-coding-agent/core/extensions/runner.js`). On an error outside a string, each non-structural string becomes `<redacted:scan_failed:a:TAG>`.
 - The `context` handler catches every error, and the summary becomes `<redacted:scan_failed:a:TAG>`.
 - The `tool_call` handler catches every error and returns `{ block: true, reason }`. On a throw, pi also fails the call (`pi-agent-core/agent-loop.js`).
-- `known()` rejects at the first call: the set stays empty, and rules 0b to 17 still apply.
+- `known()` rejects at the first call: the set stays empty, and rules 0b to 17 still apply. The `content` of an assistant message then gets no rule.
 
 ### Tests
 
@@ -910,9 +1030,10 @@ A test file builds every fake key from parts at run time, for example `["AKIA", 
 
 `engine/src/agent/hooks/sensitive-text-redaction.test.ts`:
 
-- `message_end` for each role, with `system` sections and `toolsAdded`.
+- `message_end` for each role other than `assistant`, with `system` sections and `toolsAdded`.
+- Assistant: `content` keeps a pattern value and a table value and masks a known secret. `errorMessage` keeps every rule. A signed thinking block adds no value to the table.
+- `modelOutput`: masks every rule and adds no value to the known set.
 - Same message: line 1 of a tool result holds the value in a form that no rule matches. Line 2 holds a rule 4 finding. Both lines hold the marker.
-- Same message: two tool calls of one assistant message hold one value.
 - A rule 12 value restored into `edit`, then the `toolResult` with its `diff` holds the marker.
 - A rule 4 password `pass` is restored into `edit`, and the `toolResult` of that call holds the marker. A later `npm test` output with `passed` stays unchanged.
 - A rule 13 value of 12 characters and entropy below 3.25 is restored into `write`. A later `cat` `toolResult` of that file holds the marker.
@@ -922,7 +1043,7 @@ A test file builds every fake key from parts at run time, for example `["AKIA", 
 - Thinking: a signed Anthropic block, a signed Codex block and a signed Azure Responses block stay whole, and `thinking_kept` grows.
 - Thinking: an unsigned Google block and a Bedrock block with an empty signature are redacted, and each keeps its `thinkingSignature`.
 - Thinking: an `openai-completions` block with `reasoning_content` is redacted and keeps its signature. A block of another API with a signature stays whole.
-- Thinking: pass 2 leaves a kept block unchanged, and a kept finding masks a later text.
+- Thinking: pass 2 leaves a kept block unchanged.
 - Structural keys: `thoughtSignature` stays; a key `model` inside `arguments` is redacted.
 - `restore`: `write` and `edit` input; a nested `write` call with `parentToolCallId`.
 - `restore` by tool: a `read` and a `grep` input with a rule 12 marker reach the tool unchanged. A `read` input with a `llm_credential` marker blocks.

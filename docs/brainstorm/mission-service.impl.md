@@ -116,7 +116,7 @@ An import carries no priority.
 - The choice takes the first name of `<commit_type>/<slug>`, `<commit_type>/<slug>-2`, `<commit_type>/<slug>-3` and onward that no reservation holds and that `git ls-remote` shows at no repository binding of the pinned revision. The remote read runs before the transaction. The transaction writes the name only when the attempt holds none, inserts one reservation for each of these bindings, and reads the stored name back. A concurrent first handover that lost the write uses the stored name.
 - No act deletes a reservation, so the service never gives one name out twice for one repository.
 - The name of an attempt never changes. A create-only first push that the remote refuses stops the execution, under [Workspace](worker-service.impl.md#workspace).
-- The Mission Service deletes the unit records of a node through the port `unitRecords.deleteNode(tx, node_id)` of the Worker Service, as it deletes a job through `dependencies.workQueue.delete`. It calls the port in the transaction that opens an attempt with the start point `base_branch`. It also calls it in the transaction that moves the node to `Completed` or `Discarded`, and in the transaction that retires the node.
+- The Mission Service deletes the unit records of a node through the port `unitRecords.deleteNode(tx, node_id)` of the Worker Service, as it deletes a job through `dependencies.workQueue.delete`. It calls the port in `node.unblock` when the new attempt has the start point `base_branch`, in `transition()` when the target is `Completed` or `Discarded`, in `node.retire`, and for each node that `import.apply` retires.
 - The Mission Service drafts the replies of a node through the port `intakeReplies.draftReply(tx, draft)` of the Intake Service. It calls the port in every transaction that moves the node to `Completed`.
 - The transaction calls the port once for each external link of the pinned revision whose conversation binding revision holds `reply_policy`. A move to `Discarded` or `Blocked` calls no draft.
 - `draft` holds `project_id`, `node_id`, `attempt`, `external_link`, `platform` of the conversation binding, `request_key` and `text`. The request key is `<node_id>:<attempt>:<link>`, where `<link>` is the canonical JSON of the external link.
@@ -983,7 +983,12 @@ kanthord runs no automatic evidence delete and no cleanup process.
 ## The revocation stop order
 
 - `endLiveClaim` of `src/mission/control.ts` queues a stop order with the `StopOrderReason` `revoked` for the execution of each claim that it revokes with no stop. A revocation with a stop, such as `human_paused` or `instance_archived`, keeps the order of that stop's reason.
-- The worker reads the order at its next heartbeat and ends the execution with no release, under [worker-service.impl.md](worker-service.impl.md).
+- `endLiveClaim` queues no order for the revocation by the assessment of the execution itself. The first order of an execution wins.
+- The worker takes the order through the slot of a pool-run instance at once, or at the next instance heartbeat of a `worker` placement instance. It ends the execution with no release, under [worker-service.impl.md](worker-service.impl.md#the-server-instances).
+- A pause, an override, a discard or an evidence delete of a node whose execution a pool runs holds the claim until the unit stops or the hold deadline passes. `keptExecution` answers the kept execution.
+- A pause that keeps the claim links its act trace to the root span of the kept execution. `liveExecutionOf` gives the trace.
+- `revokeHeldPauses` revokes the live claim of each `Paused` node with no stop order, with `human_paused`. The Worker Service calls it once at `startPool`.
+- The pending closes of a held override, discard or evidence delete stay in memory. After a server restart, `revokeHeldPauses` revokes the claim and the node stays `Paused`, so the human repeats the act.
 
 ## The forced archive revocation
 
