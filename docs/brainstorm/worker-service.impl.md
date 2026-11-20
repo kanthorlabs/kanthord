@@ -927,7 +927,7 @@ The container runtime store:
 - Both methods write nothing, return at once and run the reconciliation on the next tick. The reconciliation logs a failure as `worker.pool.reconcile_failed`. A call before `startPool` is a no-op.
 - A create starts the new server instance. An archive stops it.
 - A binding-set write changes only the binding entries. The pool host sends the full entry list of each changed server instance through its slot channel.
-- A queued stop order raises the work version. The pool host then reads `stopOrdersOf(tx, instance_id)` in-process for each server instance that it runs, and sends the orders through `stopOrders(orders)` of its slot. The worker unit takes them through the same `stopOrders` entry point as at the `worker` placement. `ClaimWatch` stays the fallback for a lost message.
+- A queued stop order raises the work version. The pool host then reads `stopOrdersOf(tx, instance_id)` in-process for each server instance that it runs, and sends the orders through `stopOrders(orders)` of its slot. Today the slot channel carries no stop order, so a stop order reaches only a `worker` placement instance. The worker unit takes them through the same `stopOrders` entry point as at the `worker` placement. `ClaimWatch` stays the fallback for a lost message.
 - A server instance that no binding lists runs with an empty entry list and holds no registration.
 - A binding removal ends every registration of the binding in the transaction of the binding-set write, under [Registration heartbeat](#registration-heartbeat). The entries of the binding leave each server instance. A live execution learns of the end at its next call.
 - `worker.server_instance_limit` caps the live server instances of the server over both placements, as a positive safe integer with the default `16`. A create at the cap refuses, under [The instance record](#the-instance-record).
@@ -2518,7 +2518,7 @@ The tool of the action performer takes the execution identity only.
 The execution holds a fixed `expired_at` under [Scheduler configuration](scheduler-service.impl.md#configuration).
 An external harness must release before the `expired_at` of its execution record.
 Every execution learns of the end from a stop order, from its claim watch or from its first refused call, and aborts then. The placement of its instance changes only the delivery of the stop order.
-The Mission Service queues the stop order `revoked` for every revoked claim, except a human pause, which keeps its stop order `human_paused`.
+The Mission Service queues the stop order `revoked` for every revoked claim, except a human pause, which keeps its stop order `human_paused`. Today `StopOrderReason` holds no `revoked`, and `endLiveClaim` queues no stop order, so `ClaimWatch` is the only timer signal of a revoke.
 At the `server` and the `container` placements, the pool host sends the stop order at once through the slot `stopOrders` call, under [The server instances](#the-server-instances).
 At the `worker` placement, the process reads the stop order on the next instance heartbeat, every 15 s, under [The instance exchange](#the-instance-exchange).
 The worker unit then calls `run.revoke()` with no release. The 60 s registration heartbeat carries no stop order.
@@ -2526,14 +2526,15 @@ The worker unit then calls `run.revoke()` with no release. The 60 s registration
 A claim that is not `running`, or a read that the Scheduler refuses as ended, calls `run.revoke()`. A read that fails for another reason ends nothing.
 `run.revoke()` sets the `revoked` stop and cancels `operationContext`, which aborts the pi session and any running command.
 The watch ends when `branch.push` starts, before `assessment.submit`, before `execution.release`, before the stop release, and at any stop.
-The first act of `branch.push` reads the claim. A revoke answer gives no push. On a network error at the fence read, the push continues.
+The first act of `branch.push` reads the claim. A revoke answer gives no push. On a network error at the fence read, the push continues. A run that already holds the stop `revoked` gives no push and reads no claim. In `finish` and `onExit`, a revoke answer stops with `revoked`. In `onStop`, it skips the push and keeps the stored stop.
+One proof hook on the worker transport covers each operation with `requiresExecution`. An execution-end answer calls `run.revoke()` with its code. The hook ends at the start of `execution.release`, `assessment.submit` and the stop release, because each of these calls checks the execution proof itself.
 `run.call` of `src/worker/unit/execution-run.ts` retries an `Indeterminate` answer and a 409 `gateway.idempotency.conflict` with the same idempotency key.
 The retry uses `Backoff` for at most 30 s and never past `expired_at`. It stops at once on `closed` and on a stop of the run.
 After the bound, the execution stops with `operation_failed`.
 `retryIndeterminate` of `src/apps/worker/api.ts` takes the key outside its loop.
 After a server restart, the in-memory key store is empty, so a retry can create a second evidence. KanthorD accepts that duplicate.
 A credential report that the server refuses as ended also ends the execution as `revoked`. So does the claim read after a lost release answer. The refusal code is `gateway.invocation.execution_proof_failed` or `scheduler.execution.not_running`. After a refused credential report, KanthorD sends no release. The worker stays in its pull loop.
-A revocation therefore stops a native execution within one heartbeat interval, or within 60 s plus one claim read when the heartbeat is lost.
+A revocation therefore stops a native execution within one heartbeat interval, or within 60 s plus one claim read when the heartbeat is lost. Today, with no stop order `revoked`, it stops within 60 s plus one claim read and one abort.
 On revocation or loss, the execution aborts its pi session and dispatches nothing after.
 Abort does not prove that every descendant process stops.
 The quiescence check before workspace reuse still needs a mechanism.
