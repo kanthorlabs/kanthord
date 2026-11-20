@@ -983,7 +983,12 @@ kanthord runs no automatic evidence delete and no cleanup process.
 ## The revocation stop order
 
 - `endLiveClaim` of `src/mission/control.ts` queues a stop order with the `StopOrderReason` `revoked` for the execution of each claim that it revokes with no stop. A revocation with a stop, such as `human_paused` or `instance_archived`, keeps the order of that stop's reason.
-- The worker reads the order at its next heartbeat and ends the execution with no release, under [worker-service.impl.md](worker-service.impl.md).
+- `endLiveClaim` queues no order for the revocation by the assessment of the execution itself. The first order of an execution wins.
+- The worker takes the order through the slot of a pool-run instance at once, or at the next instance heartbeat of a `worker` placement instance. It ends the execution with no release, under [worker-service.impl.md](worker-service.impl.md#the-server-instances).
+- A pause, an override, a discard or an evidence delete of a node whose execution a pool runs holds the claim until the unit stops or the hold deadline passes. `keptExecution` answers the kept execution.
+- A pause that keeps the claim links its act trace to the root span of the kept execution. `liveExecutionOf` gives the trace.
+- `revokeHeldPauses` revokes the live claim of each `Paused` node with no stop order, with `human_paused`. The Worker Service calls it once at `startPool`.
+- The pending closes of a held override, discard or evidence delete stay in memory. After a server restart, `revokeHeldPauses` revokes the claim and the node stays `Paused`, so the human repeats the act.
 
 ## The forced archive revocation
 
