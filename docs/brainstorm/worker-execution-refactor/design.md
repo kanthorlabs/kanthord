@@ -1295,7 +1295,7 @@ Setup once per checkout per execution, in `workspace.node`:
 git rev-parse --git-path rebase-merge --git-path rebase-apply/applying --git-path rebase-apply --git-path CHERRY_PICK_HEAD --git-path REVERT_HEAD --git-path MERGE_HEAD
 ```
 
-The result goes to `gitPaths`. Each gate then uses `lstat` on `.git` (must be a directory, else an invariant failure) and `existsSync` on the six paths, with no process. These six paths are per-worktree state, so a later `commondir` or config change does not move them.
+The result goes to `gitPaths`. Each gate and restore uses `lstat` on `.git`. When `.git` is a directory, the gate uses `existsSync` on the six cached paths, with no process. When `.git` is not a directory, one `git rev-parse --git-path` resolves the six paths again for that call, so a turn that writes a gitdir file keeps its commit and its push. These six paths are per-worktree state, so a later `commondir` or config change does not move them.
 
 Before, write mode, per checkout, per agent turn (`turn-gate.ts`, `local-git.ts`):
 
@@ -1344,9 +1344,9 @@ The totals leave out `update-index` (row 10 before, row 8 after). It adds 1 proc
 Rules of the new gate:
 
 1. Status 1 gives `# branch.head`, `# branch.oid`, the entries, the `u` lines and the `?` lines. `--no-ahead-behind` stops the commit walk against the upstream that `checkout -B <b> origin/<ref>` sets.
-2. Fast path (write mode, and checkpoint mode with no `openMerge`): `branch.head` is the node branch, `branch.oid` equals `before`, no entry, no `?` line and no operation path exists. Status lists each path that `add --all` stages, so `add --all` would stage nothing. The turn is unchanged, and the gate ends. An entry with only a worktree-side change takes the slow path.
+2. Fast path (write mode, and checkpoint mode with no `openMerge`): `branch.head` is the node branch, `branch.oid` equals `before`, no entry, no `?` line and no operation path exists. Status lists each path that `add --all` stages, so `add --all` would stage nothing. The turn is unchanged, and the gate ends. An entry with only a worktree-side change takes the slow path. With a submodule whose `ignore` is `all`, status lists nothing while `add --all` stages the gitlink; `diff --cached --raw` hides that gitlink, so the outcome is the same: no commit and an unchanged turn.
 3. Violation checks run in the order of today. The first match names the code:
-   1. `branch.head` is not the node branch (also `(detached)`): `worker.turn.branch_changed`.
+   1. `branch.head` is not the node branch (also `(detached)`): `worker.turn.branch_changed`. The detail names `refs/heads/<branch>`, or the ref of one `git symbolic-ref --quiet HEAD` when `branch.head` is `(null)`.
    2. `branch.oid` differs from `before`, and command 2 fails: `worker.turn.history_rewritten`.
    3. `branch.oid` differs from `before`, and command 3 lists a merge with a parent that is not `before` and not the commit of `openMerge`: `worker.turn.foreign_merge`.
    4. Conflict mode: the cached `MERGE_HEAD` file does not hold the commit of `openMerge`: `worker.turn.merge_missing`.
@@ -1357,7 +1357,7 @@ Rules of the new gate:
 4. All checkouts run step 3 in parallel (D7). The gate waits for every checkout. On a violation, it restores every checkout to `before` and returns one stop with the code of the lowest checkout index. In `onStop`, it restores and returns.
 5. With no violation and `branch.oid` not `before`, command 4 resets.
 6. Command 6 lists the staged set. The `M` entries with the same regular mode are the conversion candidates for command 7. The staged set minus the conversion-only paths decides the commit, and gives the changed paths for the span. This replaces `diff --cached --quiet` and `diff --name-only`.
-7. Status 10 is invariant I: `branch.head` is the node branch, `branch.oid` is the new head, no `u` line, no entry with an index-side change (X is not `.`), no `?` line, and no operation path exists. It also gives the new `heads` value. A conversion-only path can show a worktree-side change (Y), as today, and does not fail the invariant.
+7. Status 10 is invariant I: `branch.head` is the node branch, `branch.oid` is the new head, no `u` line, no `?` line, and no operation path exists. No entry has an index-side change (X is not `.`), apart from a gitlink entry whose three modes are `160000`. It also gives the new `heads` value. A conversion-only path can show a worktree-side change (Y), as today, and does not fail the invariant.
 8. Conflict mode runs only after `markers.check` found no marker (D23). `concludeMerge` (commands 5 to 9) then commits the merge.
 9. Checkpoint mode on `onExit`: the gate concludes an `openMerge` with `resolved: true` by running the conflict-mode checks (D13). It aborts each other `MERGE_HEAD`, as today. An `openMerge` with no `MERGE_HEAD` counts as no merge. Checkpoint mode on `onStop`: the gate aborts every `MERGE_HEAD`.
 
