@@ -31,7 +31,6 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - The steps `state.open`, `budget.check`, `unit.leave` and `unit.runner` have no catalogue entry. `done_record.put` becomes `unit_record.put` in C2.
 - `runChain` throws the stop, and `executionBoundary` releases it. The budget-end mapping stays inside each step that has it today. The runner has no `stopMapped`.
 - The `examine` chain holds `[PAR] prepare.inputs` (`inputs.read(revision, dependencies)` and `workspace.review(base)`) in `prepare`. A budget end in these reads releases with `further_work: true` and the stop `budget_end/wall_time` (C4).
-- The phase spans of `implement` are one-frame loops. The runner opens no `worker.step` span. C5 adds it.
 - Accepted change: the dispose stack releases the node workspace after a failed give of the base tree. The stop keeps the code of the first error.
 
 ### A2 deviations
@@ -167,7 +166,6 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - Git processes per checkout per turn: unchanged 14 to 1, changed 17 or 18 to 5 or 6, agent committed 18 or 19 to 8 or 9. The restore after a live verification: 9 to 4.
 - The replay of the 10 replay seeds on engine `049a22f2` ends `completed` with checks 3, 5, 6 and 8 passed.
 - A `.git` that is not a directory resolves `gitPaths` again for that call, so the gate keeps its code, commit and push. A staged gitlink of a submodule with `ignore = all` passes invariant I. The `branch_changed` detail names full refs.
-- On `onExit`, the gate still aborts an open merge (C5).
 - The live run of the 11 seeds on engine `049a22f2` (`runs-c1/` of the eval set) ends `completed` with checks 3, 5 and 6 passed: 262 turns, $0.98, 63.3 tasks minutes, against 338 turns, $1.98 and 82.4 minutes of the baseline. The C0 redaction rule gives most of the cut, in `T8TWV9P5`. The other seeds vary in both directions with the model output.
 - [x] C2. Unit record and trailer removal (D21 layer 2). Replay.
 
@@ -204,13 +202,21 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - `SpanRecorder` keeps the open span in an `AsyncLocalStorage`, so a step span of a branch has the span that is open at the group start as its parent.
 - A streamed reviewer asset that a deadline or a stop cuts deletes its partial file and keeps the stop code of the context.
 - The replay against `runs-c2/` equals the baseline on the 8 replay seeds: the same commit trees and messages, and the same outbox apart from times and commit ids.
-- `examine` keeps `setup.entries(examine)` and `env.setup(examine)` in `tasks`, so the golden file differs from section 4 there. Owner: C5, with the budget-end stop of `examine` in `prepare`.
 - `workspace.node` takes its trees serially under the pool lock. Only `gitPaths` and the restore run in parallel. Owner: a later step.
 - `units.plan` plans the checkouts serially. Owner: a later step.
-- The release tree verification, `markers.check`, the coder report per unit, the split of the release gate steps and `conflict.revisions` belong to C5, C6 or later steps.
+- The release tree verification, `markers.check`, the coder report per unit, the split of the release gate steps and `conflict.revisions` belong to C6 or later steps.
 - A sibling cancel does not reach `workspace.node`, `units.plan` and `run.call`, because they use `operationContext` or `state.cancel`. The group waits for them. Owner: a later step.
 - The first failed download starts no new download, but the running downloads go on until they end or the deadline passes. Owner: a later step.
-- [ ] C5. Checkpoint merge, telemetry and stop detail (D21 layer 6). Replay.
+- [x] C5. Checkpoint merge, telemetry and stop detail (D21 layer 6). Replay.
+
+### C5 deviations
+
+- `base.refresh` runs the marker check of a budget end. No separate `markers.check` step exists, and the D23 loop is not built.
+- At a budget end, a merge is resolved only when each conflicted file held a marker right after the merge and holds none now. A modify/delete or a binary conflict is aborted.
+- `SecretPort.redact` takes a length limit, so the redaction runs before the cut.
+- A final step writes a zero-length `worker.step` span. The CLI host opens the tasks phase span of `worker tasks run`.
+- `setup.entries(examine)` and `env.setup(examine)` run in the `workspace` branch of `prepare`. The golden file matches section 4 for `examine`.
+- The replay against `runs-c2/` equals the baseline on the 8 replay seeds: the same commit trees and messages, and the same outbox apart from times and commit ids. `turns.jsonl` differs only in drift text of `bash` results.
 - [ ] C6. The `Conflict` prompt (D22). Replay plus live run.
 
 ## Open items
@@ -244,6 +250,14 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - [ ] Open, at each pi upgrade. `src/agent/hooks/checkout-confinement.ts` holds a copy of the path rules of pi (`normalizePath`, `resolvePath` and the `read` spelling variants of pi 1.1.0). Compare the copy with the new pi version before the upgrade lands.
 
+- [ ] Open, Worker Service. `execution.release(stop)` runs in `executionBoundary` outside the walker, so it writes no `worker.step` span. Open the span there. Owner: C6 or later.
+
+- [ ] Open, Worker Service. An `examine` release on `onExit` after a budget end sends no stop, although design section 2 rule 5 names `budget_end/<limit>`. This gap existed before C5. Owner: a later step.
+
+- [ ] Open, Worker Service. A conflict turn in normal conflict mode that ends with no action passes the marker check for a modify/delete or a binary conflict, so gate G commits the "ours" side. Record the conflicted files with no marker at the merge, and refuse them until the agent acts. Owner: C6 (D22) or D23.
+
+- [ ] Open, Worker Service, credential rule. A failed gate G writes the git error text on the `worker.gate` span (`gateFailure`). The text predates C5. Rule whether to redact it with `secrets.redact` or to drop it.
+
 ## Pull requests
 
 | Step | Repository | Pull request                                                    | Merge commit |
@@ -266,3 +280,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | C3   | `engine`   | [#660](https://github.com/kanthorlabs/kanthord-engine/pull/660) | `382ecb07`   |
 | C3b  | `engine`   | [#664](https://github.com/kanthorlabs/kanthord-engine/pull/664) | `87989394`   |
 | C4   | `engine`   | [#665](https://github.com/kanthorlabs/kanthord-engine/pull/665) | `c4cff043`   |
+| C5   | `engine`   | [#666](https://github.com/kanthorlabs/kanthord-engine/pull/666) | `2c1d71af`   |
