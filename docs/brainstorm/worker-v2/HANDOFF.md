@@ -94,7 +94,7 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - `ChainIo.capabilities` is required.
 - The bash tool of `src/agent/tool-table.ts` takes the session `env` through `childEnvironment`, with the `PATH` of pi, not `process.env`. The worker passes the `process.env` of its thread, so the worker result is the same. The serve path no longer passes `PI_OFFLINE` and `PI_CODING_AGENT_DIR` to bash.
 - `tasks_prepare` runs its steps in sequence and includes `state.open`, because the runner has no parallel group before C4. It uses `IMPLEMENT_HOST_PORTS`.
-- `claim.check` of the CLI host answers ok. C3 deletes the port.
+- `claim.check` of the CLI host answered ok. C3 deleted the port.
 - The seed plan node has `judged: []`.
 - A budget end in `tasks_prepare` becomes the stop `budget_end/wall_time`.
 - A SIGINT during the tree preparation gives the stop `worker_stopped`, not `tree_invalid`.
@@ -161,7 +161,7 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 ## Phase C: behavior layers
 
-- [ ] C1. Gate G and restore reduction (D21 layer 1). Replay plus live run. Built and replayed; the live run waits for the cost approval of Ulrich.
+- [x] C1. Gate G and restore reduction (D21 layer 1). Replay plus live run.
 
 ### C1 deviations
 
@@ -169,6 +169,7 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - The replay of the 10 replay seeds on engine `049a22f2` ends `completed` with checks 3, 5, 6 and 8 passed.
 - A `.git` that is not a directory resolves `gitPaths` again for that call, so the gate keeps its code, commit and push. A staged gitlink of a submodule with `ignore = all` passes invariant I. The `branch_changed` detail names full refs.
 - The checkouts stay serial (C4). On `onExit`, the gate still aborts an open merge (C5).
+- The live run of the 11 seeds on engine `049a22f2` (`runs-c1/` of the eval set) ends `completed` with checks 3, 5 and 6 passed: 262 turns, $0.98, 63.3 tasks minutes, against 338 turns, $1.98 and 82.4 minutes of the baseline. The C0 redaction rule gives most of the cut, in `T8TWV9P5`. The other seeds vary in both directions with the model output.
 - [x] C2. Unit record and trailer removal (D21 layer 2). Replay.
 
 ### C2 deviations
@@ -178,7 +179,14 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - The replay of the 10 replay seeds ends `completed` with checks 3, 5 and 6 passed. Check 8 fails by design: each commit holds the recorded tree and message without the trailer, and the outbox adds only `worker.execution.unit_record.put`.
 - Each eval seed holds a `plan`, so a local run reads no `unit_records` and no trailer. The engine tests cover the planning from unit records.
 - Phase C replays after C2 compare with the C2 live baseline in `runs-c2/` of the eval set, not with the phase B records.
-- [ ] C3. `ClaimWatch` and push fence (D21 layer 3). Replay.
+- [x] C3. `ClaimWatch` and push fence (D21 layer 3). Replay.
+
+### C3 deviations
+
+- The per-turn claim read is gone. A 3-turn run with 60 s per turn reads the claim 4 times: 3 watch reads and 1 fence read.
+- The proof hook is new. Before C3, only the two agent tools reacted to an execution-end answer, and the run did not end as `revoked`.
+- The first signal of D4 is not built: no stop order `revoked`, and no slot delivery of stop orders. See the open item.
+- The replay of the 10 replay seeds against the phase B records equals the C2 replay: the same commit trees and messages, and the same outbox apart from times and commit ids. The replay against the C2 baseline in `runs-c2/` follows when that baseline exists.
 - [ ] C4. Parallel groups and fail-early order (D21 layer 5). Replay.
 - [ ] C5. Checkpoint merge, telemetry and stop detail (D21 layer 6). Replay.
 - [ ] C6. The `Conflict` prompt (D22). Replay plus live run.
@@ -201,6 +209,8 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - [ ] Open, in phase B. Each request line of `turns.jsonl` holds the full transcript, so the file grows with the square of the turn count, and `readTurns` loads the whole file with no size cap. Measure one real run in B3 and decide. B3 measures 59.7 MB for 113 turns and 11.1 MB for 42 turns.
 
 - [ ] Open, after phase C. `worker.execution.unit_record.put` refuses an intent other than `implement`, but an evaluation execution of an `implement` node passes the check, because the server stores no claim kind. A row from it can skip a unit in a later execution. Close it with a check of the node state through a Mission Service read port. The change touches the Worker Service and the Mission Service, so Ulrich rules it.
+
+- [ ] Open, waits for Ulrich. Stop order delivery (C3b proposal). The slot channel carries no stop order, so `human_paused` and `instance_archived` never reach a run at the `server` or `container` placement before its claim expires. `StopOrderReason` holds no `revoked`, and `endLiveClaim` queues no stop order, so a revoke waits up to 60 s for `ClaimWatch`. The change touches the Worker Service, the Mission Service and the pool host.
 
 - [ ] Open, with the first open-world capability. The open-world tool record keys by `call_id` only, and a live run records a doubled `call_id` that the reader refuses. Key by the turn position plus the call id.
 
@@ -225,3 +235,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | C0   | `engine`   | [#650](https://github.com/kanthorlabs/kanthord-engine/pull/650) | `cd52d454`   |
 | C1   | `engine`   | [#653](https://github.com/kanthorlabs/kanthord-engine/pull/653) | `049a22f2`   |
 | C2   | `engine`   | [#655](https://github.com/kanthorlabs/kanthord-engine/pull/655) | `90d2293d`   |
+| C3   | `engine`   | [#660](https://github.com/kanthorlabs/kanthord-engine/pull/660) | `382ecb07`   |
