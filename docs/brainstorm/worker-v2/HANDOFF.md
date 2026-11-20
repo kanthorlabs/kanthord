@@ -185,8 +185,18 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - The per-turn claim read is gone. A 3-turn run with 60 s per turn reads the claim 4 times: 3 watch reads and 1 fence read.
 - The proof hook is new. Before C3, only the two agent tools reacted to an execution-end answer, and the run did not end as `revoked`.
-- The first signal of D4 is not built: no stop order `revoked`, and no slot delivery of stop orders. See the open item.
-- The replay of the 10 replay seeds against the phase B records equals the C2 replay: the same commit trees and messages, and the same outbox apart from times and commit ids. The replay against the C2 baseline in `runs-c2/` follows when that baseline exists.
+- The first signal of D4 comes in C3b.
+- The replay of the 10 replay seeds against the phase B records equals the C2 replay: the same commit trees and messages, and the same outbox apart from times and commit ids.
+- The C2 live baseline on engine `90d2293d` (`runs-c2/` of the eval set) ends `completed` for all 11 seeds with checks 3, 5 and 6 passed.
+- The C3 replay against `runs-c2/` equals the baseline on 8 seeds: the same commit trees and messages, and the same outbox apart from times and commit ids. `EPQQ3DAR`, `T8TWV9P5` and `W70FZ7AJ` stop with `redacted_record` at turns 5, 24 and 25, because the live answer holds a fixture value. The C2 engine stops at the same turns. Later phase C replays compare these 8 seeds.
+- [x] C3b. Stop order delivery (D4 first signal). Approved 2026-11-20 by Ulrich.
+
+### C3b deviations
+
+- `endLiveClaim` queues `revoked` for every revoke except the assessment of the execution itself. The first order wins.
+- A pause or an archive of a pool-run instance holds the claim until the unit stops or the hold deadline passes. A human act never sends `revoked` as the first order to a pool-run node. Only the restart recovery and the hold deadline send it.
+- `worker_instance.archive_actor` goes into the existing worker migration, by the migration rule of `AGENTS.md`. The stop orders stay in memory.
+- After a revoke, the fence answers false and the stop release sends no release, also after a requested stop.
 - [ ] C4. Parallel groups and fail-early order (D21 layer 5). Replay.
 - [ ] C5. Checkpoint merge, telemetry and stop detail (D21 layer 6). Replay.
 - [ ] C6. The `Conflict` prompt (D22). Replay plus live run.
@@ -210,7 +220,13 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - [ ] Open, after phase C. `worker.execution.unit_record.put` refuses an intent other than `implement`, but an evaluation execution of an `implement` node passes the check, because the server stores no claim kind. A row from it can skip a unit in a later execution. Close it with a check of the node state through a Mission Service read port. The change touches the Worker Service and the Mission Service, so Ulrich rules it.
 
-- [ ] Open, waits for Ulrich. Stop order delivery (C3b proposal). The slot channel carries no stop order, so `human_paused` and `instance_archived` never reach a run at the `server` or `container` placement before its claim expires. `StopOrderReason` holds no `revoked`, and `endLiveClaim` queues no stop order, so a revoke waits up to 60 s for `ClaimWatch`. The change touches the Worker Service, the Mission Service and the pool host.
+- [x] Closed by C3b. Stop order delivery: the slot and the container frame carry the stop orders, and `endLiveClaim` queues `revoked`.
+
+- [ ] Open, later cleanup. A held override, discard or evidence delete links no execution trace: `holdForStop` passes `null`. Pass the trace of `keptExecution` as the held pause does. The act field `revoked` of `actedOn` also carries the trace of a kept execution; rename it to `linked`.
+
+- [ ] Open, Mission Service. The pending closes of a held override, discard or evidence delete stay in memory. After a server restart, the node stays `Paused` and the human repeats the act. Make them durable only when a reader needs it.
+
+- [ ] Open, server tests. E09.15c of `src/apps/server/e2e-worker-host.test.ts` failed twice under the load of a full verify and passed each time alone. The likely cause is a failed checkpoint push of `branchPushStop` under load. Add a wait on the remote ref, or find the cause.
 
 - [ ] Open, with the first open-world capability. The open-world tool record keys by `call_id` only, and a live run records a doubled `call_id` that the reader refuses. Key by the turn position plus the call id.
 
@@ -236,3 +252,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | C1   | `engine`   | [#653](https://github.com/kanthorlabs/kanthord-engine/pull/653) | `049a22f2`   |
 | C2   | `engine`   | [#655](https://github.com/kanthorlabs/kanthord-engine/pull/655) | `90d2293d`   |
 | C3   | `engine`   | [#660](https://github.com/kanthorlabs/kanthord-engine/pull/660) | `382ecb07`   |
+| C3b  | `engine`   | [#664](https://github.com/kanthorlabs/kanthord-engine/pull/664) | `87989394`   |
