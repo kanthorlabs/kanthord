@@ -230,6 +230,14 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
   - Candidate: 5 of 5 correct, every judge of `conflicts.md` passes. Conflict model turns 5, 5, 5, 3, 9; 82 model requests.
   - The release gate flag is `false` in every run that reached the release gate.
 
+- [x] C6b. The `Conflict` prompt with `{{base_changes}}` is the default. Ruled 2026-11-20 by Ulrich from the C6 live comparison. Replay: no seed has a conflict, so the replay does not change.
+
+### C6b deviations
+
+- `static/prompt/candidate/` is removed. A `conflict` override template without `{{base_changes}}` runs no base-side git process.
+
+- [ ] C7. Worker Service fixes before the merge into `main`: the gate error text, the diff options, the release stop span, the examine stop at a budget end and the modify/delete conflicts. Ruled 2026-11-20 by Aelita as owner.
+
 ## Open items
 
 - [x] S1, closed. Ruled 2026-11-19 by Aelita as owner: the seed export serves only a node that is not closed, as `worker-service.impl.md` § The seed export states. An eval seed is the start state of a node, not a copy of a past execution. A closed node has no start state: its branch holds the finished work and may be deleted. Phase B takes its seeds from open nodes through `worker tasks seed`, and from new executions through the capture hook `KANTHORD_CAPTURE_TASKS`.
@@ -269,8 +277,6 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 
 - [ ] Open, Worker Service, credential rule. A failed gate G writes the git error text on the `worker.gate` span (`gateFailure`). The text predates C5. Rule whether to redact it with `secrets.redact` or to drop it.
 
-- [ ] Open, owner ruling. Make the candidate `Conflict` template the default: move `{{base_changes}}` into `static/prompt/template/conflict.md`. Evidence: C6 deviations. A default change changes the prompt of every conflict turn.
-
 - [ ] Open, before D24. The owner read of a conflict takes the unit id from the commit body. D24 removes that id; move the read to the unit records or the commit attribution span.
 
 - [ ] Open, Worker Service. The patch diffs `diffText` and `changePatch` of `local-git.ts` run `git diff` with no `--no-ext-diff --no-textconv`, so the checkout config can change their output.
@@ -301,3 +307,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | C4   | `engine`   | [#665](https://github.com/kanthorlabs/kanthord-engine/pull/665) | `c4cff043`   |
 | C5   | `engine`   | [#666](https://github.com/kanthorlabs/kanthord-engine/pull/666) | `2c1d71af`   |
 | C6   | `engine`   | [#669](https://github.com/kanthorlabs/kanthord-engine/pull/669) | `44c581a9`   |
+| C6b  | `engine`   | [#671](https://github.com/kanthorlabs/kanthord-engine/pull/671) | `68872c05`   |
