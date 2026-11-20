@@ -169,7 +169,15 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - The replay of the 10 replay seeds on engine `049a22f2` ends `completed` with checks 3, 5, 6 and 8 passed.
 - A `.git` that is not a directory resolves `gitPaths` again for that call, so the gate keeps its code, commit and push. A staged gitlink of a submodule with `ignore = all` passes invariant I. The `branch_changed` detail names full refs.
 - The checkouts stay serial (C4). On `onExit`, the gate still aborts an open merge (C5).
-- [ ] C2. Unit record and trailer removal (D21 layer 2). Replay.
+- [x] C2. Unit record and trailer removal (D21 layer 2). Replay.
+
+### C2 deviations
+
+- The table `worker_unit_record` goes into the existing worker migration, by the migration rule of `AGENTS.md`. C2 needs a new operational store. A store that ran the old worker migration has no unit record table.
+- A node branch with `Kanthord-Done` trailers runs each pending unit once more. The release notes state both points.
+- The replay of the 10 replay seeds ends `completed` with checks 3, 5 and 6 passed. Check 8 fails by design: each commit holds the recorded tree and message without the trailer, and the outbox adds only `worker.execution.unit_record.put`.
+- Each eval seed holds a `plan`, so a local run reads no `unit_records` and no trailer. The engine tests cover the planning from unit records.
+- Phase C replays after C2 compare with the C2 live baseline in `runs-c2/` of the eval set, not with the phase B records.
 - [ ] C3. `ClaimWatch` and push fence (D21 layer 3). Replay.
 - [ ] C4. Parallel groups and fail-early order (D21 layer 5). Replay.
 - [ ] C5. Checkpoint merge, telemetry and stop detail (D21 layer 6). Replay.
@@ -191,6 +199,8 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 - [x] Closed. The `turns.jsonl` writer applies rule 0 and rules 1 to 17, so an answer with a fixture value stays marked, and its replay stops with `redacted_record`. Ruled 2026-11-20 by Aelita as owner: `T8TWV9P5` is a live seed only. The phase C replays use the other 10 seeds. The live record on engine `cd52d454` (`runs-c0/` of the eval set) ends `completed` with checks 3, 5 and 6 passed: 72 turns against 113, $0.53 against $1.09, 18.0 against 35.1 tasks minutes. It has no shell refusal of a marker, and no model text about a marker. Its answer of turn 62 holds a fixture value, so its replay stops at turn 62 with `redacted_record`.
 
 - [ ] Open, in phase B. Each request line of `turns.jsonl` holds the full transcript, so the file grows with the square of the turn count, and `readTurns` loads the whole file with no size cap. Measure one real run in B3 and decide. B3 measures 59.7 MB for 113 turns and 11.1 MB for 42 turns.
+
+- [ ] Open, after phase C. `worker.execution.unit_record.put` refuses an intent other than `implement`, but an evaluation execution of an `implement` node passes the check, because the server stores no claim kind. A row from it can skip a unit in a later execution. Close it with a check of the node state through a Mission Service read port. The change touches the Worker Service and the Mission Service, so Ulrich rules it.
 
 - [ ] Open, with the first open-world capability. The open-world tool record keys by `call_id` only, and a live run records a doubled `call_id` that the reader refuses. Key by the turn position plus the call id.
 
@@ -214,3 +224,4 @@ The chain runner of A1 keeps the behavior of today. These points differ from sec
 | B5   | `engine`   | [#646](https://github.com/kanthorlabs/kanthord-engine/pull/646) | `66b45da5`   |
 | C0   | `engine`   | [#650](https://github.com/kanthorlabs/kanthord-engine/pull/650) | `cd52d454`   |
 | C1   | `engine`   | [#653](https://github.com/kanthorlabs/kanthord-engine/pull/653) | `049a22f2`   |
+| C2   | `engine`   | [#655](https://github.com/kanthorlabs/kanthord-engine/pull/655) | `90d2293d`   |

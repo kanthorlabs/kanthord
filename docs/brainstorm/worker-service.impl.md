@@ -1871,9 +1871,11 @@ The unit record lives in the Worker Service and never in the repository. The wor
 - The verdict unit writes a record only for a node without tasks. For a node with tasks, no reader reads that record.
 - `worker.execution.unit_record.put` is a `client` mutation of `unary` lifetime at `PUT /api/worker/execution/:execution_id/unit_record` that requires a live execution.
 - The server checks the execution proof and the claim. It checks that `unit_id` is the node id or a task id of the pinned revision, and that each `binding_id` names a repository binding of the pinned revision. Another `unit_id` answers 409 `worker.unit_record.unit_unknown`, and another `binding_id` answers 409 `worker.unit_record.binding_unknown`.
+- Before those checks, the server checks that the pinned revision of the node has the intent `implement`. Another intent answers 409 `worker.unit_record.intent_invalid` with `details: { intent }`. Today an evaluation execution of an `implement` node passes this check, because the server stores no claim kind.
+- The write transaction checks the running claim with `requireRunning`. A claim that is not running answers 409 `scheduler.execution.not_running`. The put answers 200 with the stored record.
 - A failed put that is not `revoked` logs `unit record failed` and ends nothing. The put returns its failure to the caller and stores no stop. A `revoked` answer ends the execution as `revoked`.
 - Read: `worker.execution.setup.get` returns `unit_records` for an `implement` execution, under [The execution setup](#the-execution-setup).
-- After merge step M at the claim, the planning runs `git rev-list origin/<base_branch>..HEAD` once in each checkout.
+- After merge step M at the claim, the planning runs `git rev-list origin/<base_branch>..HEAD` once in each checkout. With no record in the setup, it runs no `git rev-list`.
 - A record is valid when its `content_digest` equals the digest of the current unit content, and each commit of `commits` is in the list of the checkout of its `binding_id`.
 - A unit with a valid record is done. A revision that changes a task content reopens only that task.
 - A merge of `origin/<base_branch>` keeps the node commits in the list, so the records stay valid. A node commit that reaches `origin/<base_branch>` leaves the list.
@@ -2790,6 +2792,8 @@ kanthord worker tasks compare <output-a> <output-b>
 - `--output` of `run` defaults to `./tasks-run-<execution_id>`. An existing folder fails unless `--force` is set. `--force` replaces only an empty folder or a run folder, which holds both `result.json` and `state/`.
 - On success, `run` prints one JSON line with the output folder, the end kind and the exit code.
 - The help text and the command page state that `env.setup`, the verification commands and agent `bash` run on the host with its network.
+- The seed `setup` takes an optional `unit_records`; an absent field means none. A seed `plan` decides the pending units, and the run then reads no `unit_records`.
+- A local run answers `worker.execution.unit_record.put` and appends `{ operation: "worker.execution.unit_record.put", body }` to `outbox.json`.
 - `compare` prints differences in route, end, commits, unit results and `metrics.json`. It fails with `cli.worker.tasks.seed_mismatch` when the seed digests of the two runs differ.
 
 Files read by `run`: `<seed-folder>/seed.json`, each `--tree` path, `--replay` file, `--system-prompt` file, each file of `--templates`, and with `--verify` in replay mode the `outbox.json` and the checkouts under `state/` of the recorded folder. Files written by `run`: the output folder and its contents. Files read by `seed`: none. Files written by `seed`: `<output>/seed.json`; `--force` replaces only an empty folder or a folder that holds only `seed.json`, and a symbolic link is refused. Files read by `compare`: `result.json`, `context.json`, `metrics.json` and the checkouts under `state/checkouts/` of each folder. `compare` accepts only full hex commit ids as heads and runs `git log` with `--end-of-options` and the check 8 git settings; any other head fails with `cli.worker.tasks.option_invalid`.
