@@ -20,7 +20,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 ### Architecture
 
 - [ ] Added 2026-11-16 from the page writes of the worker execution refactor. The design pages hold the rules; these documents outside `docs/brainstorm/` still state the old rules.
-  - `engine/docs/cli/worker.md`: `worker.execution.unit_record.put` (`PUT /api/worker/execution/:execution_id/unit_record`) with the 409 codes `worker.unit_record.unit_unknown` and `worker.unit_record.binding_unknown`, the code `repository.node_branch.taken`, the setup answer fields `unit_records` and `commit_identity`, the stop `conflict_unresolved`.
+  - `engine/docs/cli/worker.md`: the code `repository.node_branch.taken`, the setup answer field `commit_identity`, the stop `conflict_unresolved`.
   - `engine/docs/cli/mission.md`: delete the reply action and the `posted` end state; add the transition rule `conflict_unresolved`.
   - `engine/docs/cli/project.md`: every reply post needs a human approval; `reply_policy` is `{ "follows": { "type": "node_completed" } }` in the field rule and the examples; `project.commit_identity.list`; `commit_identity_cascade` in the `project binding apply` answer; the codes `project.commit_identity.pinned`, `project.bindings.repository.commit_identity_required` and `project.bindings.repository.commit_identity_invalid`.
   - `engine/docs/cli/intake.md`: `outbound approve <outbound-request-id> [--text <text>]` (`intake.outbound.request.approve`) and `outbound reject <outbound-request-id>` (`intake.outbound.request.reject`), `awaiting_approval` in the `--state` set, the delete filter that refuses it, `draft` in the read projection.
