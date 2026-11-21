@@ -24,16 +24,16 @@ Each layer file starts with its goals `G1`, `G2`, ..., ends with its decisions a
 
 ## Layer files
 
-The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`.
+The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. The accept of the Fable review sets `reviewed`, and the acceptance of Ulrich at the joint review sets `accepted`.
 
-| Layer | File                                 | Title                        | Purpose                                                                                                   | Round goals    | Status     |
-| ----- | ------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------- | -------------- | ---------- |
-| L1    | [L1-model.md](L1-model.md)           | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today | R3, R4, R6, R8 | `reviewed` |
-| L2    | [L2-agent.md](L2-agent.md)           | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract          | R1, R2, R6, R8 | `planned`  |
-| L3    | [L3-agent-cli.md](L3-agent-cli.md)   | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                      | R1, R6, R8     | `planned`  |
-| L4    | [L4-worker.md](L4-worker.md)         | The worker                   | Specify `coder@1`, the worker layer, the profile selection, the link to the line and the server           | R3, R4, R6, R8 | `planned`  |
-| L5    | [L5-worker-cli.md](L5-worker-cli.md) | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                              | R5, R6, R8     | `planned`  |
-| L6    | [L6-migration.md](L6-migration.md)   | Migration                    | Specify the build order from the code of today                                                            | R7             | `planned`  |
+| Layer | File                                 | Title                        | Purpose                                                                                                   | Round goals    | Status    |
+| ----- | ------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------- | -------------- | --------- |
+| L1    | [L1-model.md](L1-model.md)           | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today | R3, R4, R6, R8 | `draft`   |
+| L2    | [L2-agent.md](L2-agent.md)           | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract          | R1, R2, R6, R8 | `planned` |
+| L3    | [L3-agent-cli.md](L3-agent-cli.md)   | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                      | R1, R6, R8     | `planned` |
+| L4    | [L4-worker.md](L4-worker.md)         | The worker                   | Specify `coder@1`, the worker layer, the profile selection, the link to the line and the server           | R3, R4, R6, R8 | `planned` |
+| L5    | [L5-worker-cli.md](L5-worker-cli.md) | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                              | R5, R6, R8     | `planned` |
+| L6    | [L6-migration.md](L6-migration.md)   | Migration                    | Specify the build order from the code of today                                                            | R7             | `planned` |
 
 L1 links these anchors of later files. Each later file keeps the heading of each anchor.
 
@@ -59,7 +59,7 @@ One meaning per term. A term of today keeps its meaning unless its entry marks `
 - **agent session.** The pi session of one agent profile for one consumer, known by its session identity. A resume restores it after its close ([agent.md](../agent.md#agent-session)). Change: wording only; [agent.vocabulary.md](../agent.vocabulary.md#agent-session) defines it with "run".
 - **run.** One open-to-close of an agent session. A resume of the session starts a new run. A run holds one or more turns. Change: a new term. The command name `kanthord worker tasks run` keeps its name. The global root `run` of `kanthord run agent` and `kanthord run worker` is a command name, not this term.
 - **agent CLI.** The one-shot command `kanthord run agent`. It runs one agent profile from one input and exits. It holds only the LLM credential, on standard input. Change: a new command under the new global root `run` ([L1](L1-model.md#e5-two-clis-fits-with-the-root-run)).
-- **worker CLI.** The one-shot command `kanthord run worker`. It claims one execution, runs it and exits. It holds only the instance key. Change: a new command under the new global root `run` ([L1](L1-model.md#e5-two-clis-fits-with-the-root-run)).
+- **worker CLI.** The one-shot command `kanthord run worker`. It claims one execution, runs it and exits. The instance key is its only start credential and its only credential toward the server, as `serve worker`. It reads the machine key and receives the handover as `serve worker` does. Change: a new command under the new global root `run` ([L1](L1-model.md#e5-two-clis-fits-with-the-root-run)).
 - **consumer.** The code that opens an agent session for its own purpose: a worker, the Workbench Service, the Project Service or the agent CLI. Change: today a consumer is a service ([agent.vocabulary.md](../agent.vocabulary.md#consumer)); the agent CLI is no service.
 - **agent contract.** The input and the output of a run. [L2](L2-agent.md#input-and-output-contract) specifies it. Change: a new term.
 - **agent input.** The input of one run: the profile name, the model selection and runtime, the workspace roots, the budget, the system prompt or the instructions, and the consumer records. Change: a new term.
@@ -84,5 +84,5 @@ One meaning per term. A term of today keeps its meaning unless its entry marks `
 - **line port.** A typed function of the worker host that step code of the line calls outside a turn (`engine/src/worker/unit/foundry-ports.ts`). It is no tool. Change: a new name for the Foundry port of today ([worker-service.vocabulary.md](../worker-service.vocabulary.md#foundry-port)).
 - **server.** KanthorD: one process that holds the services ([architecture.vocabulary.md](../architecture.vocabulary.md#server)). Unchanged.
 - **task.** A part of the WHAT of an `implement` node with its own criterion, but no outcome of its own ([overview.vocabulary.md](../overview.vocabulary.md#task)). Unchanged. A task is one work unit.
-- **work unit.** A task, or an `implement` node with no task, which is its own work unit ([worker-service.md](../worker-service.md)). An `examine` node holds no task. Change: the worker selects one profile per work unit; the selection method is open **(Q4)**.
+- **work unit.** A task, or an `implement` node with no task, which is its own work unit ([worker-service.md](../worker-service.md)). An `examine` node holds no task. Unchanged. The profile selection method and its unit are open **(Q4)**.
 - **execution.** The unit of work that the Scheduler Service records for one node and one worker instance ([overview.vocabulary.md](../overview.vocabulary.md#execution)). Unchanged. An agent knows no execution.

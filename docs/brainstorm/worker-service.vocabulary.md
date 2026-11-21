@@ -466,7 +466,7 @@ The set is closed and it holds two values.
 - **CLI host**, which calls the Foundry from `kanthord worker tasks run` on one machine
 
 Both Foundry hosts run the same code. The Foundry does not know which one calls it.
-In the model of [Agent V2 and Worker V3](agent-worker-v3/L1-model.md#worker), the term for both is "the worker host". The worker host of this page is its server mode, and the CLI host is its offline mode. The code keeps the names.
+In the model of [Agent V2 and Worker V3](agent-worker-v3/L1-model.md#worker), the term for both is "the worker host". The worker host of this page is its server mode, and the CLI host is its offline mode. The offline mode covers the `implement` chain only. The code keeps the names.
 
 ## host tool
 
