@@ -462,6 +462,7 @@ The Agent component owns these keys of the section `agent`.
 
 - Sensitive text redaction is the first [session hook](agent.vocabulary.md#session-hook). It replaces each [sensitive text](agent.vocabulary.md#sensitive-text) of an agent session with a [redaction marker](agent.vocabulary.md#redaction-marker).
 - It acts before pi persists a message and before the model reads it.
+- Superseded 2026-11-21 by R2-H of Ulrich: KanthorD does not modify LLM output, so assistant text, thinking blocks and the compaction summary stay unredacted, and a finding raises a rotate warning. [L1-model.md](agent-worker-v3/L1-model.md#session-file) holds the rule; the rules below for LLM output are superseded.
 - The rule module is `engine/src/agent/sensitive-text.ts`. The session hooks live in `engine/src/agent/hooks/sensitive-text-redaction.ts`.
 - One redaction object exists for each call of `sensitiveTextRedaction`. It holds the rule set, one growing known set, the redaction table and the tag. It exposes two session hooks: `restore` and `hook`.
 - `openSession` creates the redaction object from the pi session id, unless the consumer passes one. The input of `openSession` holds exactly one of `knownSecrets` and `redaction`, so no consumer opens a session without a redaction.
