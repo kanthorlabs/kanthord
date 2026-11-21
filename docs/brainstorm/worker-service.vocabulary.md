@@ -454,6 +454,7 @@ Display name: Worker Foundry.
 The set of functions is closed and it holds three values: `foundryImplement`, `foundryEvaluation` and `foundryExamine`.
 Execution 1 of "Add password reset" calls `foundryImplement` once, and that call runs the three tasks and the release gate.
 [The Foundry](worker-service.impl.md#the-foundry) defines the contract.
+In the model of [Agent V2 and Worker V3](agent-worker-v3/L1-model.md#worker), the term for this part is "the line". The code keeps the name Foundry.
 
 ## Foundry host
 
@@ -465,6 +466,7 @@ The set is closed and it holds two values.
 - **CLI host**, which calls the Foundry from `kanthord worker tasks run` on one machine
 
 Both Foundry hosts run the same code. The Foundry does not know which one calls it.
+In the model of [Agent V2 and Worker V3](agent-worker-v3/L1-model.md#worker), the term for both is "the worker host". The worker host of this page is its server mode, and the CLI host is its offline mode. The code keeps the names.
 
 ## host tool
 

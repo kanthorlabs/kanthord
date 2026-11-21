@@ -86,9 +86,9 @@ Code facts:
 
 - **D31 (own idea): run the `tasks` phase as a standalone local command through the Foundry ports and the agent tools of D32.** The command uses production step code with no step of its own. No `tasks` step holds placement logic or imports a transport constructor; placement lives only in the Foundry host. The command adds one production behavior: the capture hook of section 5.7. Reason: a developer runs and replays the core of an execution on one machine with no server access and can change one variable and compare the result.
 
-- **D32 (EM ruling 2026-11-17): the Foundry is the core of a node execution. It is a custom framework on pi-coding-agent.** D32 extends D31 to all three chains.
+- **D32 (EM ruling 2026-11-17): the Foundry is the core of a node execution. It is a custom framework on pi-coding-agent.** D32 extends the Foundry boundary of D31 to all three chains. The standalone command of D31 covers only `implement`.
   - A Foundry host calls one function of the Foundry per chain: `foundryImplement`, `foundryEvaluation` or `foundryExamine`. The Foundry does not know its Foundry host.
-  - The Foundry host has two forms: the KanthorD worker and the standalone CLI. Both forms run the same code of the Foundry.
+  - The Foundry host has two forms: the KanthorD worker and the standalone CLI. The KanthorD worker runs the Foundry of all three chains. The standalone CLI runs only the Foundry of `implement` (section 5.7), and both forms run the same code for it.
   - A human, a harness or the long-running worker process prepares the input. The same consumer takes the local materials after the phase and acts on them.
   - The Foundry depends only on its input and on the host tools that the Foundry host injects. It constructs no client, no transport and no resource.
   - The Foundry makes a side effect only through a host tool. A host tool is an agent tool or a Foundry port.

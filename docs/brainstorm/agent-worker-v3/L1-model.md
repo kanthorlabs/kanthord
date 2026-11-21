@@ -20,18 +20,20 @@ The direction of Ulrich is his thinking, not a fixed specification. This section
 
 ### E1. Role profiles `bee@1`, `fee@1`, `te@1` (fits, with a fit rule)
 
-- **Verdict.** Fits. Ulrich found in the dogfood run that `swe@1` alone is not specific enough: "During the dogfooding I realized that we need more specific agent than just use swe@1 for all in one" (2026-11-21).
+- **Verdict.** Fits. A teammate of Ulrich ran the dogfood on another machine. From that run, Ulrich concluded that `swe@1` alone is not specific enough: "During the dogfooding I realized that we need more specific agent than just use swe@1 for all in one" (2026-11-21).
+- **Dogfood finding.** The tasks of the `apps` repository, a React app with Tailwind, did not follow the UI. The session lacked the React and Tailwind context.
+- **Context mechanism of today.** A session loads no context file by itself (`engine/src/agent/agent-session.ts`, `sessionParts`, `noContextFiles: true`). A repository gives its context through two parts of the Repository prompt: the instruction file of its repository binding (`prompts.instruction_file`, absent by default) and the stored Repository prompt ([agent.md](../agent.md#prompt-composer), layers 2 and 3). The file `apps/AGENTS.md` exists in the `apps` repository.
 - **Evidence for the fit.**
   - The pages already name a testing profile: `tdd@1` runs `swe@1`, `te@1` and `re@1` ([overview.md](../overview.md), section "Worked example: `tdd@1`"; [HANDOFF.md](../HANDOFF.md), item "Multi-agent workers").
   - The Role of `swe@1` holds no rule of a stack (`engine/static/prompt/swe@1.md`). A role adds the method of its stack.
 - **Fit rule.**
-  1. Add `bee@1`, `fee@1` and `te@1` as role profiles. Keep `swe@1`, name unchanged, as the generalist profile **(Q2)**.
-  2. `swe@1` is the configuration owner of the four implementation profiles **(Q3)**. [Constraint C1](#e1-constraints) holds the scope.
-  3. A work unit selects its profile. A task is one work unit, and an `implement` node with no task is its own work unit ([worker-service.md](../worker-service.md)). An absent selection selects `swe@1` **(Q4)**. [L4](L4-worker.md#profile-selection) holds the detail.
-  4. The Foundry holds one agent session per profile of an execution. It opens each session at the first use of its profile. Today one `agent.open` runs per execution (`engine/src/worker/unit/chain-implement.ts`, `implementWorkspaceNodes`).
+  1. Add `bee@1`, `fee@1` and `te@1` as role profiles. Keep `swe@1`, name unchanged, as the generalist default profile and the evaluation baseline. A role profile that does not do better than `swe@1` on the same inputs, with the same repository context, leaves the catalog.
+  2. `swe@1` is the configuration owner of the four implementation profiles. [Constraint C1](#e1-constraints) holds the scope.
+  3. The worker selects one profile per work unit. A task is one work unit, and an `implement` node with no task is its own work unit ([worker-service.md](../worker-service.md)). The selection method is open **(Q4)**. [L4](L4-worker.md#profile-selection) holds the detail.
+  4. The line holds one agent session per profile of an execution. It opens each session at the first use of its profile. Today one `agent.open` runs per execution (`engine/src/worker/unit/chain-implement.ts`, `implementWorkspaceNodes`).
   5. In `coder@1`, `te@1` is the profile of a task whose deliverable is a test. It runs in the same `unit.turn` step as each other task. A line with `te@1` as its own station is the worker `tdd@1`, which stays an example.
   6. `swe@1` stays the profile of each turn that belongs to no work unit, for example the conflict turn. It is also the profile of `examine`, because an `examine` node holds no task ([mission-service.md](../mission-service.md)), and of the Workbench.
-  7. The profile prompt holds one coding text that the coding profiles share. A Role holds only the role statement and its method. [L2](L2-agent.md#profile-prompts) writes the texts. Each method line of a Role traces to one dogfood finding **(Q1)**.
+  7. The profile prompt holds one coding text that the coding profiles share. A Role holds only the role statement and its method. [L2](L2-agent.md#profile-prompts) writes the texts. Each method rule of a Role traces to one dogfood finding or to one evaluation result.
   8. The four implementation profiles hold the seven tools of today. A role gets another tool only for a need of today. [L2](L2-agent.md#coding-tools) applies the rule.
   9. Build in two layers. Layer 1 is the role profiles in the runtime catalog and the agent CLI. Layer 1 adds no server operation, no server record and no server view. Layer 2 is the work unit selection, the session per profile and the execution setup. Layer 2 also ships the shared coding text as a new prompt part of `swe@1` and `re@1` in the worker path. [L6](L6-migration.md) starts layer 2 after layer 1 passes its check.
 
@@ -39,7 +41,7 @@ The direction of Ulrich is his thinking, not a fixed specification. This section
 
 - **C1. One configuration owner.** A role profile has no enablement, agent provider, default configuration, fallback chain, cooldown, claim selection, pin, worker binding entry or Binding prompt of its own. It uses those of `swe@1`. Reason: the claim scans each name of `agent_names` and answers no work when one name cools (`engine/src/worker/agent-selection.ts`). Each separate name also triples the configuration work of a human ([agent.md](../agent.md#agent-configuration)). `agent_names` of `coder@1` stays `["swe@1"]`. The claim, the inference authorization, the execution setup and the binding checks read `agent_names` (`engine/src/worker/agent-selection.ts`, `authorization.ts`, `execution-setup.ts`, `service.ts`). The role profiles of a worker are a separate list that only the profile selection and the prompt composition read.
 - **C2. One LLM credential per execution.** All sessions of one execution use the one model selection and the one credential of `swe@1`, as today. No role has a model of its own in this round.
-- **C3. Selection per work unit, not per repository.** One node can span a backend and a frontend repository ([mission-service.md](../mission-service.md)). One session works from the checkouts root (`engine/src/agent/agent-port.ts`, `checkoutsRootOf`). A per-repository value has no single answer for such a node.
+- **C3. One node can span repositories.** One node can span a backend and a frontend repository ([mission-service.md](../mission-service.md)). One session works from the checkouts root (`engine/src/agent/agent-port.ts`, `checkoutsRootOf`). A per-repository value has no single answer for such a node.
 - **C4. Repository conventions stay in the Repository prompt.** The instruction file, `prompts.repository` and the Binding prompt carry them ([agent.md](../agent.md#prompt-composer)). A Role holds no convention of one repository.
 - **C5. Today reads one agent.** The session open reads only `setup.agents[0]` (`engine/src/agent/agent-port.ts`, `WORKING_AGENT`). A role profile in a worker thus needs the layer 2 change of the open, not only a catalog entry.
 - **C6. The server part lists only configuration owners.** A role profile is in the runtime catalog. It is in no enablement list, no row of the agent page and no `prompts.agents` key. Reason: `AGENT_NAMES` (`engine/src/agent/contract.ts`) keys `AGENT_DECLARATIONS` (`engine/src/agent/catalog.ts`) and one `prompts.agents` key per name (`engine/src/project/contract.ts`). The enablement and the agent page read the catalog ([agent.md](../agent.md#agent-catalog)). The shared coding text is a new value of the closed set `PromptPart` (`engine/src/agent/contract.ts`), and `engine/src/agent/prompt-files.ts` lists only the Standard and the Role. It changes the composed prompt and the references of each `swe@1` and `re@1` execution, so it ships in layer 2.
@@ -47,7 +49,7 @@ The direction of Ulrich is his thinking, not a fixed specification. This section
 
 ### E2. "Stateless" (fits, with a definition)
 
-- **Evidence.** A pi session holds state inside one run. The worker host passes a session root, and pi writes a session file for the resume (`engine/src/agent/agent-port.ts`, `sessionManagerOf`; [agent.md](../agent.md#agent-session)). The CLI host records each turn to `turns.jsonl` for the replay ([design.md §5.7](../worker-execution-refactor/design.md#57-standalone-tasks-run)). The Foundry sends several turns to one session (`engine/src/worker/unit/native-agent-session.ts`, `prompt` and `instruct`).
+- **Evidence.** A pi session holds state inside one run. The worker host passes a session root, and pi writes a session file for the resume (`engine/src/agent/agent-port.ts`, `sessionManagerOf`; [agent.md](../agent.md#agent-session)). The offline mode records each turn to `turns.jsonl` for the replay ([design.md §5.7](../worker-execution-refactor/design.md#57-standalone-tasks-run)). The line sends several turns to one session (`engine/src/worker/unit/native-agent-session.ts`, `prompt` and `instruct`).
 - **Fit.** [L1-D11](#decisions) defines "stateless". [Statelessness](#statelessness) holds the checks.
 
 ### E3. Agent capability and worker capability (fits, with a rule)
@@ -57,20 +59,22 @@ The direction of Ulrich is his thinking, not a fixed specification. This section
 
 ### E4. The worker "integrates deeply with KanthorD" (fits, with a limit)
 
-- **Evidence.** The Foundry constructs no client and no transport. It makes a side effect only through a host tool ([design.md D32](../worker-execution-refactor/design.md#1-decisions)). `kanthord worker tasks run` runs the same Foundry code with no server call (`engine/src/worker/unit/tasks-run.ts`).
-- **Fit.** Only the Foundry host of a worker talks to the server ([L1-D2](#decisions)). The offline run and the replay of D31 stay.
+- **Evidence.** The line constructs no client and no transport. It makes a side effect only through a host tool ([design.md D32](../worker-execution-refactor/design.md#1-decisions)). `kanthord worker tasks run` runs the same line code of `implement` with no server call (`engine/src/worker/unit/tasks-run.ts`).
+- **Fit.** Only the worker host in server mode talks to the server ([L1-D2](#decisions)). The offline mode and the replay of D31 stay.
 
-### E5. Two CLIs (fits; the meaning of the worker CLI is open)
+### E5. Two CLIs (fits, with the root `run`)
 
-- **Evidence.** `kanthord serve worker` starts one worker instance from its instance configuration and runs until it stops (`engine/docs/cli/other.md`, section `serve worker`). The direction pairs the worker CLI with an agent CLI that takes one input.
-- **Suggestion.** Build the worker CLI as a mode of `kanthord serve worker` that claims one execution and exits **(Q5)**. Keep one process type that runs a worker against a server. The instance key stays its only credential.
-- **Reason.** One process type keeps one credential path. A run of one execution matches the agent CLI for a human who develops a profile or a worker.
+- **Evidence.** `kanthord serve worker` starts one worker instance from its instance configuration and runs until it stops. The instance key is its only credential, and it refuses `--token` (`engine/docs/cli/other.md`, section `serve worker`). The direction pairs the worker CLI with an agent CLI that takes one input.
+- **Fit.** Both CLIs are one-shot commands under a new global root `run`. The binary stays `kanthord`, and `serve` stays the long-running process.
+  1. The agent CLI is `kanthord run agent`. It runs one agent profile from one input and exits ([L3](L3-agent-cli.md)). It holds only the LLM credential, on standard input, and no KanthorD credential.
+  2. The worker CLI is `kanthord run worker`. It claims one execution, runs it and exits ([L5](L5-worker-cli.md)). It holds only the instance key, as `serve worker`, and refuses `--token`.
+  3. Change: `run` joins the closed set of global root names. Today the set holds `config`, `upgrade`, `serve` and `auth` (`engine/docs/cli/other.md`, section "Closed root names and option scope").
+  4. [L5](L5-worker-cli.md) decides whether `kanthord worker tasks run` moves under `run worker`.
 
-### E6. Profile names `ops@1` and `comm@1` (name conflict)
+### E6. Profile names `ops@1` and `comm@1` (fits, with another name for Operation Setup)
 
-- **Problem.** The direction gives `ops@1` to Operation Setup and `comm@1` to the Communication agent "Yumi". The branch `origin/feature/workbench-v2` names Yumi `ops@1`.
-- **Evidence.** `git show origin/feature/workbench-v2:src/agent/catalog.ts`: `"ops@1"` has `display_name: "Yumi"`.
-- **Suggestion.** At the merge of `feature/workbench-v2`, rename the Yumi profile to `comm@1` **(Q7)**. This round does not design `comm@1`.
+- **Evidence.** The direction gives `ops@1` to Operation Setup and `comm@1` to the Communication agent "Yumi". The branch `origin/feature/workbench-v2` names Yumi `ops@1`: `git show origin/feature/workbench-v2:src/agent/catalog.ts` gives `"ops@1"` with `display_name: "Yumi"`.
+- **Fit.** Yumi keeps `ops@1`. Operation Setup takes another name when a later round designs it. This round designs neither profile.
 
 ### Points that fit with no rule
 
@@ -83,12 +87,13 @@ The direction of Ulrich is his thinking, not a fixed specification. This section
 
 (G1)
 
-The model has three actors: the agent, the worker and the server. A worker has three parts: the Foundry host, the Foundry and the worker layer.
+The model has three actors: the agent, the worker and the server. A worker has three parts: the worker host, the line and the worker layer.
 
 ```mermaid
 flowchart LR
-  S[Server: KanthorD] <-->|claim, handover, setup, release, worker tool calls| H[Foundry host]
-  H -->|ports| F[Foundry]
+  S[Server: KanthorD] <-->|server mode: claim, handover, setup, release, worker tool calls| H[Worker host]
+  LF[Local files: seed, output, replay] <-->|offline mode| H
+  H -->|ports| F[Line]
   H -->|capabilities, worker tools| WL[Worker layer]
   F -->|agent.open per profile, turns| A[Agent sessions]
   WL -->|instructions, capabilities| A
@@ -97,11 +102,12 @@ flowchart LR
 
 The diagram states these facts:
 
-- The server and the Foundry host exchange the claim, the handover, the setup, the release and the calls of worker tools.
-- The Foundry host gives ports to the Foundry. It gives capabilities and worker tools to the worker layer.
-- The Foundry opens one agent session per profile and sends turns to it.
+- In server mode, the server and the worker host exchange the claim, the handover, the setup, the release and the calls of worker tools.
+- In offline mode, the worker host reads a seed and writes the output folder and the replay record. It makes no server call.
+- The worker host gives ports to the line. It gives capabilities and worker tools to the worker layer.
+- The line opens one agent session per profile and sends turns to it.
 - The worker layer gives instructions and capabilities to each agent session.
-- Each agent session gives the turn end, the text and the session events back to the Foundry.
+- Each agent session gives the turn end, the text and the session events back to the line.
 
 ### Agent
 
@@ -123,14 +129,20 @@ Change: the Agent component of [agent.md](../agent.md#scope) splits into two par
 
 ### Worker
 
-- A worker is a manufacturing line for one category of work. `coder@1` and `reviewer@1` are the lines of the coding category.
-- The **Foundry host** links the line to the outside. The worker host talks to the server; the CLI host works on local files.
-- The **Foundry** is the line logic: the `tasks` phase of each chain and its steps (`engine/src/worker/unit/foundry-implement.ts`, `foundry-evaluation.ts`, `foundry-examine.ts`).
+- A worker automates one category of work. `coder@1` and `reviewer@1` are the workers of the coding category. Change: the direction calls the whole worker a manufacturing line. The V3 pages use "line" only for the part below.
+- The **worker host** links the line to the outside. It has two run modes:
+  - **Server mode** talks to KanthorD: `kanthord serve worker` and `kanthord run worker`.
+  - **Offline mode** works on local files, a seed and a replay, with no server call: `kanthord worker tasks run` (`engine/src/worker/unit/tasks-run.ts`). It covers the `implement` chain only (`engine/docs/cli/worker.md`, section `tasks run`).
+- The **line** is the `tasks` phase of each chain and its steps, behind typed ports (`engine/src/worker/unit/foundry-implement.ts`, `foundry-evaluation.ts`, `foundry-examine.ts`, `foundry-ports.ts`).
 - The **worker layer** is what the line adds to an agent session: worker instructions, worker capabilities and the worker tools that they register.
 - The worker selects the profile of each session. The agent never selects a profile or a worker.
-- The Foundry sits inside the worker, between the Foundry host and the agent. The steps outside `tasks` run in the worker host (`engine/src/worker/unit/chain-runner.ts`).
-- Change: the Foundry opens an agent session only through the agent contract of [L2](L2-agent.md). The port `agent.open` builds the agent input from the execution setup and the worker layer (`engine/src/worker/unit/foundry-ports.ts`, `AgentPort`).
-- The Foundry rules of D32 stay: no client, no transport, no credential, and a side effect only through a host tool.
+- The line sits inside the worker, between the worker host and the agent. The steps outside `tasks` run in the worker host (`engine/src/worker/unit/chain-runner.ts`).
+- The port seam of the line stays. It serves the offline mode, the replay and the eval set.
+  - The import closure of the line holds no client, no transport and no credential (`engine/src/worker/unit/foundry-boundary.test.ts`).
+  - The build rule `FoundryReadsSshAccess` refuses a `tasks` step that reads `sshAccess` (`engine/src/worker/unit/chain.ts`).
+- Every D32 rule of the Foundry applies to the line: no client, no transport, no credential, and a side effect only through a host tool ([design.md D32](../worker-execution-refactor/design.md#1-decisions)).
+- Change: the line opens an agent session only through the agent contract of [L2](L2-agent.md). The port `agent.open` builds the agent input from the execution setup and the worker layer (`engine/src/worker/unit/foundry-ports.ts`, `AgentPort`).
+- The code keeps its names this round: `foundry-*.ts`, `FoundryHost`, `FoundryStep` and the CLI host. "Line" names the code of the Foundry. "Worker host" names the code of each Foundry host.
 
 ### Server
 
@@ -150,14 +162,14 @@ Change: the Agent component of [agent.md](../agent.md#scope) splits into two par
 
 (G1)
 
-| Actor or part        | Owns                                                                                                                           | Does not own                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| Agent (runtime)      | Profiles, session open, profile prompt, profile tools, guards, wrapped `bash`, child environment, pi tool install, prompt join | A server call, a database, a durable record, a model choice     |
-| Worker: Foundry host | Server link, host resources, Foundry ports, worker tool implementations, telemetry sink, steps outside `tasks`                 | The line logic of `tasks`; the profile prompt                   |
-| Worker: Foundry      | The `tasks` phase: turns, gate, verification, unit records, release gate                                                       | A client, a transport, a credential, an SSH signer, a tree pool |
-| Worker: worker layer | Worker instructions, worker capabilities, worker tools, the tool grant of a session, the profile selection                     | The session open; the guards; a credential                      |
-| Server               | Agent configuration and selection, custody, prompt sources and references, scheduling, records                                 | An agent session of a worker execution                          |
-| Other consumer       | Its consumer tools and hooks; its credential source                                                                            | A profile; a guard of the agent runtime                         |
+| Actor or part        | Owns                                                                                                                                                    | Does not own                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Agent (runtime)      | Profiles, session open, profile prompt, profile tools, guards, wrapped `bash`, child environment, pi tool install, prompt join                          | A server call, a database, a durable record, a model choice     |
+| Worker: worker host  | Server link in server mode, local files in offline mode, host resources, line ports, worker tool implementations, telemetry sink, steps outside `tasks` | The `tasks` phase; the profile prompt                           |
+| Worker: line         | The `tasks` phase: turns, gate, verification, unit records, release gate                                                                                | A client, a transport, a credential, an SSH signer, a tree pool |
+| Worker: worker layer | Worker instructions, worker capabilities, worker tools, the tool grant of a session, the profile selection                                              | The session open; the guards; a credential                      |
+| Server               | Agent configuration and selection, custody, prompt sources and references, scheduling, records                                                          | An agent session of a worker execution                          |
+| Other consumer       | Its consumer tools and hooks; its credential source                                                                                                     | A profile; a guard of the agent runtime                         |
 
 ## Agent–worker boundary
 
@@ -185,7 +197,7 @@ Boundary rules:
 3. In the worker path, the server calls that function at the execution setup. The agent input carries the composed text and its references, and the agent adds no text. Today the server joins the parts with `finalPrompt` (`engine/src/agent/prompt-render.ts`), which `prompt-resolve.ts`, `service.ts` and `engine/src/worker/execution-setup.ts` call. The session takes `agent.prompt.final` whole (`agent-port.ts`). The composition function replaces `finalPrompt` in the worker path. The Workbench and the Project Service keep the second join `systemPrompt` of `prompt-render.ts` this round (`engine/src/workbench/service.ts`, `engine/src/project/environment-agent.ts`).
 4. In the agent CLI path, the agent composes the shipped profile prompt and the instructions of the input.
 5. The override of a profile prompt file by the agent directory of the server host stays a server feature ([agent.md](../agent.md#prompt-composer)).
-6. Change: the KanthorD protocol lines of each Role move to the worker instructions. In `swe@1.md`, these are two sentences of "Execution": "The worker runs the verifications after the turn." of item 4 and "The worker merges the base branch itself." of item 5. The method rules of items 4 and 5 stay in the Role. In `re@1.md`, these are item 8 of "Judgement" and the section "Findings". The Role of `re@1` keeps its judgement rules 1 to 7.
+6. Change: the KanthorD protocol text of each Role moves to the worker instructions. In `swe@1.md`, these are two sentences of "Execution": "The worker runs the verifications after the turn." of item 4 and "The worker merges the base branch itself." of item 5. The method rules of items 4 and 5 stay in the Role. In `re@1.md`, these are item 8 of "Judgement" and the section "Findings". The Role of `re@1` keeps its judgement rules 1 to 7.
 7. The guards of the agent wrap every tool, a worker tool included. The worker cannot remove a guard.
 
 ## Tool ownership rule
@@ -198,7 +210,7 @@ Boundary rules:
 4. A worker tool reaches the agent only as a pi tool or an MCP tool that a worker capability registers (D32). The agent sees its name, its schema and its result.
 5. Change: the allowlist guard holds the profile tools and the tool names that the worker grants. Today it holds `tools` and `host_tools` of the declaration (`engine/src/agent/tool-table.ts`, `sessionTools`).
 6. In a confined session, the confinement guard refuses each tool with no location declaration (`engine/src/agent/hooks/checkout-confinement.ts`). Each granted tool carries its location list at the grant, also when the list is empty. A new tool of a confined profile needs a D27 test ([design.md §5.4](../worker-execution-refactor/design.md#54-credentials)).
-7. A Foundry port is no tool. Step code calls it outside a turn, and the model never sees it.
+7. A line port is no tool. Step code calls it outside a turn, and the model never sees it.
 
 [L2](L2-agent.md#coding-tools) applies rule 1. [L4](L4-worker.md#worker-tools) applies rules 2 to 6 to the worker tools of `coder@1` and `reviewer@1`.
 
@@ -228,14 +240,30 @@ Each tool, hook, port and prompt part that an agent session gets today, with its
 | Session store by execution                                                                                                       | `src/agent/session-directory.ts`                                                                                            | Worker layer. The agent takes the store as input                                                   |
 | Session trace                                                                                                                    | `src/worker/unit/native-agent.ts`; `src/worker/unit/agent-telemetry.ts`                                                     | Worker layer records; the agent emits the events                                                   |
 | Model runtime factory                                                                                                            | `src/worker/unit/model-runtime.ts`; `frozenStore` in `src/llm/refresh-watch.ts`                                             | Consumer. The agent takes the runtime as input                                                     |
-| Capability list                                                                                                                  | `FoundryHost.capabilities` in `src/worker/unit/foundry.ts`                                                                  | Worker layer: worker capabilities                                                                  |
-| Foundry ports                                                                                                                    | `src/worker/unit/foundry-ports.ts`                                                                                          | Worker: Foundry host. No change of owner                                                           |
+| Capability list                                                                                                                  | `capabilities` of `AgentPortInput` in `src/agent/agent-port.ts`; `FoundryHost.capabilities` in `src/worker/unit/foundry.ts` | Worker layer: worker capabilities. Change: `FoundryHost.capabilities` has no reader and leaves     |
+| Line ports                                                                                                                       | `src/worker/unit/foundry-ports.ts`                                                                                          | Worker: the worker host implements them. No change of owner                                        |
 | `base.md`; Roles `swe@1.md`, `re@1.md`, `env@1.md`                                                                               | `static/prompt/`                                                                                                            | Agent: profile prompt. Change: boundary rule 6; the shared coding text                             |
 | `workbench.md`, template `framing-workbench`                                                                                     | `static/prompt/`; `static/prompt/template/`                                                                                 | Consumer prompt of the Workbench. Unchanged                                                        |
 | Other templates (`work`, `framing-worker`, `task-revision`, `criterion-revision`, `evaluation`, `examine`, `repair`, `conflict`) | `static/prompt/template/`                                                                                                   | Worker layer: worker instructions and turn texts                                                   |
 | Instruction file, stored Repository prompt, Binding prompt                                                                       | [agent.md](../agent.md#prompt-composer)                                                                                     | Worker layer. The server keeps the storage                                                         |
 
 No tool of today goes to removal. The removal applies only to the agent catalog fields that name worker tools.
+
+### Extension rule
+
+(G3)
+
+1. Each pi extension is one module that exports one extension factory. Its test file is next to it.
+2. pi receives each extension as a function at session start: an `InlineExtension` through `extensionFactories` (`engine/src/agent/agent-session.ts`, `sessionParts`). The in-memory closures thus stay: the redaction secrets, the worker tool transport function and the confinement roots.
+3. No consumer loads an extension from a file path.
+4. The extension lists of [L2](L2-agent.md) and [L4](L4-worker.md) follow this rule.
+
+Change: these modules of engine `c864130e` break rule 1.
+
+- `engine/src/agent/hooks/sensitive-text-redaction.ts` returns two factories, `restore` and `hook`, from `sensitiveTextRedaction`.
+- No test names `homeRelativeCwd`, `pinnedLayersHook` or `toolAllowlist`.
+- Only `engine/src/agent/hooks/sensitive-text-redaction.test.ts` tests `toolApproval`.
+- The capabilities `executionEvidence` and `linkUpdates` have no test file next to them. `engine/src/worker/unit/agent-port.test.ts` tests them.
 
 ## Statelessness
 
@@ -262,8 +290,8 @@ No tool of today goes to removal. The removal applies only to the agent catalog 
 - **What.** The `api_key` or `oauth` credential of the selected agent provider, and its routing metadata.
 - **Enters.** The agent runtime, only as the pi credential store inside the model runtime.
 - **Holders.**
-  - Worker path: `credential.store` (C1) of the worker host, from the handover.
-  - Agent CLI and offline mode: one `frozenStore` from standard input (`engine/src/llm/refresh-watch.ts`).
+  - Worker path: `credential.store` (C1) of the worker host in server mode, from the handover.
+  - `run agent` and the offline mode: one `frozenStore` from standard input (`engine/src/llm/refresh-watch.ts`).
   - Workbench: `custody.workbenchCredentials`, holder `server` (`engine/src/apps/server/index.ts`).
   - Project Service: `custody.serverAgentCredentials`, holder `server` (`engine/src/apps/server/index.ts`).
 - **Extension reach.** Each extension factory can reach the credential through `ctx.modelRegistry` of pi. A lint rule forbids `modelRegistry` and `registerProvider` (`engine/eslint.config.js`). Change: the lint glob covers each directory that holds a capability or a consumer hook. Today it covers only `src/agent/capabilities/`.
@@ -272,26 +300,29 @@ No tool of today goes to removal. The removal applies only to the agent catalog 
 
 ### Credentials that never enter the agent
 
-| Credential                                | Holder                                                                                                                               | Never passed in                                                                                                                 |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| Instance key and machine key              | The worker host of `serve worker`. The worker transport holds a bearer from the instance key (`engine/src/apps/worker/transport.ts`) | The agent, the Foundry, a capability, a child process. A worker tool closes over a transport function and never gets the bearer |
-| Handover key and report key               | `credential.store` (C1); zeroed at dispose                                                                                           | The agent, the Foundry, every context key                                                                                       |
-| SSH identity or relay signer of a binding | `ssh.access` (C2); read by `workspace.node`, `workspace.review`, `branch.push`, `repository.fetchBase`                               | The agent, each `tasks` step, a child process (`SSH_AUTH_SOCK` removed)                                                         |
-| Custody master key, JWT signing key       | The server                                                                                                                           | Each worker host, agent and Foundry                                                                                             |
+| Credential                                | Holder                                                                                                                                                             | Never passed in                                                                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Instance key and machine key              | The worker host in server mode: `serve worker` and `run worker`. The worker transport holds a bearer from the instance key (`engine/src/apps/worker/transport.ts`) | The agent, the line, a capability, a child process, `run agent`. A worker tool closes over a transport function and never gets the bearer |
+| Handover key and report key               | `credential.store` (C1); zeroed at dispose                                                                                                                         | The agent, the line, every context key, `run agent`                                                                                       |
+| SSH identity or relay signer of a binding | `ssh.access` (C2); read by `workspace.node`, `workspace.review`, `branch.push`, `repository.fetchBase`                                                             | The agent, each `tasks` step, a child process (`SSH_AUTH_SOCK` removed)                                                                   |
+| Custody master key, JWT signing key       | The server                                                                                                                                                         | Each worker host, agent and line, `run agent`                                                                                             |
 
-A secret of a capability follows the capability rules of [design.md §5.4](../worker-execution-refactor/design.md#54-credentials). No capability of this round holds one. The agent CLI takes only the LLM credential and no KanthorD credential.
+A secret of a capability follows the capability rules of [design.md §5.4](../worker-execution-refactor/design.md#54-credentials). No capability of this round holds one.
+
+- `run agent` takes only the LLM credential, on standard input. It takes no KanthorD credential: no instance key, no machine key and no token. It declares no `--token`.
+- `run worker` takes only the instance key, as `serve worker`. It refuses `--token`.
 
 ### Reach of an unconfined session
 
 A session with no confinement guard reaches each file and process of its OS user, through `bash` or through an unconfined `read`. The table states that reach. The `HOME` redirect of `tasks run` is no confinement.
 
-| Where the session runs                           | Reach through `bash`                                                                                                                                                                                   |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `server` placement                               | Every resource of the server: each credential, `master_key`, the JWT signing key, the database ([worker-service.vocabulary.md](../worker-service.vocabulary.md#placement))                             |
-| `container` placement                            | The slot volume, the network and its own instance; no file of the server                                                                                                                               |
-| `worker` placement                               | The instance key, the credential copies and the workspaces of its instance, the machine key and its copies ([trust boundary](../worker-service.vocabulary.md#trust-boundary))                          |
-| Workbench session in the server process          | Every resource of the server, through the Workbench `bash` of `swe@1` and through the unconfined `read` of `re@1` (`engine/src/workbench/tools.ts`, `builtinTools`; `engine/src/workbench/service.ts`) |
-| Agent CLI or offline mode on a developer machine | Each file of that OS user: SSH keys, cloud credential files, kanthord instance files, the token of `cli.yaml`                                                                                          |
+| Where the session runs                                 | Reach through `bash`                                                                                                                                                                                   |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `server` placement                                     | Every resource of the server: each credential, `master_key`, the JWT signing key, the database ([worker-service.vocabulary.md](../worker-service.vocabulary.md#placement))                             |
+| `container` placement                                  | The slot volume, the network and its own instance; no file of the server                                                                                                                               |
+| `worker` placement                                     | The instance key, the credential copies and the workspaces of its instance, the machine key and its copies ([trust boundary](../worker-service.vocabulary.md#trust-boundary))                          |
+| Workbench session in the server process                | Every resource of the server, through the Workbench `bash` of `swe@1` and through the unconfined `read` of `re@1` (`engine/src/workbench/tools.ts`, `builtinTools`; `engine/src/workbench/service.ts`) |
+| `run agent` or the offline mode on a developer machine | Each file of that OS user: SSH keys, cloud credential files, kanthord instance files, the token of `cli.yaml`                                                                                          |
 
 The OS containment of these processes is an open item of [HANDOFF.md](../HANDOFF.md), Worker Service ("Decide the OS containment").
 
@@ -299,21 +330,22 @@ The OS containment of these processes is an open item of [HANDOFF.md](../HANDOFF
 
 | Rule of today                                                                                                                                    | Source                                                                                                                                   | Rule in the model                                                                                                             | Strength |
 | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------- |
-| Frozen store: no refresh, rotation, lease or report                                                                                              | `engine/src/llm/refresh-watch.ts` (`frozenStore`)                                                                                        | The agent CLI and the offline mode use it. Only the worker host refreshes, through C1                                         | Same     |
-| `--credential-stdin` with the `isatty(0)` check and a zeroed buffer                                                                              | `engine/src/apps/cli/worker-tasks.ts`; `credentialOf` in `engine/src/worker/unit/tasks-credential.ts`                                    | The agent CLI takes the LLM credential only this way, with the same checks                                                    | Same     |
-| Provider check, routing metadata only from standard input, `credential_expiring`                                                                 | `engine/src/worker/unit/tasks-credential.ts`                                                                                             | The agent CLI applies each check; no option, variable or input file names an endpoint                                         | Same     |
-| No option, environment variable or file takes a credential                                                                                       | [design.md §5.7](../worker-execution-refactor/design.md#57-standalone-tasks-run)                                                         | Kept for the agent CLI                                                                                                        | Same     |
-| Session redaction with the known secrets on every session                                                                                        | `engine/src/agent/hooks/sensitive-text-redaction.ts`; `sessionParts`                                                                     | Kept. The agent CLI result output passes the writer redaction                                                                 | Same     |
-| In-memory session of `tasks run`                                                                                                                 | [design.md §5.7](../worker-execution-refactor/design.md#57-standalone-tasks-run)                                                         | The agent CLI holds an in-memory session store this round                                                                     | Same     |
+| Frozen store: no refresh, rotation, lease or report                                                                                              | `engine/src/llm/refresh-watch.ts` (`frozenStore`)                                                                                        | `run agent` and the offline mode use it. Only the worker host in server mode refreshes, through C1                            | Same     |
+| `--credential-stdin` with the `isatty(0)` check and a zeroed buffer                                                                              | `engine/src/apps/cli/worker-tasks.ts`; `credentialOf` in `engine/src/worker/unit/tasks-credential.ts`                                    | `run agent` takes the LLM credential only this way, with the same checks                                                      | Same     |
+| Provider check, routing metadata only from standard input, `credential_expiring`                                                                 | `engine/src/worker/unit/tasks-credential.ts`                                                                                             | `run agent` applies each check; no option, variable or input file names an endpoint                                           | Same     |
+| No option, environment variable or file takes a credential                                                                                       | [design.md §5.7](../worker-execution-refactor/design.md#57-standalone-tasks-run)                                                         | Kept for `run agent`                                                                                                          | Same     |
+| Session redaction with the known secrets on every session                                                                                        | `engine/src/agent/hooks/sensitive-text-redaction.ts`; `sessionParts`                                                                     | Kept. The `run agent` result output passes the writer redaction                                                               | Same     |
+| In-memory session of `tasks run`                                                                                                                 | [design.md §5.7](../worker-execution-refactor/design.md#57-standalone-tasks-run)                                                         | `run agent` holds an in-memory session store this round                                                                       | Same     |
 | `childEnvironment` for each child process                                                                                                        | `engine/src/agent/environment.ts`                                                                                                        | Kept                                                                                                                          | Same     |
 | `--pass-env` refuses a fixed name, an ambient-removal name and a name that `childEnvironment` removes; each passed value joins the known secrets | `passEnvRefused` in `engine/src/worker/unit/tasks-seed.ts`; `engine/src/apps/cli/worker-tasks.ts`; `engine/src/worker/unit/tasks-run.ts` | A value that a consumer passes to the child environment: the same name refusals apply, and each value joins the known secrets | Same     |
-| Ambient credential removal before pi loads, `HOME`, AWS file paths, metadata endpoints off                                                       | `withoutAmbientCredentials` in `engine/src/worker/unit/tasks-credential.ts`                                                              | Change: the agent CLI applies it too                                                                                          | Stricter |
-| `checkoutConfinement` on each `re@1` session that `agentPort` opens and each `env@1` session                                                     | `engine/src/agent/agent-port.ts` (`guardsOf`); `engine/src/project/environment-agent.ts`                                                 | Kept. Confinement becomes a profile property in the worker path and the agent CLI                                             | Same     |
-| No context key holds a credential; a capability gets no handover result, `sshAccess` or model runtime                                            | [design.md §5.4](../worker-execution-refactor/design.md#54-credentials)                                                                  | Kept for the Foundry and each worker capability                                                                               | Same     |
+| Ambient credential removal before pi loads, `HOME`, AWS file paths, metadata endpoints off                                                       | `withoutAmbientCredentials` in `engine/src/worker/unit/tasks-credential.ts`                                                              | Change: `run agent` applies it too                                                                                            | Stricter |
+| `checkoutConfinement` on each `re@1` session that `agentPort` opens and each `env@1` session                                                     | `engine/src/agent/agent-port.ts` (`guardsOf`); `engine/src/project/environment-agent.ts`                                                 | Kept. Confinement becomes a profile property in the worker path and `run agent`                                               | Same     |
+| No context key holds a credential; a capability gets no handover result, `sshAccess` or model runtime                                            | [design.md §5.4](../worker-execution-refactor/design.md#54-credentials)                                                                  | Kept for the line and each worker capability                                                                                  | Same     |
 | Lint rule on `modelRegistry` and `registerProvider`                                                                                              | `engine/eslint.config.js`                                                                                                                | Change: the glob covers each directory of a capability or consumer hook                                                       | Stricter |
 | The runtime imports `worker/contract.ts`                                                                                                         | `engine/src/agent/catalog.ts`, `agent-port.ts`                                                                                           | Change: the runtime imports no worker module, so no profile tool reaches a server                                             | Stricter |
-| pi writes no `auth.json` or settings file; `tasks run` refuses an `auth.json`                                                                    | `engine/src/agent/agent-session.ts`; design.md §5.7                                                                                      | Kept; the agent CLI refuses an `auth.json` in its pi directory and loads no extension from a path                             | Same     |
-| `serve worker`: the instance key is the only credential; `--token` refused                                                                       | `engine/docs/cli/other.md`, section `serve worker`                                                                                       | The worker CLI keeps it                                                                                                       | Same     |
+| pi writes no `auth.json` or settings file; `tasks run` refuses an `auth.json`                                                                    | `engine/src/agent/agent-session.ts`; design.md §5.7                                                                                      | Kept; `run agent` refuses an `auth.json` in its pi directory and loads no extension from a path                               | Same     |
+| `serve worker`: the instance key is the only credential; `--token` refused with `cli.serve.worker_token`                                         | `engine/docs/cli/other.md`, section `serve worker`                                                                                       | Kept. `run worker` has the same rule                                                                                          | Same     |
+| `--token` applies only to a remote command that declares it                                                                                      | `engine/docs/cli/other.md`, section "Closed root names and option scope"                                                                 | `run agent` and `run worker` declare no `--token`. `run agent` holds no KanthorD credential                                   | Same     |
 
 ## Mapping of today
 
@@ -321,28 +353,33 @@ The OS containment of these processes is an open item of [HANDOFF.md](../HANDOFF
 
 This section states what each item becomes. [L6](L6-migration.md) plans the build.
 
-| Item of today               | Path                                                           | Becomes                                                                                                                              |
-| --------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `swe@1`                     | `engine/src/agent/catalog.ts`; `engine/static/prompt/swe@1.md` | The generalist profile and the configuration owner of the implementation profiles **(Q2, Q3)**. Its `host_tools` become worker tools |
-| `bee@1`, `fee@1`, `te@1`    | none                                                           | New role profiles under the [fit rule of E1](#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule)                                   |
-| `re@1`                      | `engine/src/agent/catalog.ts`; `engine/static/prompt/re@1.md`  | The review profile, name unchanged, confined. Its protocol lines move to the `reviewer@1` instructions                               |
-| `env@1`                     | `engine/src/project/environment-agent.ts`                      | A profile whose consumer is the Project Service. Unchanged in this round                                                             |
-| `coder@1`                   | `engine/src/worker/catalog.ts`                                 | The coding line for `implement` and `examine`, with `swe@1`, `bee@1`, `fee@1` and `te@1` **(Q4)**                                    |
-| `reviewer@1`                | `engine/src/worker/catalog.ts`                                 | The review line, with `re@1` and the action performer                                                                                |
-| `claude-code@1`             | `engine/src/worker/catalog.ts`                                 | Unchanged. An external harness hosts it, and it holds no profile                                                                     |
-| Chain `implement`           | `engine/src/worker/unit/chain-implement.ts`                    | The line of `coder@1` for `implement`, with one session per profile                                                                  |
-| Chain `examine`             | `engine/src/worker/unit/chain-examine.ts`                      | The line of `coder@1` for `examine`, with `swe@1`                                                                                    |
-| Chain `evaluation`          | `engine/src/worker/unit/chain-evaluation.ts`                   | The line of `reviewer@1`, with `re@1`                                                                                                |
-| `kanthord worker tasks run` | `engine/src/worker/unit/tasks-run.ts`                          | The offline mode of a worker: the CLI Foundry host. [L5](L5-worker-cli.md) owns its command shape                                    |
-| `kanthord serve worker`     | `engine/docs/cli/other.md`, section `serve worker`             | The base of the worker CLI of [L5](L5-worker-cli.md) **(Q5)**                                                                        |
-| Workbench sessions          | `engine/src/workbench/service.ts`                              | A consumer with its own tools and guard set. Unchanged in this round                                                                 |
+| Item of today                               | Path                                                           | Becomes                                                                                                                                                  |
+| ------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `swe@1`                                     | `engine/src/agent/catalog.ts`; `engine/static/prompt/swe@1.md` | The generalist default profile, the evaluation baseline and the configuration owner of the implementation profiles. Its `host_tools` become worker tools |
+| `bee@1`, `fee@1`, `te@1`                    | none                                                           | New role profiles under the [fit rule of E1](#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule)                                                       |
+| `re@1`                                      | `engine/src/agent/catalog.ts`; `engine/static/prompt/re@1.md`  | The review profile, name unchanged, confined. Its protocol text moves to the `reviewer@1` instructions                                                   |
+| `env@1`                                     | `engine/src/project/environment-agent.ts`                      | A profile whose consumer is the Project Service. Unchanged in this round                                                                                 |
+| `coder@1`                                   | `engine/src/worker/catalog.ts`                                 | The coding worker for `implement` and `examine`, with `swe@1`, `bee@1`, `fee@1` and `te@1`. The selection method is open **(Q4)**                        |
+| `reviewer@1`                                | `engine/src/worker/catalog.ts`                                 | The review worker, with `re@1` and the action performer                                                                                                  |
+| `claude-code@1`                             | `engine/src/worker/catalog.ts`                                 | Unchanged. An external harness hosts it, and it holds no profile                                                                                         |
+| Chain `implement`                           | `engine/src/worker/unit/chain-implement.ts`                    | The chain of `coder@1` for `implement`. Its `tasks` phase is the line, with one session per profile                                                      |
+| Chain `examine`                             | `engine/src/worker/unit/chain-examine.ts`                      | The chain of `coder@1` for `examine`, with `swe@1`. Its `tasks` phase is the line. The offline mode does not run it                                      |
+| Chain `evaluation`                          | `engine/src/worker/unit/chain-evaluation.ts`                   | The chain of `reviewer@1`, with `re@1`. Its `tasks` phase is the line. The offline mode does not run it                                                  |
+| `kanthord worker tasks run`                 | `engine/src/worker/unit/tasks-run.ts`                          | The offline mode of the worker host, for the `implement` chain only. [L5](L5-worker-cli.md) decides whether it moves under `run worker`                  |
+| `kanthord serve worker`                     | `engine/docs/cli/other.md`, section `serve worker`             | The server mode of the worker host as a long-running process. Unchanged                                                                                  |
+| `kanthord run agent`, `kanthord run worker` | none                                                           | The agent CLI and the worker CLI: one-shot commands under the new global root `run` ([E5](#e5-two-clis-fits-with-the-root-run))                          |
+| Workbench sessions                          | `engine/src/workbench/service.ts`                              | A consumer with its own tools and guard set. Unchanged in this round                                                                                     |
 
 ## Handoffs to later layers
 
-- [L2](L2-agent.md): the file assignment of the [agent runtime](#agent-runtime-and-server-part-of-the-agent-component), with the split of `prompt-render.ts` and the part of `contract.ts`, `prompt-composer.ts`, `prompt-assets.ts`, `config.ts` and `index.ts`; the anchors `#coding-tools`, `#profile-prompts` and `#input-and-output-contract`; the composition function of boundary rule 2.
-- [L3](L3-agent-cli.md): goal "One input runs under two profiles, and the results compare." The checks of [Statelessness](#statelessness). The command page tells the developer the [reach of an unconfined session](#reach-of-an-unconfined-session) and to use a credential that the developer owns, as the `tasks run` page does.
-- [L4](L4-worker.md): the anchors `#worker-instructions`, `#worker-capabilities`, `#worker-tools` and `#profile-selection`; the sessions of constraint C7 and the separate profile list of constraint C1; the lint glob of the [LLM credential](#llm-credential).
+- [L2](L2-agent.md): the file assignment of the [agent runtime](#agent-runtime-and-server-part-of-the-agent-component), with the split of `prompt-render.ts` and the part of `contract.ts`, `prompt-composer.ts`, `prompt-assets.ts`, `config.ts` and `index.ts`; the anchors `#coding-tools`, `#profile-prompts` and `#input-and-output-contract`; the composition function of boundary rule 2; the extension list under the [extension rule](#extension-rule).
+- [L3](L3-agent-cli.md): the command `kanthord run agent` under the global root `run`. Goal "One input runs under two profiles, and the results compare." The checks of [Statelessness](#statelessness). The command page tells the developer the [reach of an unconfined session](#reach-of-an-unconfined-session) and to use a credential that the developer owns, as the `tasks run` page does.
+- [L4](L4-worker.md): the anchors `#worker-instructions`, `#worker-capabilities`, `#worker-tools` and `#profile-selection`; the profile selection after the ruling of Q4; the sessions of constraint C7 and the separate profile list of constraint C1; the lint glob of the [LLM credential](#llm-credential); the extension list under the [extension rule](#extension-rule).
+- [L4](L4-worker.md): one session per profile needs the port `agent.open` in the port set of the `implement` line. Today `IMPLEMENT_PORTS` holds no `agent.open`; only `IMPLEMENT_HOST_PORTS` adds it for the host step (`engine/src/worker/unit/foundry-ports.ts`).
+- [L5](L5-worker-cli.md): the command `kanthord run worker` and the change of the closed root set in `engine/docs/cli/other.md`. L5 decides whether `kanthord worker tasks run` moves under `run worker`.
 - [L6](L6-migration.md): layer 2 of E1 starts after layer 1 passes its check; the import check of [L1-D5](#decisions).
+- [L6](L6-migration.md): remove the field `FoundryHost.capabilities` (`engine/src/worker/unit/foundry.ts:36`) and its three arguments, because `runTasks` never reads it. Remove the exports `foundryEvaluation` and `foundryExamine`, which have no caller, and update `chain-golden.txt`.
+- [L6](L6-migration.md): for the [extension rule](#extension-rule), split `sensitive-text-redaction.ts` into one factory per module and add the missing tests. Add a gate check that fails on an extension file with no test file next to it.
 
 ## Open items for HANDOFF
 
@@ -350,28 +387,25 @@ This section states what each item becomes. [L6](L6-migration.md) plans the buil
 
 ## Decisions
 
-1. **L1-D1.** The model has three actors: agent, worker and server. A worker has three parts: Foundry host, Foundry and worker layer. Constraint: each later layer assigns each new item to one row of the [responsibility table](#responsibility-table).
-2. **L1-D2.** Only the Foundry host of a worker talks to the server. Constraint: the Foundry and the worker layer construct no client and no transport; `kanthord worker tasks run` stays as the offline mode.
+1. **L1-D1.** The model has three actors: agent, worker and server. A worker has three parts: the worker host, the line and the worker layer. The worker host has two run modes: server mode and offline mode. Constraint: each later layer assigns each new item to one row of the [responsibility table](#responsibility-table); the code keeps the names `foundry-*.ts` this round.
+2. **L1-D2.** Only the worker host in server mode talks to the server. Constraint: the line and the worker layer construct no client and no transport; the port seam of the line stays (`foundry-boundary.test.ts`, `FoundryReadsSshAccess`); `kanthord worker tasks run` stays as the offline mode, for the `implement` chain only.
 3. **L1-D3.** The agent runs one agent profile. The profile fixes the profile prompt, the profile tools and the confinement. Constraint: a profile names no worker tool and no model default.
-4. **L1-D4.** The worker selects the profile of each session; a work unit selects its profile, and the Foundry holds one session per profile **(Q4)**. Constraint: the agent input holds one profile name; [L4](L4-worker.md#profile-selection) specifies the selection.
+4. **L1-D4.** The worker selects the profile of each session, one profile per work unit, and the line holds one session per profile. The selection method is open **(Q4)**. Constraint: the agent input holds one profile name; [L4](L4-worker.md#profile-selection) specifies the selection after the ruling.
 5. **L1-D5.** The agent input names no execution, claim, node or server address. The agent runtime imports no worker, project, mission or scheduler module, no transport and no gateway client. Constraint: an import check of the `engine` repository fails the build on such an import.
-6. **L1-D6.** The coding category has the implementation profiles `swe@1`, `bee@1`, `fee@1`, `te@1` and the review profile `re@1` **(Q2)**. Constraint: E1 constraints C1 to C7 hold.
+6. **L1-D6.** The coding category has the implementation profiles `swe@1`, `bee@1`, `fee@1`, `te@1` and the review profile `re@1`. Constraint: E1 constraints C1 to C7 hold.
 7. **L1-D7.** The [tool ownership rule](#tool-ownership-rule) decides the owner of each tool and capability. Constraint: `evidence-upload` and `link_update_list` are worker tools, and the agent catalog loses `host_tools`.
 8. **L1-D8.** In the worker path and the agent CLI, no consumer can remove a guard. The allowlist holds the profile tools and the granted worker tools. Constraint: the Workbench and the Project Service keep their guard set this round.
 9. **L1-D9.** Confinement is an explicit property of the profile; `re@1` and `env@1` hold it. It applies in the worker path and the agent CLI this round. Constraint: the roots are an input of the consumer.
 10. **L1-D10.** One pure composition function of the agent runtime joins the system prompt. It replaces `finalPrompt` of `engine/src/agent/prompt-render.ts` in the worker path, where the server calls it. The agent CLI calls it on the shipped profile prompt and the input instructions. Constraint: the agent adds no text to a composed prompt; the agent directory override stays a server feature; the Workbench and the Project Service keep `systemPrompt` this round.
 11. **L1-D11.** "Stateless" means the [nine checks](#statelessness): no state between runs, and each durable record owned by the consumer. Constraint: a session store, a replay record and a trace enter as input.
-12. **L1-D12.** The KanthorD protocol lines of each Role move to the worker instructions. Constraint: a Role names no worker, no gate, no node branch and no reply format of a worker.
-13. **L1-D13.** The LLM credential is the only credential that enters the agent, only as the pi credential store inside the model runtime. Constraint: no other credential reaches the agent, the Foundry or a child process.
-14. **L1-D14.** The agent CLI takes the LLM credential and its routing metadata only through standard input, with the frozen store, the in-memory session store and `withoutAmbientCredentials`. Constraint: no option, environment variable or input file takes a credential or names an endpoint.
+12. **L1-D12.** The KanthorD protocol text of each Role moves to the worker instructions. Constraint: a Role names no worker, no gate, no node branch and no reply format of a worker.
+13. **L1-D13.** The LLM credential is the only credential that enters the agent, only as the pi credential store inside the model runtime. Constraint: no other credential reaches the agent, the line or a child process.
+14. **L1-D14.** The agent CLI (`kanthord run agent`) takes the LLM credential and its routing metadata only through standard input, with the frozen store, the in-memory session store and `withoutAmbientCredentials`. Constraint: no option, environment variable or input file takes a credential or names an endpoint.
 15. **L1-D15.** The lint rule on `modelRegistry` and `registerProvider` covers each directory that holds a capability or a consumer hook. Constraint: a move of a capability moves the glob in the same change.
+16. **L1-D16.** `swe@1` stays the generalist default profile and the evaluation baseline. Each method rule of a Role traces to a dogfood finding or to an evaluation result. Constraint: a role profile that does not do better than `swe@1` on the same inputs, with the same repository context, leaves the catalog.
+17. **L1-D17.** The agent CLI and the worker CLI are one-shot commands under the new global root `run`: `kanthord run agent` and `kanthord run worker`. `serve` stays the long-running process, and the binary stays `kanthord`. Constraint: `run agent` holds only the LLM credential, on standard input, and no KanthorD credential; `run worker` holds only the instance key and refuses `--token`.
+18. **L1-D18.** Each pi extension is one module that exports one extension factory, with its test file next to it. pi receives each extension as an `InlineExtension` through `extensionFactories` at session start. Constraint: no consumer loads an extension from a file path, so the in-memory closures of the redaction secrets, the worker tool transport function and the confinement roots stay.
 
 ## Open questions for Ulrich
 
-1. **Q1. Dogfood findings per role.** Aelita recommends that Ulrich give, for each role, the failures of `swe@1` in the dogfood run, or the execution ids of those runs. L2 then writes each method line of a Role from one finding. Alternative: L2 writes the Roles from general practice. Then no recorded case shows that a role profile does better than `swe@1`.
-2. **Q2. `swe@1` as the generalist default.** Aelita recommends keeping `swe@1`, name unchanged, as the default profile and for each turn outside a work unit. No stored key moves. Alternative: retire `swe@1`. Then each work unit names a role, and each enablement, entry and Binding prompt key migrates.
-3. **Q3. One configuration owner.** Aelita recommends that `swe@1` own the configuration of the four implementation profiles, with one LLM credential per execution. Alternative: one enablement per role. That triples the configuration work, and one cooling role makes the claim answer no work.
-4. **Q4. The work unit profile field.** Aelita recommends one optional profile field in the task content, and in the node content of an `implement` node with no task. An absent field selects `swe@1`. This changes the Mission Service and the Worker Service. Alternative: each repository binding names its profile. That gives no single value for a node with two repositories.
-5. **Q5. The meaning of the worker CLI.** Aelita recommends a mode of `kanthord serve worker` that claims one execution and exits. The instance key stays its only credential. Alternative: the worker CLI is `serve worker` as a long-running process, which exists today. Alternative: a new process type, which adds a second credential path.
-6. **Q6. "Capability" or "capacity".** Aelita recommends keeping "capability", the term of D32, of the code (`engine/src/agent/capabilities/`) and of the lint rule. "Capacity" in the direction means a capability. Alternative: rename to "capacity" in the pages and the code.
-7. **Q7. The Yumi name.** Aelita recommends that the merge of `feature/workbench-v2` rename the Yumi profile from `ops@1` to `comm@1`, so `ops@1` stays free for Operation Setup. Only Ulrich rules a name. Alternative: keep `ops@1` for Yumi and give Operation Setup another name.
+1. **Q4. Profile selection.** Selection by code, with no new field: evaluation in progress. Ulrich wants code to select the profile of each work unit: `bee@1` for a backend repository, `fee@1` for a frontend repository and `swe@1` when the type is unknown. [Constraint C3](#e1-constraints) is a fact that the selection must meet. L4 designs the selection after the ruling.
