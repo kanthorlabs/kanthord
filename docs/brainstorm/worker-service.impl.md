@@ -2745,7 +2745,7 @@ The Foundry depends only on its input and on the host tools that the Foundry hos
 It constructs no client, no transport and no resource, and it does not know its Foundry host.
 The Foundry makes a side effect only through a host tool.
 Section 2 of the chain design holds the types and the rules of the Foundry. Sections 5.4, 5.5 and 5.7 hold the credential rules, the agent tooling and the CLI host.
-In the model of [Agent V2 and Worker V3](agent-worker-v3/L1-model.md#worker), the term for the Foundry is "the line". The term for a Foundry host is "the worker host". The worker host has a server mode (the worker host below) and an offline mode (the CLI host). The code keeps the names `foundry-*.ts`, `FoundryHost` and the port types.
+In the model of [Agent V2 and Worker V3](agent-worker-v3/L1-model.md#worker), the term for the Foundry is "the line". The term for the worker host below is "the worker host". The CLI host leaves the model in V3: the offline mode, `kanthord worker tasks` and the replay go. The code keeps the names `foundry-*.ts`, `FoundryHost` and the port types.
 
 Each term has one meaning.
 
