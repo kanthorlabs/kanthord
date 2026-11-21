@@ -26,14 +26,14 @@ Each layer file starts with its goals `G1`, `G2`, ..., ends with its decisions a
 
 The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A Fable review with the verdict accept sets `reviewed`. Ulrich sets `accepted` at the joint review.
 
-| Layer | File                                 | Title                        | Purpose                                                                                                   | Round goals    | Status    |
-| ----- | ------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------- | -------------- | --------- |
-| L1    | [L1-model.md](L1-model.md)           | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today | R3, R4, R6, R8 | `draft`   |
-| L2    | [L2-agent.md](L2-agent.md)           | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract          | R1, R2, R6, R8 | `planned` |
-| L3    | [L3-agent-cli.md](L3-agent-cli.md)   | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                      | R1, R6, R8     | `planned` |
-| L4    | [L4-worker.md](L4-worker.md)         | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                  | R3, R4, R6, R8 | `planned` |
-| L5    | [L5-worker-cli.md](L5-worker-cli.md) | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                              | R5, R6, R8     | `planned` |
-| L6    | [L6-migration.md](L6-migration.md)   | Migration                    | Specify the build order from the code of today                                                            | R7             | `planned` |
+| Layer | File                                 | Title                        | Purpose                                                                                                   | Round goals    | Status     |
+| ----- | ------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------- | -------------- | ---------- |
+| L1    | [L1-model.md](L1-model.md)           | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today | R3, R4, R6, R8 | `reviewed` |
+| L2    | [L2-agent.md](L2-agent.md)           | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract          | R1, R2, R6, R8 | `planned`  |
+| L3    | [L3-agent-cli.md](L3-agent-cli.md)   | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                      | R1, R6, R8     | `planned`  |
+| L4    | [L4-worker.md](L4-worker.md)         | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                  | R3, R4, R6, R8 | `planned`  |
+| L5    | [L5-worker-cli.md](L5-worker-cli.md) | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                              | R5, R6, R8     | `planned`  |
+| L6    | [L6-migration.md](L6-migration.md)   | Migration                    | Specify the build order from the code of today                                                            | R7             | `planned`  |
 
 L1 links these anchors of later files. Each later file keeps the heading of each anchor.
 
