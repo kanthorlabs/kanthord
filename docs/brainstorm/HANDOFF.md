@@ -117,7 +117,7 @@ Added 2026-10-06 by Ulrich, from the evaluation of the agent. The Worker Service
 - [ ] RULED 2026-11-04 by Ulrich (AH-D5). Rule 13 holds the lower-case YAML and INI form, with the value to the line end. The value refuses `(`, `)`, `,`, `;` and the backtick.
 - [ ] RULED 2026-11-04 by Ulrich (AH-D6). All 17 pattern rules stay if the build gate holds 200 ms on every performance row. Otherwise the build drops rules 15 and 17, records the drop and reports it once.
 
-- [ ] Added 2026-11-22 from the L7 design of Agent V2 and Worker V3. A later eval model of the agent evaluation is `openai-codex/gpt-6-luna:max` (`openai-codex.json`, `chat:gpt-6-luna`, each of the seven levels, list price 0.10 and 0.50 per MTok, above 272k input tokens 0.20 and 0.75). It uses the `openai-codex` `oauth` entry. Add it to [L7 Eval model](agent-worker-v3/L7-agent-evaluation.md#eval-model) when Ulrich asks for it.
+- [ ] Added 2026-11-22 from the L4 design of Agent V2 and Worker V3. A later eval model of the agent evaluation is `openai-codex/gpt-6-luna:max` (`openai-codex.json`, `chat:gpt-6-luna`, each of the seven levels, list price 0.10 and 0.50 per MTok, above 272k input tokens 0.20 and 0.75). It uses the `openai-codex` `oauth` entry. Add it to [L4 Eval model](agent-worker-v3/L4-agent-evaluation.md#eval-model) when Ulrich asks for it.
 
 ### Workbench Service
 

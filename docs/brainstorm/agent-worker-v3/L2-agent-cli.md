@@ -45,7 +45,7 @@ kanthord run agent <agent-name>
 - `run agent` runs one agent profile on one piece of work, writes one result and exits. It is local. It calls no route, opens no database, reads no server configuration file and reads no `cli.yaml`.
 - Change: `run` joins the closed set of global root names. Today the set holds `config`, `upgrade`, `serve` and `auth` (`docs/cli/other.md`, section "Closed root names and option scope"; `TOP_LEVEL_NAMES` in `src/apps/cli/completeness.test.ts`). The constant `CommandName` of `src/apps/cli/constants.ts` gets `Run: "run"`, because `createProgram` asserts one root command per name (`src/apps/cli/index.ts`).
 - `kanthord run` with no operand prints the group help and exits `0`, as each group does (`docs/cli/other.md`, section "Help semantics"). `kanthord run --help` lists `agent`.
-- The name `run worker` is reserved for [L4](L4-worker-cli.md). Until L4 builds it, the group `run` holds only `agent`.
+- The name `run worker` is reserved for [L5](L5-worker-cli.md). Until L5 builds it, the group `run` holds only `agent`.
 - The component root `agent` (`kanthord agent get`, `src/apps/cli/agent.ts`) stays. It reads the server part of the Agent component. `run agent` is the agent CLI. The two names do not overlap, because `agent` is a root and `agent` under `run` is a leaf.
 - The new page `docs/cli/run.md` owns `run agent`, with the heading "Command inventory". `docs/cli/other.md` lists `run` among the global root names and links the page.
 - The page `docs/cli/run.md` states these facts for the developer, as [L1](L1-model.md#handoffs-to-later-layers) hands them:
@@ -483,7 +483,7 @@ A Commander syntax error, for example an unknown option, writes the Commander me
 
 ### One evaluation run
 
-[L7 One evaluation run](L7-agent-evaluation.md#one-evaluation-run) holds the procedure of one run of the evaluation of L1-D20: the case, the workspace, the context parts, the command line and the record. This page keeps the comparison rule, the result fields and the gate procedure.
+[L4 One evaluation run](L4-agent-evaluation.md#one-evaluation-run) holds the procedure of one run of the evaluation of L1-D20: the case, the workspace, the context parts, the command line and the record. This page keeps the comparison rule, the result fields and the gate procedure.
 
 ### Comparison rule
 
@@ -492,9 +492,9 @@ A Commander syntax error, for example an unknown option, writes the Commander me
 - Two runs of one profile compare only when the common keys and `system_prompt_digest` are equal.
 - Two runs of two profiles compare only when the common keys are equal. Each run must also have the `system_prompt_digest` of the other runs of its profile on that case.
 - Equal `input_digest` means the same prompt parts and context parts in the same order. Equal `system_prompt_digest` means the same composed system prompt of the profile. Equal `engine_version` means the same engine release, with its tools and its pi version. The other common keys give the same model selection and budget.
-- The comparison of [L7](L7-agent-evaluation.md) groups the runs by `agent`. It reads `end`, `session`, `agent`, the common keys and `system_prompt_digest` for the verdict. It reads `usage`, `list_price_usd`, `duration_ms` and `tool_calls` as the cost of each run. The other fields serve the stdout layout and the gate procedure.
+- The comparison of [L4](L4-agent-evaluation.md) groups the runs by `agent`. It reads `end`, `session`, `agent`, the common keys and `system_prompt_digest` for the verdict. It reads `usage`, `list_price_usd`, `duration_ms` and `tool_calls` as the cost of each run. The other fields serve the stdout layout and the gate procedure.
 - A run with the class `retryable` runs again with a new session path and a new clone of C. Its line stays in the file.
-- The model output is not deterministic. [L7](L7-agent-evaluation.md) owns the evaluation plan: the cases, the count of runs per profile, the pass rule and the exit rule, which is fixed before the first run.
+- The model output is not deterministic. [L4](L4-agent-evaluation.md) owns the evaluation plan: the cases, the count of runs per profile, the pass rule and the exit rule, which is fixed before the first run.
 
 ### Gate procedure: the real-credential run
 
@@ -555,13 +555,13 @@ L2 needs these items from the agent contract. [L3](L3-agent.md#input-and-output-
 
 ## Handoffs to later layers
 
-- [L4](L4-worker-cli.md): `run worker` under the root `run`. Its codes take the form `cli.run.worker.<reason>`, to match `run agent`. `kanthord run --help` then lists `agent` and `worker`.
-- [L6](L6-migration.md): add `CommandName.Run` and the group `run` to `createProgram`. Add `run` to `TOP_LEVEL_NAMES`, the page `run` to `PAGE_INVENTORIES` and `PAGE_COUNTS`, and update `DOCUMENTED_COUNT` and `IMPLEMENTED_COUNT` (`src/apps/cli/completeness.test.ts`). Write `docs/cli/run.md`. Update the root names and the root help list of `docs/cli/other.md`, and the link list of `docs/cli/README.md`.
-- [L6](L6-migration.md): move the checks that L1 lists before the deletion of `tasks run`, with the changes of this page. The entry reader uses `readStoredCredential`. `routingMetadataOf` uses the mapping and no seed comparison. `withoutAmbientCredentials` uses R in place of the output folder and also removes the proxy names. The child `TMPDIR` is `R/tmp`. The check of `auth.json` runs before the pi tool install.
-- [L6](L6-migration.md): in `docs/cli/other.md`, section "Output and exit behavior", add the exits `2`, `4`, `5` and `75` of `run agent`, the stderr warning line and the stderr notice line. With `run`, the global root names are five. Fix the text that names three: `docs/cli/other.md:1155`, `docs/cli/README.md:71` and `docs/cli/project.md:36`.
-- [L6](L6-migration.md): assign the file of each module of [Unit-level rules](#unit-level-rules).
-- [L6](L6-migration.md): move `ProviderFailure` from the scheduler contract (`src/scheduler/contract.ts:67-73`) to `src/llm/`, next to `providerFailureOf`, so the agent runtime imports no scheduler module.
-- [L6](L6-migration.md): the Linux test container. L2-AC2 runs in the network namespace N. L2-AC6 needs a user database entry whose home is H.
+- [L5](L5-worker-cli.md): `run worker` under the root `run`. Its codes take the form `cli.run.worker.<reason>`, to match `run agent`. `kanthord run --help` then lists `agent` and `worker`.
+- [LA](LA-agent-build.md): add `CommandName.Run` and the group `run` to `createProgram`. Add `run` to `TOP_LEVEL_NAMES`, the page `run` to `PAGE_INVENTORIES` and `PAGE_COUNTS`, and update `DOCUMENTED_COUNT` and `IMPLEMENTED_COUNT` (`src/apps/cli/completeness.test.ts`). Write `docs/cli/run.md`. Update the root names and the root help list of `docs/cli/other.md`, and the link list of `docs/cli/README.md`.
+- [LA](LA-agent-build.md): move the checks that L1 lists before the deletion of `tasks run`, with the changes of this page. The entry reader uses `readStoredCredential`. `routingMetadataOf` uses the mapping and no seed comparison. `withoutAmbientCredentials` uses R in place of the output folder and also removes the proxy names. The child `TMPDIR` is `R/tmp`. The check of `auth.json` runs before the pi tool install.
+- [LA](LA-agent-build.md): in `docs/cli/other.md`, section "Output and exit behavior", add the exits `2`, `4`, `5` and `75` of `run agent`, the stderr warning line and the stderr notice line. With `run`, the global root names are five. Fix the text that names three: `docs/cli/other.md:1155`, `docs/cli/README.md:71` and `docs/cli/project.md:36`.
+- [LA](LA-agent-build.md): assign the file of each module of [Unit-level rules](#unit-level-rules).
+- [LA](LA-agent-build.md): move `ProviderFailure` from the scheduler contract (`src/scheduler/contract.ts:67-73`) to `src/llm/`, next to `providerFailureOf`, so the agent runtime imports no scheduler module.
+- [LA](LA-agent-build.md): the Linux test container. L2-AC2 runs in the network namespace N. L2-AC6 needs a user database entry whose home is H.
 
 ## Acceptance checks
 
@@ -665,7 +665,7 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
 
 ### Unit-level rules
 
-These rules hold with no process, no file system flow and no LLM stub, so their tests are unit tests ([index](index.md#reading-order)). Each item names the owning module. L3 or L6 assigns the exact file. Each rule stays in the text of this page.
+These rules hold with no process, no file system flow and no LLM stub, so their tests are unit tests ([index](index.md#reading-order)). Each item names the owning module. L3 or LA assigns the exact file. Each rule stays in the text of this page.
 
 1. **The option parser of `run agent`.** Each refusal of [Options](#options), [Model selection](#model-selection) rules 1 to 3 and [Budget](#budget) rules 1 to 3: an absent `<agent-name>`, `--model`, `--session` or `--prompt`; an absent or non-directory `--workspace`; a repeated single-value option; a `--model` with no `/`, no level, an unknown level or the provider `anthropic-subscription`; a `--budget` of no kind, of zero or of a repeated kind; the `--output` forms. The `--token` refusal comes before each other refusal. The help lists each option and no `--token`.
 2. **The text-or-path reader.** Each rule of [Text or path](#text-or-path) and [Prompt](#prompt): the exact "looks like a path" test; a value with a line break; an absent path as text with the notice; a path under `/dev` or `/proc`, before or after link resolution; a path in the KanthorD configuration directory or the pi directory; the `--auth` file by device and inode; the removal of final line breaks; an existing entry that is no regular file, or not UTF-8, or an image; the join with one blank line; an empty part; `prompt_missing`.
@@ -687,11 +687,11 @@ These rules hold with no process, no file system flow and no LLM stub, so their 
 - **The real-credential run.** It needs the credential of Ulrich. [Gate procedure](#gate-procedure-the-real-credential-run) states it with its pass conditions.
 - **A request to a cloud provider other than `openai-compatible`.** It needs that endpoint. The unit tests of the `--auth` reader cover each mapped entry. The gate run covers the provider of Ulrich.
 - **The cost limit end to end.** Each provider with a price has a fixed public host, so the LLM stub cannot serve it. The stub provider `openai-compatible` has no price (`src/llm/model-connector.ts:100`). The unit test of the budget covers the limit with a priced model. [HANDOFF.md](../HANDOFF.md#llm-component) holds the change that gives an `openai-compatible` model a price.
-- **The text of `docs/cli/run.md` for the developer.** It is page text, not a behavior. The review of the L6 step checks it.
+- **The text of `docs/cli/run.md` for the developer.** It is page text, not a behavior. The review of the LA step checks it.
 
 ## Decisions
 
-1. **L2-D1.** The agent CLI is the leaf `run agent <agent-name>` under the new global root `run`. Constraint: `run` joins `TOP_LEVEL_NAMES` and `CommandName`; `docs/cli/run.md` owns the command; `run worker` is reserved for L4.
+1. **L2-D1.** The agent CLI is the leaf `run agent <agent-name>` under the new global root `run`. Constraint: `run` joins `TOP_LEVEL_NAMES` and `CommandName`; `docs/cli/run.md` owns the command; `run worker` is reserved for L5.
 2. **L2-D2.** Each option answers one question of a KanthorD agent run (Ulrich, 2026-11-22). The options are `--prompt`, `--system-prompt`, `--model`, `--budget`, `--workspace`, `--session`, `--auth` and `--output`, and the profile is the operand. Constraint: each field has exactly one source; no JSON input file and no positional prompt exist; an absent `<agent-name>`, `--model`, `--session` or `--prompt` gives `cli.run.agent.option_invalid`.
 3. **L2-D3.** A `--prompt` or `--system-prompt` value is a file when it looks like a path and names an entry; else it is text (Ulrich, 2026-11-22). Constraint: a value with a line break is text; a path-like value with no entry gives the notice `cli.run.agent.prompt_text_path`; an existing entry that is no regular UTF-8 file is refused; a path to the `--auth` file, the KanthorD configuration directory, the pi directory, `/dev` or `/proc` is refused; the `--prompt` parts form one user message, one turn.
 4. **L2-D4.** `--system-prompt` adds context after the profile prompt at layer 2 and never replaces the profile prompt. Its reader is the evaluation with the repository context of `swe@1`. Constraint: the meaning differs from the pi option of the same name.
@@ -703,7 +703,7 @@ These rules hold with no process, no file system flow and no LLM stub, so their 
 10. **L2-D10.** The default `--auth` path is `.config/kanthord/auth.json` in the home directory of the OS user from the user database (Ulrich, 2026-11-22). Constraint: no environment variable selects the `--auth` file; the run refuses a symbolic link at the `--auth` path, an `--auth` file inside the workspace and a prompt file that is the `--auth` file; a failed lookup in the user database refuses the run.
 11. **L2-D11.** `--output stdout` gives the exact text layout, and `--output <path>` appends one JSON line per run (Ulrich, 2026-11-22). Constraint: the output file is a private, append-only file outside the workspace and the pi directory; the exit redaction applies to each form; the runtime writes nothing to stdout or stderr.
 12. **L2-D12.** The exit codes are `0` completed, `1` refusal, `2` stopped, `4` budget end, `5` terminal failure and `75` retryable failure. Ulrich ruled the separate retryable code on 2026-11-22; the values are an Aelita decision. Constraint: exit `3` stays the code of a superseded `serve worker`; each end and each code has a class.
-13. **L2-D13.** Each code has the form `cli.run.agent.<reason>`, and [Diagnostic codes](#diagnostic-codes) lists each code with its class. Constraint: L4 uses `cli.run.worker.<reason>`.
+13. **L2-D13.** Each code has the form `cli.run.agent.<reason>`, and [Diagnostic codes](#diagnostic-codes) lists each code with its class. Constraint: L5 uses `cli.run.worker.<reason>`.
 14. **L2-D14.** `--budget` takes a wall budget and a cost budget; the first limit ends the run (Ulrich, 2026-11-22). Aelita decision: the default is `2h` wall and no cost limit, no count limit applies, and an `oauth` entry accepts a cost budget as a list-price limit. Constraint: the cost is the list price from the pi catalog; a cost budget for a model with no price is refused; one clock read at step 9 gives the wall deadline, the OAuth expiry check and the start of `duration_ms`.
 15. **L2-D15.** Two evaluation runs compare only with equal `input_digest`, `engine_version`, `provider`, `model`, `reasoning_effort` and `budget`. Two runs of one profile also need an equal `system_prompt_digest`. Constraint: the evaluation reads the `--output` file; `system_prompt_digest` covers the output of the L1-D10 composition function, before pi adds `<cwd>`; each run has its own new clone of the case commit.
 16. **L2-D16.** `run agent` writes no telemetry file and gives the agent contract no trace sink. Constraint: the session file and the result are the record of the run.
