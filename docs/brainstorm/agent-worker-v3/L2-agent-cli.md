@@ -92,7 +92,7 @@ Ulrich ruled on 2026-11-22: a `--prompt` or `--system-prompt` value has no mark 
    1. When no entry exists at the path, the value is text. The run writes one notice line on stderr ([stderr](#stderr), item 3) with the code `cli.run.agent.prompt_text_path`. The notice refuses nothing. Reason: a typo in a file name becomes visible.
    2. The run refuses the entry with `cli.run.agent.auth_place` when it is the `--auth` file, compared by device and inode. It also refuses an entry whose real path lies in the KanthorD configuration directory or in the pi directory. The configuration directory is `<home>/.config/kanthord` of the user database and `directories(env).config` (`src/kernel/xdg.ts`). Reason: the text of a prompt part enters the model request. The check runs before the read.
    3. The run refuses the entry with `cli.run.agent.prompt_place` when its absolute path before link resolution or its real path lies under `/dev` or `/proc`. Example: on Linux, `/dev/stdin` resolves through `/proc/self/fd/0`. Reason: `run agent` reads no standard input and no process state, for example `/proc/self/environ`.
-   4. When an entry exists, the run reads it with `readTextFile` (`src/apps/cli/shared.ts:101-118`). That function refuses a path that is no regular file with `cli.file.not_regular`, and text that is not UTF-8 with `cli.file.encoding_invalid`. Each refusal has the `path` row. Reason: an existing entry shows that the human meant a file. This refusal is narrower than the ruling of Ulrich, which uses each other value as text ([Open questions for Ulrich](#open-questions-for-ulrich)).
+   4. When an entry exists, the run reads it with `readTextFile` (`src/apps/cli/shared.ts:101-118`). That function refuses a path that is no regular file with `cli.file.not_regular`, and text that is not UTF-8 with `cli.file.encoding_invalid`. Each refusal has the `path` row. Reason: an existing entry shows that the human meant a file. Ulrich confirmed this refusal on 2026-11-22 ([L2-D25](#decisions)).
 4. **No image.** An image file is not UTF-8 text, so rule 3.4 refuses it. Reason: the coding profiles of L3 need no image input (R2), and the session file holds no image record that the evaluation reads.
 
 ### Prompt
@@ -746,11 +746,10 @@ These rules hold with no process, no file system flow and no LLM stub, so their 
 22. **L2-D22.** The host home input is the home directory of the OS user from the user database. Constraint: `system_prompt_digest` excludes the `<cwd>` section, so the host home and the workspace path do not change it.
 23. **L2-D23.** Each end and each diagnostic code is `retryable` or `terminal` (Ulrich, 2026-11-22). Constraint: `retryable` means that the same input can succeed later with a new `--session` path and a workspace that passes the start preconditions; the class comes from `isContextOverflow` and `isRetryableAssistantError`; the failure kind comes from `providerFailureOf`; `run agent` retries nothing, and the retries of pi stay.
 24. **L2-D24.** A first signal stops the run gracefully, with the result `stopped`; a second signal ends it after the removal of R (Ulrich, 2026-11-22). Aelita decision: the graceful part has a limit of 10 seconds, then a forced stop. Constraint: SIGINT and SIGTERM have the same effect; the end `stopped` is `terminal`; step 11 ignores a signal.
+25. **L2-D25.** The run refuses a path-like `--prompt` or `--system-prompt` value that names an existing entry that is no regular UTF-8 text file, with `cli.file.not_regular` or `cli.file.encoding_invalid` (Ulrich, 2026-11-22). Constraint: only a path-like value that names no entry is used as text, with the notice `cli.run.agent.prompt_text_path`.
 
 ## Open questions for Ulrich
 
-1. **A path that names an entry that is not readable as text.** The ruling of 2026-11-22 uses each value that names no valid regular UTF-8 file as text. [Text or path](#text-or-path), rule 3.4, refuses a path to an existing entry that is no regular file or not UTF-8, which is narrower.
-   - Aelita recommends: keep the refusal. An image or a binary path never goes out to the provider as text with no notice, and the human sees the fault before any request.
-   - Alternative: use the value as text with the notice `cli.run.agent.prompt_text_path`, as for an absent path. This follows the ruling word for word, but the provider then gets the path text in place of the file.
+L2 holds no open question for Ulrich.
 
 Each other decision of this page stays inside the CLI of the engine and makes no credential rule weaker.
