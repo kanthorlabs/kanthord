@@ -402,10 +402,10 @@ export function systemPromptDigest(composed: string): string;
 - This is the join of today: `partText` and the join of `finalPrompt` (`src/agent/prompt-render.ts:204-216`).
 - **Callers.** `composeSystemPrompt` has two callers:
   - The contract, for `systemPrompt.kind` `context`: `composeSystemPrompt(profilePrompt(profile), contextTexts)`, each context text with no heading ([L2 Prompt](L2-agent-cli.md#prompt), rule 3). `run agent` passes the texts and never calls the function.
-  - `finalPrompt` of `prompt-render.ts`, in the server part. It keeps the unresolved-part rule of today: it asserts that the last part is the framing, and it returns `null` when a part is not resolved. Else it maps the parts to `PromptText` and calls `composeSystemPrompt`. Its callers stay: `prompt-resolve.ts`, `service.ts` and `src/worker/execution-setup.ts`.
+  - `finalPrompt` of `prompt-render.ts`, in the server part. It keeps the unresolved-part rule of today. It asserts that the last part is the framing. It returns `null` when a part is not resolved. Else it maps the parts to `PromptText` and calls `composeSystemPrompt`. Its callers stay: `prompt-resolve.ts`, `service.ts` and `src/worker/execution-setup.ts`.
 - Change: `systemPrompt` of `prompt-render.ts` leaves ([L1-D10](L1-model.md#decisions)). Its two callers, the Workbench Service and the Project Service, append the framing part and call `finalPrompt`. They assert that the result is not `null`. The composed text of a worker execution, a Workbench session and an `env@1` session stays byte-equal ([L1 E1, fit rule 9](L1-model.md#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule)).
 - `profilePrompt` gives the shipped parts of a profile, each with no heading.
-- `systemPromptDigest` is the SHA-256 hex digest of the output of `composeSystemPrompt`, before the input redaction and before pi adds `<cwd>` (`dist/core/system-prompt.js:110`). Reason: the marker of a redacted value holds a random tag per session (`tag` in `sensitiveTextRedaction`), so a digest after the redaction differs between two runs with the same input.
+- `systemPromptDigest` is the SHA-256 hex digest of the output of `composeSystemPrompt`. It takes the text before the input redaction and before pi adds `<cwd>` (`dist/core/system-prompt.js:110`). Reason: the marker of a redacted value holds a random tag per session (`tag` in `sensitiveTextRedaction`). So a digest after the redaction differs between two runs with the same input.
 - With `systemPrompt.kind` `composed`, the digest is the digest of the given text.
 
 ### Prompt files
@@ -424,7 +424,9 @@ The shared coding text is the three sections `## Code principles`, `## Code` and
 The protocol text that leaves `## Execution` ([L1 boundary rule 7](L1-model.md#agentworker-boundary), [L1-D12](L1-model.md#decisions)):
 
 - Item 4 loses the sentence "The worker runs the verifications after the turn."
-- Item 5 loses the sentence "The worker merges the base branch itself." Its first sentence names the node branch, so it becomes: "**Merge no branch.** Merge, rebase or cherry-pick no other branch into the branch of the workspace."
+- Item 5 changes in two ways:
+  - It loses the sentence "The worker merges the base branch itself."
+  - Its first sentence names the node branch, so it becomes: "**Merge no branch.** Merge, rebase or cherry-pick no other branch into the branch of the workspace."
 - In `re@1.md`, item 8 of `## Judgement` and the section `## Findings` leave.
 
 The role statements, exact text:
@@ -464,7 +466,7 @@ Item 6 of `## Execution` of `fee@1`, exact text. It traces to the dogfood findin
 
 - `bee@1` and `te@1` hold no method rule of their own, because no dogfood finding and no evaluation result supports one ([L1-D16](L1-model.md#decisions)). Each differs from `swe@1` only in the role statement. The evaluation of [L1-D20](L1-model.md#decisions) thus measures the role statement and, for `fee@1`, item 6.
 - No Role holds a convention of one repository ([L1 C4](L1-model.md#e1-constraints)).
-- The worker path keeps `swe@1.md` and `re@1.md` of today in layer 1. Layer 2 of E1 moves the worker path to the chain: it adds the part `coding` to `PromptPart`, points the server Role at `role/<name>.md` and deletes the old files ([L5](L5-worker.md#worker-instructions)). Until then the text exists twice, and [L3-U3](#unit-level-rules) fails on a difference.
+- The worker path keeps `swe@1.md` and `re@1.md` of today in layer 1. Layer 2 of E1 moves the worker path to the chain ([L5](L5-worker.md#worker-instructions)). It adds the part `coding` to `PromptPart`. It points the server Role at `role/<name>.md` and deletes the old files. Until then the text exists twice, and [L3-U3](#unit-level-rules) fails on a difference.
 - The build adds each new file of `static/prompt/` to the shipped assets (`shippedAsset` in `src/kernel/assets.ts`).
 
 ## Start preconditions
@@ -517,7 +519,7 @@ export const StartPrecondition = {
 
 - No consumer can remove or reorder a guard: the consumer gives only item 6 ([L1-D8](L1-model.md#decisions)).
 - Change: today the order is `homeRelativeCwd`, `restore`, the hooks of the consumer, `hook` (`src/agent/agent-session.ts:125-128`). Only `agentPort` adds `toolAllowlist` and the confinement (`guardsOf`, `src/agent/agent-port.ts:119`). On the contract path, the restore moves after the allowlist, so the restore acts only on a declared tool. The confinement stays after the restore.
-- Each guard handler catches its own error and fails closed: the allowlist, the restore and the confinement block, and the input redaction writes the failure marker. pi catches a handler error, emits it and keeps the message (`emitMessageEnd`, `dist/core/extensions/runner.js:864-899`). The error listener of the contract then ends the run with the end `failed` and the failure `internal`.
+- Each guard handler catches its own error and fails closed. The allowlist, the restore and the confinement block. The input redaction writes the failure marker. pi catches a handler error, emits it and keeps the message (`emitMessageEnd`, `dist/core/extensions/runner.js:864-899`). The error listener of the contract then ends the run with the end `failed` and the failure `internal`.
 - The open paths of today keep their own guard list until their consumers move ([Open paths until L5 and the Workbench change](#open-paths-until-l5-and-the-workbench-change)).
 
 ### Allowlist block text
@@ -546,7 +548,10 @@ The tool <name> is not declared for this agent.
 
 This is the build change of [L1 Session file](L1-model.md#session-file) on the contract path.
 
-- **Removed.** The redaction of the `assistant` message with rule 0 at `message_end`; `keepThinking` and the count `thinking_kept`; the redaction of the compaction summary at `context` and at `session_compact`, and the count `compaction_residual` (`src/agent/hooks/sensitive-text-redaction.ts:105-111`, `:368-388`, `:544-581`).
+- **Removed** (`src/agent/hooks/sensitive-text-redaction.ts:105-111`, `:368-388`, `:544-581`):
+  - the redaction of the `assistant` message with rule 0 at `message_end`;
+  - `keepThinking` and the count `thinking_kept`;
+  - the redaction of the compaction summary at `context` and at `session_compact`, and the count `compaction_residual`.
 - **Kept.** The input redaction of each `system`, `user`, `toolResult` and `custom` message at `message_end`, and of each `custom` message at `context`. The redaction of the system prompt before pi gets it (`text`, `src/agent/agent-session.ts`). The restore of `write` and `edit` arguments. `modelOutput`, now `exitText`.
 - **Error text.** `inputRedaction` redacts the `errorMessage` field of an `assistant` message at `message_end`, and no other field of that message. pi replaces the message in place, so the agent state, the events and the session file get the redacted copy (`_replaceMessageInPlace`, `dist/core/agent-session.js:864-877`).
 - **Custom entries.** `appendCustom` redacts each string of `data` with `text` before pi writes the entry. So each entry kind that a consumer writes is input-redacted.
@@ -566,7 +571,7 @@ This is the build change of [L1 Session file](L1-model.md#session-file) on the c
 
 ### Rotate warning
 
-- `outputFinding` scans each string of the `content` of an `assistant` message at `message_end` with the known-secret matcher: text, thinking, the thinking signature and the tool call arguments. It does not scan `errorMessage`.
+- `outputFinding` scans the `content` of an `assistant` message at `message_end` with the known-secret matcher. It scans each string: text, thinking, the thinking signature and the tool call arguments. It does not scan `errorMessage`.
 - One `assistant` message with one or more findings gives one `SecretWarning`. `rule` is `llm_credential`, the rule of each known secret (`SensitiveRule.LlmCredential`, `src/agent/sensitive-text.ts`). `count` is the number of findings in that message.
 - The warning refuses nothing and changes no message. It holds no value, no marker index, no tag, no length and no digest of a value.
 - The contract puts each warning in `TurnEnd.warnings`. `run agent` writes it as the line `cli.run.agent.secret_exposed` with this `rule` and `count` ([L2 stderr](L2-agent-cli.md#stderr), item 2). [L5](L5-worker.md) records it as a telemetry finding.
@@ -695,7 +700,7 @@ The catalog split changes the field reads of each consumer of `getAgentDeclarati
 | `turns`    | The contract sets `finishTurn` of the pi agent. Each call adds 1 to the turn count. When the count is equal to or more than `turns`, `finishTurn` returns `{ action: "end" }`, so the run ends at that turn with no abort. At an error or aborted response, the contract aborts the session in place of the decision | `turns`         |
 
 - pi calls `finishTurn` after a completed assistant turn and its tool results, before `turn_end` (`dist/agent-loop.js:179`). pi also calls it for an error or aborted response, and then ignores the decision (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:143-153`; `FinishTurn`, `dist/types.d.ts:125-131`). So each response counts as one turn, a retried error included.
-- **Limit at an error.** When the count reaches `turns` at an error or aborted response, the contract aborts the session. pi then makes no retry. The end is `budget_end` with `budgetReached` `turns`. An aborted response that the stop signal or an earlier limit caused keeps the end of that cause.
+- **Limit at an error.** When the count reaches `turns` at an error or aborted response, the contract aborts the session. The contract starts the abort and does not wait for it inside `finishTurn`. Reason: `session.abort()` waits for idle, and the loop waits for `finishTurn`. pi then makes no retry. The end is `budget_end` with `budgetReached` `turns`. An aborted response that the stop signal or an earlier limit caused keeps the end of that cause.
 - The same `finishTurn` returns `{ action: "end" }` after `endAfterTurn`. Else it calls no other function and returns `undefined`.
 - The first limit that the run reaches decides `budgetReached`. A later limit changes nothing.
 - The command limit of `bash` is `min(remaining wall time, COMMAND_LIMIT_MS)`, as today (`src/agent/tool-table.ts:102`). With `deadline` `null`, it is `COMMAND_LIMIT_MS` (600 s).
@@ -756,7 +761,10 @@ The Project Service opens each `env@1` session through `openAgent`:
 
 ### Workbench Service
 
-- **Constraint.** The Workbench change starts only after `feature/workbench-v2` merges into `main` ([L1-D8](L1-model.md#decisions)). Until then the Workbench of `main` uses `openSession` with [Interim redaction](#interim-redaction). Before the Workbench change, the agent build changes three things in Workbench files: the import paths of moved symbols, the call of `finalPrompt` in place of `systemPrompt`, and the catalog reads of [Catalog reads at the split](#catalog-reads-at-the-split).
+- **Constraint.** The Workbench change starts only after `feature/workbench-v2` merges into `main` ([L1-D8](L1-model.md#decisions)). Until then the Workbench of `main` uses `openSession` with [Interim redaction](#interim-redaction). Before the Workbench change, the agent build changes three things in Workbench files:
+  - the import paths of moved symbols;
+  - the call of `finalPrompt` in place of `systemPrompt`;
+  - the catalog reads of [Catalog reads at the split](#catalog-reads-at-the-split).
 - **Open.** The Workbench opens each session through `openAgent`:
   - `systemPrompt` `composed`, from `finalPrompt` of the Workbench parts and the framing.
   - `workspace` `{ cwd: place.cwd, roots: [place.cwd], confine: true }`. This keeps the confinement of every Workbench session of the branch (`checkoutConfinement(session.place.cwd)`, `src/workbench/service.ts:1702` of the branch).
@@ -821,12 +829,26 @@ Each check is an end-to-end test ([index](index.md#layer-files)). It runs the bu
 2. **L3-AC2. Each profile composes the prompt chain.**
    - Fixture: `$TEST/context.md` holds `Repository prompt M4`. Each run has its own W and S. Stub answers the text `ok`.
    - Command: for P in `swe@1`, `bee@1`, `fee@1`, `te@1`, `re@1` and `env@1`: Run with the profile P and `--system-prompt "$TEST/context.md"`.
-   - Pass: each run exits `0`. Let C(P) be the join with `"\n\n"` of these texts, each as the file holds it: `static/prompt/base.md`; `static/prompt/coding.md` for each P except `env@1`; `static/prompt/role/P.md`, or `static/prompt/env@1.md` for `env@1`; then `Repository prompt M4`. The system text of the first request of each run starts with C(P) byte for byte, and the rest is one `<cwd>` section. `system_prompt_digest` of each line in O is the SHA-256 hex digest of C(P).
+   - Pass: each run exits `0`. Let C(P) be the join with `"\n\n"` of these texts, in this order, each as the file holds it:
+     1. `static/prompt/base.md`;
+     2. `static/prompt/coding.md`, for each P except `env@1`;
+     3. `static/prompt/role/P.md`, or `static/prompt/env@1.md` for `env@1`;
+     4. `Repository prompt M4`.
+   - The system text of the first request of each run starts with C(P) byte for byte, and the rest is one `<cwd>` section. `system_prompt_digest` of each line in O is the SHA-256 hex digest of C(P).
 
 3. **L3-AC3. Each profile offers its full tool set, and a declared tool with no implementation is absent.**
-   - Fixture: each run has its own W and S. The scripted answers: for `swe@1`, call `evidence-upload` with `{"path":"README"}`, then answer `done`; for `re@1`, call `bash` with `{"command":"ls"}`, then answer `done`; for `env@1`, call `probe` with `{}`, then answer `done`; for `bee@1`, `fee@1` and `te@1`, answer `done`.
+   - Fixture: each run has its own W and S. The scripted answers:
+     - `swe@1`: call `evidence-upload` with `{"path":"README"}`, then answer `done`.
+     - `re@1`: call `bash` with `{"command":"ls"}`, then answer `done`.
+     - `env@1`: call `probe` with `{}`, then answer `done`.
+     - `bee@1`, `fee@1` and `te@1`: answer `done`.
    - Command: Run once for each of the six profiles.
-   - Pass: each run exits `0`. The first request lists exactly `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash` for `swe@1`, `bee@1`, `fee@1` and `te@1`, and exactly `read`, `grep`, `find` and `ls` for `re@1` and `env@1`. The tool result of the scripted call in S is an error result with the text `Tool evidence-upload not found`, `Tool bash not found` and `Tool probe not found`. For `re@1` and `env@1`, a digest listing of W is equal before and after.
+   - Pass:
+     - Each run exits `0`.
+     - For `swe@1`, `bee@1`, `fee@1` and `te@1`, the first request lists exactly `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash`.
+     - For `re@1` and `env@1`, the first request lists exactly `read`, `grep`, `find` and `ls`.
+     - The tool result of the scripted call in S is an error result: `Tool evidence-upload not found`, `Tool bash not found` and `Tool probe not found`.
+     - For `re@1` and `env@1`, a digest listing of W is equal before and after.
 
 4. **L3-AC4. A known secret in a tool input blocks the call, and the record keeps the model output.**
    - Fixture: K as in L3-AC1. One scripted assistant message with two tool calls: `bash` with `{"command":"printf %s K > $TEST/leak"}`, and `write` with `{"path":"leak.txt","content":"K"}`. Then the answer `done`.
@@ -846,7 +868,7 @@ Each check is an end-to-end test ([index](index.md#layer-files)). It runs the bu
    - Pass:
      - Variant 1 is refused with `cli.run.agent.start_refused`, and the `reason` row starts with `git_clean:`. Variants 2 and 3 are refused, and the `reason` row starts with `git_worktree:`. For each of the three, Stub receives no request, no file exists at S, and a digest listing of W is equal before and after.
      - Variants 4, 5 and 6 exit `0`.
-     - For variant 6, no file exists at `$TEST/M10` or at `$TEST/M11`, and a digest listing of W is equal before and after the start of the run.
+     - For variant 6, no file exists at `$TEST/M10` or at `$TEST/M11`. A digest listing of W is equal before and after the start of the run.
 
 ## Unit-level rules
 
@@ -862,7 +884,12 @@ Each rule holds in one module, with no process and no LLM stub ([index](index.md
 6. **L3-U2. Catalog.** Each profile has the exact tool set, confinement and precondition list of [Coding tools](#coding-tools). Each declared tool except `bash` has a `TOOL_CATALOG` entry. `getProfile` of an unknown name gives `undefined`. `AGENT_NAMES` holds no role profile. Test file: `src/agent/catalog.test.ts`.
 7. **L3-U3. Prompt files.** `coding.md` equals the three shared sections of `swe@1.md` and of `re@1.md`. `role/swe@1.md` and `role/re@1.md` equal the other sections of `swe@1.md` and `re@1.md` less the protocol text of [Prompt files](#prompt-files). `## Execution` and `## Findings` of `role/bee@1.md` and `role/te@1.md` equal those of `role/swe@1.md`, and those of `role/fee@1.md` differ only by item 6. No Role holds the words `worker`, `node branch` or `gate`. Test file: `src/agent/prompt-assets.test.ts`.
 8. **L3-U4. Start preconditions.** Each id passes and fails as its row states. A subdirectory of a worktree fails `git_worktree`. The order and the first failure. The reason text. Each `git` command gets `--no-optional-locks` for `git_clean`, the isolated environment and the `PATH` of the input, else of the runtime process. A name of `process.env` that `input.childEnvironment` does not hold is absent from the environment of each `git` command. A timeout fails the precondition. Test file: `src/agent/start-preconditions.test.ts`.
-9. **L3-U5. End and class.** Each end from its condition; the class from `isContextOverflow` and `isRetryableAssistantError`, a context overflow included; the failure kind; the failure `internal` for a thrown error and for an extension error; `complete`; the totals. Test file: `src/agent/run-outcome.test.ts`.
+9. **L3-U5. End and class.** Test file: `src/agent/run-outcome.test.ts`.
+   - Each end from its condition.
+   - The class from `isContextOverflow` and `isRetryableAssistantError`, a context overflow included.
+   - The failure kind.
+   - The failure `internal` for a thrown error and for an extension error.
+   - `complete` and the totals.
 10. **L3-U6. Budget.** The deadline gives `wall`. A list price equal to the limit gives `usd`. With `turns: 1`, the run ends after the first turn with `turns` and no abort, and no second provider request leaves. When the limit turn is a retryable error, the contract aborts the session, no retry request leaves, and the end is `budget_end` with `turns`. The first limit wins. `endAfterTurn` ends the run after the current batch, a mixed batch included. The command limit with a `null` deadline is `COMMAND_LIMIT_MS`. The test uses a model with a catalog price. Test file: `src/agent/run-budget.test.ts`.
 11. **L3-U7. Contract.**
     - An undeclared name of `consumerTools` throws `agent.tool_undeclared`. An unsupported `thinkingLevel` throws `agent.level_unsupported`, and no level is clamped.
@@ -926,7 +953,11 @@ These are order hints. [L6](L6-migration.md) fixes the order.
 7. The full-entry read of a session file (`readSessionFileEntry`): L5 rules its redaction before the worker path drops `assistantRedaction` ([Exit redaction](#exit-redaction)).
 8. The sandbox scope of the worker `bash` after the merge ([Workbench `bash`](#workbench-bash)).
 9. A unit rule that `HostTool` of `src/worker/contract.ts` equals the worker tool names of the catalog.
-10. Layer 2 of E1 in the worker path: the part `coding` of `PromptPart`, the server Role from `role/<name>.md`, the protocol text in the worker instructions, and the deletion of the old `swe@1.md` and `re@1.md` ([Prompt files](#prompt-files)).
+10. Layer 2 of E1 in the worker path ([Prompt files](#prompt-files)):
+    - the part `coding` of `PromptPart`;
+    - the server Role from `role/<name>.md`;
+    - the protocol text in the worker instructions;
+    - the deletion of the old `swe@1.md` and `re@1.md`.
 11. The Workbench change of [Workbench Service](#workbench-service), after the merge, with the rulings of Q1 and Q2. The lint glob of [L1-D15](L1-model.md#decisions) covers `src/workbench/tool-approval.ts`.
 
 ### To HANDOFF.md
@@ -956,7 +987,7 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 15. **L3-D15.** `RunBudget` holds `deadline`, `usd` and `turns`. The first limit that the run reaches decides `budgetReached`. Constraint: the wall and list-price limits abort. The contract counts each response in its `finishTurn`, an error included, and returns `{ action: "end" }` at the limit. At an error or aborted response at the limit, it aborts the session. The `bash` command limit is `min(remaining wall time, COMMAND_LIMIT_MS)`. `turns` gets its first reader in L5.
 16. **L3-D16.** An abort of the stop signal is the graceful stop. `forceStop` returns at once and kills each live child process. Constraint: `ToolProcesses` tracks live processes and gains `killAll`. `close` kills each child process that is still alive, waits at most `RUNTIME_SETUP_DEADLINE_MS`, and does nothing after `forceStop`.
 17. **L3-D17.** The class of a provider error is `retryable` only when `isContextOverflow` rejects it and `isRetryableAssistantError` accepts it. The failure kind is `providerFailureOf` of the redacted error text. Constraint: the contract retries nothing; the retries of pi stay.
-18. **L3-D18.** Confinement is the property `confined` of the profile. Constraint of the Workbench change: the input gains `workspace.confine`, a consumer can add the confinement with it and can never remove it, and `TOOL_CATALOG` gains `bash` with an empty location list. The sandbox, not the confinement, confines `bash`.
+18. **L3-D18.** Confinement is the property `confined` of the profile. Constraint of the Workbench change: the input gains `workspace.confine`. A consumer can add the confinement with it and can never remove it. `TOOL_CATALOG` gains `bash` with an empty location list. The sandbox, not the confinement, confines `bash`.
 19. **L3-D19.** A child process gets only the names of `input.childEnvironment`, less the names that `childEnvironment` removes, plus the pi `PATH`. This rule holds today. Constraint: L3-U11 guards it as a regression rule; the runtime process and pi do not read the input.
 20. **L3-D20.** The Project Service opens `env@1` through the contract with a `memory` session. Its `end` callback calls `endAfterTurn`, which keeps the end of today after any batch that holds a passed `environment_write`. Reason: `finishTurn` is the exported pi mechanism that gives this end with no abort, and `terminate: true` needs every result of a batch. Constraint: no consumer patches `finishTurn`; only the contract sets it.
 21. **L3-D21.** After the merge, the runtime `bash` is the one `bash` of every consumer, and the input gains `bashSandbox`. The Workbench and the worker are its readers. Constraint: the sandbox of the branch keeps its strength. A confined session of a profile that declares `bash` with no `bashSandbox` makes the open throw `agent.sandbox_missing`. L5 gives the scope of the worker; the Workbench change starts only after the merge of `feature/workbench-v2`.
@@ -969,9 +1000,9 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 28. **L3-D28. Applied to L1.** AC18, AC19, U6, U13 and the entry "Boundary rule 8" now state the pi behavior. An undeclared `consumerTools` name makes the open throw `agent.tool_undeclared`. An undeclared extension tool, or a model call of an undeclared name, gets `Tool <name> not found`. U6 is a unit test of the handler.
 29. **L3-D29. Applied to L1.** The mapping row of `env@1` and E6 note that the merge of `feature/workbench-v2` renames `env@1` to `pe@1`. The rename lands with the merge.
 30. **L3-D30. Applied to L1.** [Session file](L1-model.md#session-file) holds the block of a known secret in a tool input, in every tool, with the matcher `secretMatcher`. The rules table records that AH-Q3 keeps its strength.
-31. **L3-D31. Applied to L1.** [Session file](L1-model.md#session-file) holds the interim: both open paths of today keep the redaction of LLM output until L5 and the Workbench change. "Exit redaction" names the full-entry read of a session file and hands its ruling to L5, with the fact of `discard` at the end of an execution.
+31. **L3-D31. Applied to L1.** [Session file](L1-model.md#session-file) holds the interim. Both open paths of today keep the redaction of LLM output until L5 and the Workbench change. "Exit redaction" names the full-entry read of a session file. It hands the ruling of that read to L5, with the fact of `discard` at the end of an execution.
 32. **L3-D32. Applied to L1.** L1-D9 holds the constraint of the Workbench change: a consumer can add the confinement and can never remove it. The confinement does not confine `bash`; the sandbox confines it.
-33. **L3-D33. Applied to L1.** Statelessness check 4 and the boundary row "Consumer records" hold the session kind `memory` of the Project Service now, and the kind `resume` with the Workbench change.
+33. **L3-D33. Applied to L1.** Statelessness check 4 and the boundary row "Consumer records" hold the session kind `memory` of the Project Service now. They hold the kind `resume` with the Workbench change.
 34. **L3-D34. Applied to L1.** The L1 handoff to L3 on the start preconditions records the ruling: a resume skips `git_clean`, with the Workbench change.
 35. **L3-D35. Applied to L1.** The tool inventory row of `agentPort` states that `agent-contract.ts` is the agent part, and that the rest of `agent-port.ts` becomes the worker port `agent.open`.
 36. **L3-D36. Applied to L2.** A failed open gives `cli.run.agent.open_failed` with the `reason` row, class `terminal`, exit `1` and no result. A signal during the open keeps the rule of L2 Shutdown, rule 5: exit `2` and no result.
