@@ -528,6 +528,18 @@ A refusal in these checks means: a nonzero exit code, and one line on stderr tha
     - Pass: `kanthord run --help` exits 0 and lists `agent` and `worker`. `docs/cli/other.md` lists `run` among the global root names. The completeness test exits 0, with `run` in `TOP_LEVEL_NAMES`.
     - Today: the global root names are `config`, `upgrade`, `serve` and `auth` (`docs/cli/other.md`). `TOP_LEVEL_NAMES` holds no `run` (`src/apps/cli/completeness.test.ts`).
 
+15. **AC15. The worker commits the work of a session before the next session opens** ([Agent–worker boundary](#agentworker-boundary), rule 9; L1-D21). Owner: L5.
+    - Fixture: a local KanthorD server, a registered worker instance, Stub, and one execution whose line opens two `swe@1` sessions in the same worktree. The scripted turn of the first session writes one file.
+    - Command: `kanthord run worker` with that instance.
+    - Pass: the second session open gives no refusal. `git log` of the worktree shows one new commit between the two session opens, with the file of the first session. `git status --porcelain` is empty at the second session open.
+    - Today: one `agent.open` runs per execution (`implementWorkspaceNodes` in `src/worker/unit/chain-implement.ts`).
+
+16. **AC16. The lint rule on `modelRegistry` and `registerProvider` covers each capability and consumer hook directory** ([LLM credential](#llm-credential), "Extension reach"; L1-D15). Owner: L5.
+    - Fixture: the `engine` repository at the commit under test. A variant adds one temporary file that reads `ctx.modelRegistry`, in each directory that holds a capability or a consumer hook. L5 lists the directories.
+    - Command: `pnpm run lint`, once per variant.
+    - Pass: with the commit under test, the exit code is 0. With each variant, the exit code is nonzero, and the output names the temporary file.
+    - Today: the rule applies only to `src/agent/capabilities/**/*.ts` (`eslint.config.js`). The consumer hook `src/agent/hooks/tool-approval.ts` is outside that glob.
+
 ## Handoffs to later layers
 
 - [L2](L2-agent-cli.md): the command `kanthord run agent` under the global root `run`. L2 adds `run` to the closed root set of `engine/docs/cli/other.md` ("Closed root names and option scope"), because `run agent` is the first command under it. The session file path is an input, under the place rule of [Session file](#session-file). The `--auth` file follows [The `--auth` file](#the---auth-file-of-run-agent). L2 specifies the mapping from the `env` object of an `--auth` entry to the routing metadata of the provider, and the schema of the raw `--auth` entry. Goal "One input runs under two profiles, and the results compare." The checks of [Statelessness](#statelessness). The command page tells the developer the [reach of an unconfined session](#reach-of-an-unconfined-session) and to use a credential that the developer owns.
@@ -578,7 +590,7 @@ A refusal in these checks means: a nonzero exit code, and one line on stderr tha
 22. **L1-D22.** `run agent` takes the LLM credential only from a pi `auth.json` file named by `--auth <path>`, with the default `~/.pi/agent/auth.json`. It reads no credential from standard input (Ulrich, 2026-11-22). The worker path takes the LLM credential from the handover of the server. Constraint: [The `--auth` file](#the---auth-file-of-run-agent) holds the rules. `run agent` reads the entry with the exported pi function `readStoredCredential` and an explicit path. It refuses a key with a variable reference or a `!` command, so it runs no shell code for a credential. The three changed credential rows are weaker for `run agent` (Q8, ruled 2026-11-21). Ulrich re-confirmed this full effect, with its conditions, on 2026-11-21 (R2-I).
 23. **L1-D23.** The server operation `worker.execution.seed.get` leaves with `kanthord worker tasks seed`, because no reader remains. Ulrich accepted this breaking change on 2026-11-21 (R2-I). No server runs the latest code, so the change breaks no deployed client. Constraint: L6 can remove it early, in the step that deletes the `tasks-*` files.
 24. **L1-D24.** The pi packages (`@earendil-works/pi-*`) are the official implementation of the agent runtime. When pi gives a mechanism, KanthorD uses it and builds no second one: the credential file `auth.json`, the session file and the extension factories. Constraint: KanthorD calls only the exported pi API. A KanthorD check can refuse more than pi (for example the `!` and `$NAME` keys of [The `--auth` file](#the---auth-file-of-run-agent)), but it never accepts what pi refuses.
-25. **L1-D25.** L1 states its public behavior as acceptance checks AC1..AC14. Constraint: each owner layer turns its checks into runnable commands; an implementation passes the checks of its layer and of every upper layer.
+25. **L1-D25.** L1 states its public behavior as acceptance checks AC1..AC16. Constraint: each owner layer turns its checks into runnable commands; an implementation passes the checks of its layer and of every upper layer.
 
 ## Open questions for Ulrich
 
