@@ -34,11 +34,11 @@ Ulrich set this order on 2026-11-22. The worker work starts only after the agent
 
 1. L1, the model. Status `accepted`.
 2. L2, the agent CLI. Then L3, the agent. Then L7, the agent evaluation (Ulrich, 2026-11-22).
-3. L6 part A: the build steps of the agent, from the code of today to L2 and L3.
+3. L6 part A: the build steps of the agent, from the code of today to L2 and L3, and the runner and the evaluation set of L7.
 4. The agent gate, in this order:
-   1. The acceptance checks and the unit-level rules of L1, L2 and L3 that their owner layers make runnable pass.
+   1. The acceptance checks and the unit-level rules of L1, L2, L3 and L7 that their owner layers make runnable pass.
    2. An end-to-end run of `kanthord run agent` with a real LLM credential passes. The credential comes from the pi `auth.json` of Ulrich, through `--auth`.
-   3. The agent evaluation of [L7](L7-agent-evaluation.md) runs against the built agent, in this order: the calibration of the eval model, the comparison of each role profile against `swe@1`, then the confirming check on the production model.
+   3. The agent evaluation of [L7](L7-agent-evaluation.md) runs against the built agent, in this order: the calibration of the eval model, the comparison of each role profile against `swe@1`, then the confirming check on the production model. An evaluation with no verdict fails this step, and Ulrich decides the next step.
 5. L4, the worker CLI. Then L5, the worker. Then L8, the worker evaluation.
 6. L6 part B: the build steps of the worker. Then the worker evaluation of L8 runs.
 7. After this round, `feature/workbench-v2` rebases onto `main` and moves the Workbench to the agent contract (Ulrich, 2026-11-22). The Agent V2 and Worker V3 work merges into `main` first. [L3](L3-agent.md#constraints-on-the-workbench-branch-at-rebase) lists the constraints of that rebase.
@@ -55,12 +55,13 @@ The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A
 | L4    | [L4-worker-cli.md](L4-worker-cli.md)               | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                                                           | R5, R6, R8     | `planned`  |
 | L5    | [L5-worker.md](L5-worker.md)                       | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                                               | R3, R4, R6, R8 | `planned`  |
 | L6    | [L6-migration.md](L6-migration.md)                 | Migration                    | Specify the build order from the code of today                                                                                         | R7             | `planned`  |
-| L7    | [L7-agent-evaluation.md](L7-agent-evaluation.md)   | The agent evaluation         | Specify the evaluation set, the eval model, the calibration, the pass rule, the fixed exit rule and the runner of the agent evaluation | R8, R9         | `draft`    |
+| L7    | [L7-agent-evaluation.md](L7-agent-evaluation.md)   | The agent evaluation         | Specify the evaluation set, the eval model, the calibration, the pass rule, the fixed exit rule and the runner of the agent evaluation | R6, R8, R9     | `draft`    |
 | L8    | [L8-worker-evaluation.md](L8-worker-evaluation.md) | The worker evaluation        | Specify the worker-level checks against a local KanthorD server, the review cases and the successor of the Worker V2 eval set          | R5, R9         | `planned`  |
 
 L1 links these anchors of later files. Each later file keeps the heading of each anchor.
 
 - `L3-agent.md#coding-tools`, `#profile-prompts`, `#input-and-output-contract`, `#constraints-on-the-workbench-branch-at-rebase`
+- `L7-agent-evaluation.md#exit-rule`, `#one-evaluation-run`, `#unit-level-rules`
 - `L5-worker.md#worker-instructions`, `#worker-capabilities`, `#worker-tools`
 
 [L1](L1-model.md#handoffs-to-later-layers) lists the other items that it hands to a later layer.
@@ -72,6 +73,12 @@ L1 links these anchors of later files. Each later file keeps the heading of each
 ## Glossary
 
 One meaning per term. A term of today keeps its meaning unless its entry marks `Change:`.
+
+- **eval model.** The model that runs the agents under test in the agent evaluation. Calibration fixes its level. Change: a new term ([L7](L7-agent-evaluation.md#eval-model)).
+- **production model.** The model of the confirming check, `anthropic/claude-sonnet-5-5:high`. Change: a new term ([L7](L7-agent-evaluation.md#confirming-check)).
+- **case.** One task of the evaluation set: a repository snapshot, a task text and hidden checks. Change: a new term ([L7](L7-agent-evaluation.md#case-folder)).
+- **calibration.** The runs of `swe@1` that fix the level of the eval model before the comparison. Change: a new term ([L7](L7-agent-evaluation.md#calibration)).
+- **confirming check.** The runs on the production model that confirm a role profile that wins on the eval model. Change: a new term ([L7](L7-agent-evaluation.md#confirming-check)).
 
 - **agent.** One LLM working unit that runs one agent profile on pi-coding-agent. It is stateless and runs without KanthorD ([L1](L1-model.md#statelessness)). Change: today an agent is "an automated participant responsible for carrying out steps as the WHO" ([overview.vocabulary.md](../overview.vocabulary.md#agent)). The role in the WHO stays. The new meaning adds the unit and its boundary.
 - **agent runtime.** The part of the Agent component that is the agent of the model: the session open, the profiles, the guards, the tools and the prompt join. Change: a new term ([L1](L1-model.md#agent-runtime-and-server-part-of-the-agent-component)).

@@ -608,6 +608,7 @@ Each rule holds in one module, with no process, no file system flow and no LLM s
 - **Extension rule 1, one factory per module.** The rule is code structure. U8 covers the test file of rule 1. AC27 covers rule 3.
 - **Tool ownership rule 7, a declared tool with no location declaration.** The rule is a catalog structure rule. The test "a tool with no location field passes, a tool with no catalog entry is blocked and a path field of another tool is checked" covers it (`src/agent/hooks/checkout-confinement.test.ts:87`).
 - **L1-D10, one composition function.** The rule is code structure. The composed text depends on the prompt texts that L3 writes.
+- **L1-D16, the fixed exit rule.** [L7](L7-agent-evaluation.md#unit-level-rules), unit-level rule 3, covers it.
 - **Reach of an unconfined session.** The table states a risk, not a behavior.
 - **"Never passed in" of the LLM credential.** The list has no closed set of outputs. AC4, AC7, AC8, AC23 and U3 cover the closed outputs.
 
