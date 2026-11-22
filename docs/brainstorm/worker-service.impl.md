@@ -783,6 +783,9 @@ The heartbeat and the renewal:
 - Each record holds `instance`, `connection_name` and `last_heartbeat_at`. A connection that an archive drops logs no disconnected record. A new connection replaces the current connection and logs no disconnected record for it.
 - After a server restart, a Gateway request that re-creates the connection logs `connection_name` null.
 - When the server cannot write a disconnected record, it logs `worker.instance.connection_log_failed` and continues.
+- The same sweep then releases the executions of the lost instance (`releaseLostExecutions` of `src/worker/instances.ts`). It revokes each live execution of the instance that holds no stop order, through `revokeForInstanceLoss`, with the loss `heartbeat_lost`. The stop is `instance_lost` with the code null, and Mission counts no failure. An execution with a stop order keeps its 60 s deadline.
+- A failed revoke logs `worker.instance.loss_failed` with `instance_id`, `loss` and `err`. The sweep tries again at each later run, until the revoke succeeds, the instance sends a heartbeat, a new connection opens or `LOSS_RELEASE_ATTEMPT_LIMIT`, 5 attempts, has failed. After the fifth failure the server logs `worker.instance.loss_abandoned` once and stops the retry.
+- A lapsed instance that sends a heartbeat again opens no lost execution again. `renewConnection` clears the retry.
 - An increment of `gateway.auth.version` fails every token with 401. The process takes a new worker token and connects with its `connection_id`. When a `client_secret` changed, it exits 1 with `worker.instance.secret_changed`. The restart resumes each registration and each `running` execution with a fresh handover.
 - The renewal reads only the monotonic clock, so a difference of the two clocks stops nothing.
 
@@ -938,9 +941,10 @@ The container runtime store:
 - `worker.server_instance_limit` caps the live server instances of the server over both placements, as a positive safe integer with the default `16`. A create at the cap refuses, under [The instance record](#the-instance-record).
 - A server start with more live server instances than the cap starts the oldest ones by `created_at` up to the cap. Each other one stays pending.
 - The pool host writes `worker.pool.instance_limit` with `instance` to the server log for each pending instance. It starts the oldest pending instance when a started one ends.
-- An instance exit without a stop request restarts the instance with a backoff of 1 s that doubles up to 30 s. The backoff resets after the instance lives 30 s.
+- An instance exit without a stop request restarts the instance with a backoff of 1 s that doubles up to `POOL_BACKOFF_MAX_MS`, 300 s. The backoff resets after the instance lives 300 s.
 - The pool host writes `worker.pool.instance_failed` with `instance`, `placement`, `exit_code` and `err` to the server log.
-- The registrations stay live during the backoff, so the new instance resumes each registration and its `running` execution.
+- After that record, the pool host calls `instanceFailed` of the Worker Service (`WorkerInstances.instanceFailed` of `src/worker/instances.ts`). It revokes each live execution of the instance with the stop `instance_lost` and the loss `pool_failed`, as [the instance exchange](#the-instance-exchange) states. A failed release logs `worker.pool.instance_failed_release` and does not stop the restart. The connection sweep then retries the release, at most 5 attempts in all. A new connection or a heartbeat of the restarted instance ends the retry, and the execution then holds its node until its `expired_at`. A restart of the server ends the retry.
+- The registrations stay live during the backoff, so the new instance resumes each registration.
 - At server stop, `stopPool` runs first, before quiesce. The pool host sends the `stop` control to each instance through its slot driver.
 - The pool host calls `terminate()` for an instance that does not end within the pool stop deadline of 5 s. The server watchdog is 10 s.
 - A stopped instance cancels its live execution. Only a worker unit with a live execution keeps its registration. An idle worker unit deregisters.
@@ -1832,6 +1836,9 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 
 - A verdict holds a text and a judged commit for each binding that the review saw.
 - A verdict also holds the open findings of the attempt. `readPrior` reads them from `findings` of `mission.execution.review_round.get`.
+- For an attempt after attempt 1, `readPrior` reads the review round once and also answers `unblockReason` and `earlierVerdicts` from `unblock_reason` and `earlier_verdicts`. `StepsState` keeps both.
+- `criterionRevisionInstruction` of `src/worker/unit/judgement.ts` renders `criterion-revision` with the rationale, the findings, the earlier verdicts and the unblock reason. `earlierVerdictsText` writes one block for each verdict: the attempt, the round, the result and the rationale, then one line for each finding of that verdict. With no rationale, the text omits "Previous judgement".
+- With an unblock reason and no recorded verdict, `unrecordedNodeInstruction` of `src/worker/unit/steps-implement.ts` still gives the coder a node instruction that holds the reason, also when every task is done. The coder answers the reason with FIXED or OPEN in its final reply, and that answer is no blocker of its finding list.
 - The `criterion-revision` text lists each open finding with its id, its label, its round, its name, its description, its fix and its why. The coder answers each finding id with FIXED or OPEN and the reason in its final reply. A finding answer is no blocker of the finding list of the coder.
 - With no failed check, the judged commit of a `criterion-not-met` assessment is the commit of each `repository` address of its `tested_input`. A `success` assessment gives no judged commit. With a failed check, the failed checks give the judged commits. The judged commit of change requests is the `commit_id` of the latest change request of each binding, by `submitted_at`.
 - `judgedCheckouts` keeps a judged commit only when the checkout holds it and it is an ancestor of `HEAD`. It logs `judged commit off the node history` for each other one.
@@ -1860,6 +1867,7 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 - The execution writes the change requests into one requested-changes text. The text holds the reviewer, the commit and the body of each change request, and it names the repository binding of each change request. It also holds the path, the line and the body of each review comment of that change request.
 - The requested-changes text stops at 4 KiB.
 - The requested-changes text is the verdict text. It enters [The verdict unit](#the-verdict-unit).
+- `readHumanRequests` of `src/worker/unit/node-reads.ts` joins the requested-changes text and the link-updates text. The evaluation prompt holds it as the human change requests.
 - When the read finds no current change request, an execution of attempt 2 or later reads `mission.execution.cleared_assessment.get`. A cleared assessment that is not `success` gives its rationale as plain instruction text.
 - A change request routes no task. The verdict unit sends the whole text to the agent. The verdict rule asks for a commit until the last turn of the limit.
 - A platform failure of the read answers 502 `repository.platform.github.<class>`. The execution stops with `operation_failed` and that code.
@@ -2122,6 +2130,15 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - KanthorD does not rerun the whole command after a test failure.
 - A setup failure of the base-head tree stops the execution with `environment_failed` and the class `setup_failed`.
 
+### The base run of a failed verification
+
+- `baseline(command)` of `src/worker/unit/verification.ts` runs a verification command on the base head, after the setup of the base clone. `BaseHead.runOf` of `src/worker/unit/environment-setup.ts` answers `BaseResult`, `{ exit_code, timed_out, last_line }`, and memoizes it for the same commits, digests and command.
+- A command that fails at the head with the class `code_failure` or `timeout` runs on the base head (`baseOutcome`). The failure is the same when the exit code and the `timed_out` value are equal, and the last nonblank output line is equal after `sameLine` reads each digit run as `0`.
+- A command that fails the same way on the base head gets the class `base_failure` (`VerificationClass.BaseFailure`). `environmentStop` stops the execution with `environment_failed` and the code `base_failed`, and the agent gets no revision turn. The stop detail is the JSON `{ index, command, exit_code, timed_out, last_line }` after `redactReason`.
+- A command that exits 127 at the head still uses the base exit code to decide between `Environment` and `CodeFailure`.
+- A time-limit end at the head that also ends at the base gets `base_failed`, not `verification_timeout`.
+- The stop `base_failed` does not count toward `mission.consecutive_failure_limit`, and it sets no environment `failed`.
+
 ### The stops
 
 | Condition                                                             | Stop                                                                                    |
@@ -2147,6 +2164,11 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 3. It submits the evidence `Affected test results`.
 4. The verdict `failed` gives `criterion-not-met` with the stage `affected` and the affected failure report as the rationale. No agent judges it.
 5. The verdicts `passed` and `base_red` go to the reviewer in the [evaluation prompt](agent.impl.md#prompt-templates).
+
+- `askJudgement` passes the earlier verdicts, the unblock reason and the human change requests of the round to `evaluationInstruction`. The `evaluation` text states that a human change request and the unblock reason outrank the default standard and the own rule of the reviewer, and that a change that an earlier verdict accepted stays accepted.
+- A blocker of the judgement holds `action` `yes` or `person` (`evaluationJudgementSchemaOf`). `EvaluationFacts.person_labels` lists the labels of the `person` findings.
+- `reworkCauseOf` answers the cause `human` with the subcategory `intervention`, assigned by the reviewer, when every unmet blocker holds `action: person` (`personOnlyBlockers` of `src/worker/unit/rework-cause.ts`).
+- `unchangedAssessmentOf` of `src/worker/unit/evaluation.ts` reads the rework assessment. It answers that assessment when its result is `success` and its `tested_input` equals the tested input of the round as canonical JSON. The evaluation then runs no verification, no affected test and no reviewer agent. `unchangedEvaluation` submits `success` with no finding, no proposal and the rationale "No commit followed assessment <id>. The review of the same commits stands."
 
 - The assessment submit holds the changed gate files of each repository in `gate_files`, as `{ binding_id, paths }`. The evaluation omits the key when no gate file changed.
 - `prepareEvaluation` excludes the evidence with the subject `Affected test results` from the support assets, from `snapshotOf` and from `placedOf`.
@@ -2473,6 +2495,8 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | `provider_failed`                         | `unauthorized`                                                           | `human.configuration`                                              |
 | `provider_failed`                         | `bad_request`                                                            | `unattributed`, suspects `worker_action`, `prompt`, `llm_provider` |
 | `environment_failed`                      | `setup_failed`, `command_absent`, `affected_invalid`, `affected_timeout` | `environment.<code>`                                               |
+| `environment_failed`                      | `base_failed`                                                            | `unattributed`, suspects `environment`, `plan`                     |
+| `operation_failed`                        | a git failure whose reason is `host_unreachable`                         | `infrastructure.network`                                           |
 | failed `worker.git` step                  | `fetch_base`, `push`                                                     | `unattributed`, suspects `infrastructure`, `worker_action`         |
 | failed `worker.git` step                  | `merge_base`                                                             | `unattributed`, suspects `worker_action`, `environment`            |
 | `operation_failed`                        | `worker.verification.infrastructure_failed`                              | `infrastructure.verification_killed`                               |
@@ -2488,7 +2512,7 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | `operation_failed`                        | other `worker.*` code                                                    | `unattributed`, suspects `worker_action`, `infrastructure`         |
 | `operation_failed`                        | prefix `gateway.`, or no code                                            | `unattributed`, suspects `infrastructure`, `worker_action`         |
 | `no_progress`                             | the last verification of the stop detail holds `timed_out: true`         | `unattributed`, suspects `environment`, `plan`                     |
-| `no_progress`                             | other                                                                    | `unattributed`, suspects `model`, `prompt`, `plan`                 |
+| `no_progress`                             | other                                                                    | `model.no_progress`                                                |
 | `budget_end`, `assessment_absent`         | the last verification of the stop detail holds `timed_out: true`         | `unattributed`, suspects `environment`, `plan`, `model`            |
 | `budget_end`, `assessment_absent`         | other                                                                    | `unattributed`, suspects `plan`, `model`                           |
 | `judgement_invalid`, `report_absent`      | any                                                                      | `unattributed`, suspects `model`, `prompt`                         |
@@ -2503,6 +2527,9 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | none of the above                         | none                                                                     | `unattributed`                                                     |
 
 - The stop classes `affected_invalid` and `affected_timeout` take the cause `environment.<code>`, as `setup_failed` and `command_absent` do.
+- The `host_unreachable` row applies to a failed git operation with `worker.git.commit_failed` or `repository.connector.git_failed`. `RepositoryComponent.gitFailureReasonOf` reads the innermost cause, and `ExecutionRun` hands the reason to `stopCauseOf` as `git_failure`. A git step that ends at its deadline keeps the cause of its git step. The row comes before the git step rows.
+- A stop with the cause `infrastructure.network` is a host fault under [Loss settlement](scheduler-service.impl.md#loss-settlement). It does not count toward the failure limit.
+- Every release with a stop carries the cause. `budget_end` takes its cause through `stopCauseOf` with `git_failure` null.
 - A verification that fails and then passes at the same commit gets no environment cause. The workspace can differ between the two runs.
 - The reviewer execution computes the cause of a `criterion-not-met` assessment with the `criterion-not-met` rows. It hands that cause with the assessment submit. The Scheduler writes it on the root span end of that execution, as for a stop.
 - The `worker.evaluation` span keeps the facts: `kanthord.evaluation.stage` (`setup`, `verification`, `affected` or `judgement`) and `kanthord.evaluation.unmet_grounds`.

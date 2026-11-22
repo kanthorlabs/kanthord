@@ -103,6 +103,8 @@ An import carries no priority.
 - `StartPoint` is an enum in code with the values `base_branch` and `node_branch`. The column `mission_attempt.start_point` holds it with no `CHECK` constraint.
 - Attempt 1 records `base_branch`, whatever act opens it. An unblock records the value of its optional body field `start_point`, and `node_branch` when the field is absent. The request schema refuses another value with 400 `gateway.request.validation_failed`, and the act writes nothing.
 - The `Attempt` read answers `start_point`.
+- `mission_attempt.unblock_reason` is a nullable `TEXT` column. `unblockReasonOf` of `src/mission/control-unblock.ts` gives the value: `reason` of the body, else `reason` of `change`, else null. `openAttempt` writes it, and attempt 1 and every other opener write null.
+- `unblock_reason` reaches the worker through `ReviewRound`, under [The read shape](#the-read-shape).
 - The claim admission answers `kind`, `project_id`, `attempt` and `node_revision`. It answers no node branch.
 - The Scheduler asks for the node branch of an execution through the `MissionBranches` port. `nodeBranchesOf(tx, keys)` answers one branch for each `{ node_id, attempt }` key, in key order.
 - The node branch of attempt N is the branch of the latest attempt k <= N that records `base_branch`. `nodeBranchOf(node_id, k)` of the Repository component builds `kanthord/<node id>` for k = 1 and `kanthord/<node id>-a<k>` for a later k.
@@ -631,7 +633,7 @@ The read computes these values, and no column stores them.
 | Enum                        | Values                                                                                          |
 | --------------------------- | ----------------------------------------------------------------------------------------------- |
 | `FindingKind`               | `blocker`, `suggestion`                                                                         |
-| `FindingAction`             | `yes`, `no`                                                                                     |
+| `FindingAction`             | `yes`, `no`, `person`                                                                           |
 | `FindingGround`             | `stated`, `standard`, `unstated`, `conflict`. The worker imports it as the ground of a blocker. |
 | `FindingRoute`              | `fix`, `report`, `record`                                                                       |
 | `FindingStatus` (read only) | `open`, `fixed`                                                                                 |
@@ -645,7 +647,8 @@ The read computes these values, and no column stores them.
 
 - `label` of a reviewer finding matches `^[BS][1-9][0-9]{0,2}$` and is unique inside one assessment. The service derives `kind` from it.
 - `label` of a human finding is `H<n>`, where n is 1 plus the count of the human findings of the node. The service gives it, and the partial unique index keeps it unique in the node.
-- A reviewer blocker holds `action: yes` and a `ground`. A reviewer suggestion holds `ground: null`.
+- A reviewer blocker holds `action: yes` or `action: person` and a `ground` (`requireFinding` of `src/mission/finding-admit.ts`). A reviewer suggestion holds `ground: null`.
+- `action: person` marks an item that only a person can close. It is no action item.
 - A human finding holds `action: yes`, `ground: null`, the `kind` that the human gives and a `cause_owner`.
 - `task_id` names a task of the revision that the assessment names, or it is null for the node criterion or the default standard.
 - `name`, `description`, `fix` and `why` each hold nonblank text of at most `FINDING_TEXT_MAX_BYTES` UTF-8 bytes. The worker schema checks that limit without the server configuration. 100 findings with 4 fields of 8 KiB give 3.2 MiB, under the 32 MiB body limit.
@@ -664,6 +667,7 @@ The route at the insert:
 | `action: yes`, `implement`, its assessment causes a rework    | `fix`    |
 | `action: yes`, its assessment is current and causes no rework | `report` |
 | `action: yes`, `examine`, its assessment causes a rework      | `record` |
+| `action: person`, its assessment is current                   | `report` |
 | A human finding                                               | `report` |
 
 - A current assessment that causes no rework changes the route of each finding of the attempt with `route: fix` and `status: open` to `report`. The change runs in two paths: the close branch, and a current `success` that waits for the external actions.
@@ -681,6 +685,8 @@ The route at the insert:
 - A current assessment writes its own identity into `fixed_assessment_id` of each listed finding. A non-current assessment writes nothing.
 - `action_items` of a submit is the count of its findings with `action: yes`, plus the count of the open findings of the attempt with `route: fix` that `fixed_finding_ids` does not list. A current `success` of an `implement` node causes a rework when `action_items` is above 0 and the round is not final.
 - The worker submits a round that ends before the judgement with an empty `fixed_finding_ids`, so the open findings stay open.
+- `reworkDueOf` of `src/mission/assessment-submit.ts` adds two conditions. A rework is not due when `personOnlyOf` holds: the result is `criterion-not-met`, `action_items` is 0 and a blocker holds `action: person`. A rework is not due when `unchangedOf` holds: the result is `success` and `tested_input` equals, as canonical JSON, the `tested_input` of the latest earlier `success` execution assessment of the attempt.
+- With `personOnlyOf`, `limitedOf` answers the rule `human_acceptance` with no count and no limit. The route of a `person` finding is `report` (`routeOf`). With `unchangedOf`, the open findings with `route: fix` change to `report`, as for any current assessment that causes no rework.
 
 ### The human finding
 
@@ -711,7 +717,9 @@ The route at the insert:
 | `mission.finding.create`             | `POST /api/mission/node/:node_id/finding`                        | `human`                       | `Finding`                                             |
 | `mission.finding.update`             | `PATCH /api/mission/finding/:finding_id`                         | `human`                       | `Finding`                                             |
 
-- `ReviewRound` holds `round`, `final`, `review_base` and `findings`. `round` is the round of the next assessment of the claimed attempt.
+- `ReviewRound` (`reviewRoundSchema`) holds `round`, `final`, `review_base`, `findings`, `unblock_reason` and `earlier_verdicts`. `round` is the round of the next assessment of the claimed attempt.
+- `unblock_reason` is `mission_attempt.unblock_reason` of the claimed attempt, or null.
+- `earlier_verdicts` holds one `EarlierVerdict` (`earlierVerdictSchema`) for each execution assessment of an attempt before the claimed attempt, in `sequence` order: `{ attempt, round, result, rationale, findings }`. `findings` holds each finding of that assessment, open or not. An `examine` claim answers both fields too.
 - `final` is true when `round - 1 >= mission.rework_limit` or the attempt holds a request evidence.
 - `review_base` is `TestedInput | null`: the tested input of the latest earlier base round of the attempt.
 - `findings` lists each finding of the attempt with `route: fix` and `status: open`, in the order of the list, with `id`. An `examine` claim answers `findings: []` and `review_base: null`.
@@ -914,6 +922,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
   `--attempt <n>` selects the records of attempt n.
   `--attempt 0` selects the records that the service writes while the attempt reads 0.
 - Every transition into `Blocked` writes an outcome, so the blocked read always returns one.
+- A current `success` assessment of an `examine` node with no required external action closes the attempt into `Blocked` (`closedStateOf` of `src/mission/assessment-submit.ts`). The outcome holds `result: success`, and its derived `closing_event` is `assessment-passed`. `limitedOf` hands the rule `human_acceptance` with no count and no limit to the transition. `TransitionRule` of `src/mission/contract.ts`, of `src/scheduler/contract.ts` and of `src/tracking/contract.ts` holds `human_acceptance`.
+- A person closes that block with `mission.node.override` and `result: success`. The override writes a human assessment and a new outcome, and the node reaches `Completed`. An unblock opens a new attempt instead.
   For a node blocked while its attempt reads 0, the read returns that outcome with no request evidence.
 - An outcome stores no closing event. The read derives `closing_event` in this order:
   - `success-override` for a human assessment with `result: success`.
@@ -953,6 +963,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - A node read holds `depends_on`: the node identities that the dependency edges of the node name, as a duplicate-free list in ascending order.
 - `depends_on` of a node read holds node identities. `depends_on` of a plan file holds plan file names.
+- A node read of a blocked node answers `blocked_context` (`blockedContextSchema`): `{ outcome, requests, rule }`. `rule` is `human_acceptance` or null. `humanAcceptanceRuleOf` of `src/mission/record-read.ts` gives `human_acceptance` when the current outcome names an execution assessment and either its result is `success`, or `personOnlyRound` holds. `personOnlyRound` holds when the assessment has the result `criterion-not-met`, a reported `person` blocker and no reported `yes` finding, and no earlier open reviewer finding of the attempt with `action: yes` and a route other than `record` remains. A human block, a human discard and every other block give null.
 - A node read and `node list` answer `intent` and `tags` at the revision that the open attempt pins, else at the current revision. `node list` filters by `intent`.
 - A node read answers `tasks: TaskContent[]` of that revision. The `Tasks (<count>)` section of the node card reads it.
 - No operation reads the [dependency closure](mission-service.md#mission-structure-and-nodes) of one node.

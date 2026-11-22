@@ -1449,7 +1449,7 @@ The attempts block:
 - An execution whose cause equals the cause of the previous failed execution of the attempt shows `Repeat`. The current trace shows `This trace`.
 - A repeated `plan` or `prompt` cause shows "A retry does not fix this. Change the plan or the prompt."
 - A setup stop with `agent.prompt.source_invalid` and the stop detail `changed` has the cause `infrastructure.prompt_record`, because the next execution composes again from the current text. A stop with another stop detail, for example `too_large`, `not_utf8`, `unreadable` or `control_character`, has the cause `prompt.source_invalid`.
-- A stop with `project.bindings.repository.ssh_unreachable` has the cause `infrastructure.network`. A stop with `project.bindings.repository.base_branch_absent` has the cause `human.configuration`. A stop with `worker.execution.prompt_not_pinned` or `worker.execution.prompt_record_failed` has the cause `infrastructure.prompt_record`.
+- A stop with `project.bindings.repository.ssh_unreachable`, or with a failed git operation whose reason is `host_unreachable`, has the cause `infrastructure.network`. A stop with the reason `instance_lost` has the cause `infrastructure.execution_lost`. A stop with the code `base_failed` has an `unattributed` cause with the suspects `environment` and `plan`. A stop with `project.bindings.repository.base_branch_absent` has the cause `human.configuration`. A stop with `worker.execution.prompt_not_pinned` or `worker.execution.prompt_record_failed` has the cause `infrastructure.prompt_record`.
 - The current execution shows `Prompt changed` when the digest of a `part` and `name` pair of `kanthord.prompt.sources`, or `kanthord.prompt.templates_digest`, differs from the previous execution.
 - The comparison reads the spans of the previous execution once. No other execution carries the mark.
 - An execution row opens its trace on the `Summary` tab. A failed read shows its error and `Retry`.
@@ -1511,7 +1511,7 @@ The prompt block:
   The agent labels are `Session <agent name>`, `Turn <index>`, the tool name of an `agent.tool`, and `Progress`.
   `scheduler.transition` shows `Transition <from state> -> <to state>`.
   The root span of an act trace shows the label of its act: `Paused`, `Resumed`, `Ready`, `Blocked`, `Unblocked`, `Discarded`, `Overridden`, `Proposals decided` or `Evidence deleted`.
-- The span detail of a `scheduler.execution` root with `kanthord.execution.end` `revoked` shows "Revoked by a human" or "Revoked by a review", by `kanthord.revoke.cause`.
+- The span detail of a `scheduler.execution` root with `kanthord.execution.end` `revoked` shows "Revoked by a human" or "Revoked by a review", by `kanthord.revoke.cause`. The engine also writes the value `instance_lost` for an execution that the server released because its worker instance was lost.
 - The tree takes the keyboard: up and down move the selection, right expands, left collapses, and Enter opens the span detail.
 - The waterfall bar uses the theme tokens only. Its text repeats the duration, so the bar holds no information alone.
 

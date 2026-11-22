@@ -290,11 +290,23 @@ The set is closed and it holds two values.
 ## block condition
 
 A block condition is a condition that closes an attempt and reaches `Blocked`.
-The set is closed and it holds three values.
+The set is closed and it holds four values.
 
 - **a current assessment that does not pass**
+- **a current passing assessment of an `examine` node**
 - **the end state other of a request evidence**
 - **a human reason on a paused node**
+
+## human acceptance
+
+The block of an `examine` node whose current execution assessment passes.
+The transition rule is `human_acceptance`.
+The same rule holds when a `criterion-not-met` round has only `person` blockers as action items.
+A person closes the block with an override that asserts success, and the node reaches `Completed`.
+[Outcome and completion](mission-service.md#state-of-a-node) owns the rule.
+
+Take the `examine` node "Audit the report formats". Its assessment passes, and the node reaches `Blocked` with `human_acceptance`.
+Ulrich reads the findings and overrides with the reason "Findings accepted", and the node reaches `Completed`.
 
 ## asserted result
 
@@ -391,6 +403,7 @@ Only the first case permits an empty judgement, and no case permits an absent ra
 
 The record of one blocker or one suggestion that a review round reports.
 A finding holds a label, a kind, an action, a name, a description, a fix and a why, and a blocker also holds a ground.
+The action is `yes`, `no` or `person`. The action `person` marks an item that only a person can close.
 Its status is `open` or `fixed`: `fixed` when a later current assessment of the attempt lists it in `fixed_finding_ids`.
 [Review finding](mission-service.md#review-finding) owns the rule.
 

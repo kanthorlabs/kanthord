@@ -496,8 +496,14 @@ No human override reaches a terminal node, and no correction reaches its outcome
 A human who needs further work on a completed node adds a new node.
 An edit writes the WHAT, and a correction writes a new outcome record.
 
-Three conditions reach `Blocked`, and each follows the evaluation except the human block.
-They are a current assessment that does not pass and causes no [rework](#rework-limit), the end state other of a request evidence and a human reason on a paused node.
+Four conditions reach `Blocked`, and each follows the evaluation except the human block.
+They are a current assessment that does not pass and causes no [rework](#rework-limit), a current passing assessment of an `examine` node, the end state other of a request evidence and a human reason on a paused node.
+A passing current assessment of an `examine` node with no required external action closes the attempt into `Blocked`, not into `Completed`, with the transition rule `human_acceptance`.
+The transition holds no count and no limit, and the outcome keeps the result `success`.
+A dependent of that node waits, because the node is not `Completed`.
+A person accepts the work with an override that asserts success and gives a reason, and the node reaches `Completed`.
+A person who disagrees unblocks the node.
+The rule `human_acceptance` also holds for a `criterion-not-met` round that causes no rework because its only action items are `person` blockers.
 A dependency produces `Pending` under the dependency rules of Mission structure and nodes.
 `External.Failed` folds every non-success end state of the external system.
 
@@ -558,6 +564,10 @@ The Mission Service first consumes its loss declaration in the same transaction,
 The human act then checks its own precondition against the settled state.
 A finished execution of the attempt with no stop ends the count: a release with no stop, an assessment end or a revocation.
 A stop that [advances the fallback chain](agent.md#advance) is neutral. It neither counts nor ends the count.
+A stop with the cause `infrastructure` and the subcategory `network` is a host fault. A host fault is neutral too, and the Scheduler holds the job for `scheduler.stop_backoff` seconds.
+An `environment_failed` stop with the code `base_failed` is neutral, because the same command fails on the base commit.
+A stop that repeats the reason, the code and the detail of the stop before it in the same attempt pauses the node at once with the transition rule `repeated_stop`, and the transition holds no count and no limit.
+A host fault repeats like any other stop. A `budget_end` stop, a stop of an operator and a stop of an earlier attempt never repeat.
 A human resume resets nothing, so it grants one more try.
 Below the limit, a loss or a release with a `stop` returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
 A loss or a release with a `stop` that reaches the limit moves the node to `Paused` with a service actor, the attempt stays open, and no job exists.
@@ -582,6 +592,11 @@ A current execution assessment of a round that is not final causes a rework in t
 - On an `implement` node, its result is `success`, and an open finding of the attempt with the route `fix` is not in its `fixed_finding_ids`.
 
 An `examine` node keeps only the rework of `criterion-not-met`.
+A finding with `action: person` is no action item.
+A current `criterion-not-met` round whose only action items are `person` blockers causes no rework.
+It closes the attempt into `Blocked` with the transition rule `human_acceptance`, and the cause is `human` with the subcategory `intervention`, assigned by the reviewer.
+A current `success` round whose tested commits equal the tested commits of the latest earlier `success` execution assessment of the attempt causes no rework. A commit that no round reviewed starts a new review.
+That round writes `success` with no finding, and the open findings of the attempt with the route `fix` become report-only.
 An assessment whose cause has the category `plan` causes no rework. The plan belongs to the human, and the execution belongs to KanthorD.
 A forced delete of a request evidence removes it from the attempt, so a later assessment can cause a rework.
 The round of that request still counts toward the limit.
@@ -597,6 +612,9 @@ When a current round causes no rework, its findings with `action: yes` and the o
 KanthorD fixes no report-only finding, and a human reviews each one under [Review finding](#review-finding).
 A human unblock opens the next attempt, and that attempt counts its rounds from 1.
 The next execution reads the assessment that caused the latest rework of its attempt, and the open findings of the attempt.
+The execution of each round also reads the verdicts of the attempts before its attempt, the human change requests and the unblock reason of its attempt.
+A human change request and the unblock reason outrank the default standard and the own rule of the reviewer, and the reviewer raises no finding that reverses them.
+A change that an earlier verdict accepted stays accepted, unless the change differs or a stated rule forbids it.
 The configuration file of the server sets the limit.
 
 Round 1 reviews the change of the node against the base branch of each binding.
@@ -636,7 +654,9 @@ Take "Add password reset" with the limit 2.
 
 A review finding is the record of one blocker or one suggestion of a review round.
 The reviewer gives each finding a label, an action, a name, a description, a fix and a why.
-A blocker also holds its ground.
+The action is `yes`, `no` or `person`.
+The action `person` marks an item that only a person can close, for example a live model run, a paid eval, a merge, a pull request description or a browser check.
+A blocker holds the action `yes` or `person`, and it also holds its ground.
 The Mission Service records each finding of a submit in the transaction of its assessment.
 An assessment holds no finding list, and each finding names its assessment.
 
@@ -651,6 +671,7 @@ A finding of a non-current assessment gets the route `record`, and that assessme
 A finding with `action: yes` of an `implement` round that causes a rework gets the route `fix`.
 A finding with `action: yes` of a current round that causes no rework gets the route `report`.
 A finding with `action: yes` of an `examine` round that causes a rework gets the route `record`.
+A finding with `action: person` of a current round gets the route `report`.
 
 A finding is `fixed` when its `fixed_assessment_id` names an assessment, and `open` otherwise.
 `fixed_finding_ids` of a current assessment is the only link between rounds.
@@ -759,10 +780,10 @@ A forced delete of the request evidence of the open attempt holds the node, and 
 | `Waiting -> Paused`                      | Human holds the node                                                                                                                                                                  | Stays open                                                                              | None                                                                                                                                                                  |
 | `Waiting -> Completed`                   | Human override asserts success                                                                                                                                                        | Closes by force                                                                         | Outcome                                                                                                                                                               |
 | `Waiting -> Discarded`                   | Human discards the node                                                                                                                                                               | Closes by force                                                                         | Outcome                                                                                                                                                               |
-| `Evaluating -> Completed`                | Current passing assessment that causes no rework; node requires no external action                                                                                                    | Closes                                                                                  | Outcome                                                                                                                                                               |
+| `Evaluating -> Completed`                | Current passing assessment that causes no rework; `implement` node requires no external action                                                                                        | Closes                                                                                  | Outcome                                                                                                                                                               |
 | `Evaluating -> External.Requested`       | Release; current passing assessment stands, and a required external action of the attempt is requested                                                                                | No effect                                                                               | Assessment                                                                                                                                                            |
 | `Evaluating -> Available`                | Current execution assessment that causes a [rework](#rework-limit)                                                                                                                    | No effect                                                                               | Assessment                                                                                                                                                            |
-| `Evaluating -> Blocked`                  | Current assessment does not pass and causes no rework                                                                                                                                 | Closes                                                                                  | Outcome                                                                                                                                                               |
+| `Evaluating -> Blocked`                  | Current assessment does not pass and causes no rework, or current passing assessment of an `examine` node with the rule `human_acceptance`                                            | Closes                                                                                  | Outcome                                                                                                                                                               |
 | `Evaluating -> Paused`                   | Human holds the node; reviewer execution stops                                                                                                                                        | Stays open                                                                              | None                                                                                                                                                                  |
 | `Evaluating -> Discarded`                | Human discards the node                                                                                                                                                               | Closes by force                                                                         | Outcome                                                                                                                                                               |
 | `Evaluating -> Waiting`                  | Loss declaration or release with a stop of the evaluation claim below the consecutive failure limit                                                                                   | No effect                                                                               | None                                                                                                                                                                  |
@@ -819,9 +840,9 @@ stateDiagram-v2
     Waiting --> Paused: Human hold
     Waiting --> Completed: Success override
     Waiting --> Discarded: Human discard
-    Evaluating --> Completed: Pass, no external action
+    Evaluating --> Completed: Implement node passes, no external action
     Evaluating --> Available: Rework below the limit
-    Evaluating --> Blocked: Assessment does not pass
+    Evaluating --> Blocked: Assessment does not pass, or examine node passes
     Evaluating --> Paused: Human hold
     Evaluating --> Discarded: Human discard
     Evaluating --> Waiting: Loss declaration or stop
@@ -923,6 +944,7 @@ It names the attempt that it clears.
 It names the node revision that it expects.
 It carries a content change when the human changes the direction.
 It may carry an optional nonblank reason, as the other human controls do.
+The attempt that the unblock opens stores the reason of the act, else the reason of its content change, else none.
 It may carry an optional start point.
 The start point `node_branch` continues the node branch of the cleared attempt, and it is the default.
 The start point `base_branch` starts the next attempt from the base branch on a new node branch.
@@ -944,7 +966,8 @@ An unblock names the human as the opener of the attempt that it opens.
 
 Every human direction enters the node revision.
 The unblock carries that change.
-The attempt carries no direction of its own.
+The attempt carries only the reason of the unblock, as a direction for its coder and for the reviewer of each of its rounds.
+A criterion stays a content change.
 Its start point says where the work starts, not what the work is.
 
 A human who redirects a node that holds an open attempt pauses the node, blocks it and unblocks it with the content change.
@@ -956,6 +979,7 @@ The next execution reads the node revision that its attempt pins.
 It reads the outcome of the cleared attempt and the cause that the outcome names.
 After a rework, it reads the assessment that caused the latest rework of its attempt, and the open findings of the attempt.
 It reads the opener of its attempt.
+It reads the unblock reason that its attempt stores.
 It reads every trusted link update of the node, as every attempt does.
 A read of a record of a closed attempt migrates nothing.
 
