@@ -12,13 +12,15 @@ This set designs the next agent and worker of KanthorD. It starts from the direc
 6. **R6.** Each credential rule of today keeps its strength or becomes stricter at every layer.
 7. **R7.** L6 gives an ordered list of build steps from the code of today to this design. After each step, `main` works, and the step names the check that proves it.
 8. **R8.** Each point of the direction of Ulrich has a verdict with evidence. A point that does not fit has a suggestion for Ulrich.
+9. **R9.** Each role profile has a verdict from the fixed evaluation set of [L7](L7-agent-evaluation.md): keep or leave.
 
 ## Reading order
 
 1. Read [L1](L1-model.md) first. It fixes the actors, the boundaries, the tool ownership rule and the credential flow.
 2. Read [L2](L2-agent-cli.md), then [L3](L3-agent.md), for the agent CLI and then the agent.
-3. Read [L4](L4-worker-cli.md), then [L5](L5-worker.md), for the worker CLI and then the worker.
-4. Read [L6](L6-migration.md) last, for the build order.
+3. Read [L7](L7-agent-evaluation.md) after L3, for the agent evaluation.
+4. Read [L4](L4-worker-cli.md), then [L5](L5-worker.md), for the worker CLI and then the worker. Then read [L8](L8-worker-evaluation.md), for the worker evaluation.
+5. Read [L6](L6-migration.md) last, for the build order.
 
 The layers go from the overall to the details. Each CLI layer comes before the core layer that serves it, so the core satisfies the contract that the CLI states. When a core layer needs a change to that contract, the change goes to the CLI layer first. L6 gives the build order, which is a separate order.
 
@@ -31,28 +33,30 @@ Each layer file has a section "Acceptance checks". Each check states one public 
 Ulrich set this order on 2026-11-22. The worker work starts only after the agent gate passes.
 
 1. L1, the model. Status `accepted`.
-2. L2, the agent CLI. Then L3, the agent.
+2. L2, the agent CLI. Then L3, the agent. Then L7, the agent evaluation (Ulrich, 2026-11-22).
 3. L6 part A: the build steps of the agent, from the code of today to L2 and L3.
 4. The agent gate, in this order:
    1. The acceptance checks and the unit-level rules of L1, L2 and L3 that their owner layers make runnable pass.
    2. An end-to-end run of `kanthord run agent` with a real LLM credential passes. The credential comes from the pi `auth.json` of Ulrich, through `--auth`.
-   3. The evaluation of [L1-D20](L1-model.md#decisions) runs: each role profile against `swe@1`.
-5. L4, the worker CLI. Then L5, the worker.
-6. L6 part B: the build steps of the worker.
+   3. The agent evaluation of [L7](L7-agent-evaluation.md) runs against the built agent, in this order: the calibration of the eval model, the comparison of each role profile against `swe@1`, then the confirming check on the production model.
+5. L4, the worker CLI. Then L5, the worker. Then L8, the worker evaluation.
+6. L6 part B: the build steps of the worker. Then the worker evaluation of L8 runs.
 7. After this round, `feature/workbench-v2` rebases onto `main` and moves the Workbench to the agent contract (Ulrich, 2026-11-22). The Agent V2 and Worker V3 work merges into `main` first. [L3](L3-agent.md#constraints-on-the-workbench-branch-at-rebase) lists the constraints of that rebase.
 
 ## Layer files
 
 The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A Fable review with the verdict accept sets `reviewed`. Ulrich sets `accepted` at the joint review.
 
-| Layer | File                                 | Title                        | Purpose                                                                                                   | Round goals    | Status     |
-| ----- | ------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------- | -------------- | ---------- |
-| L1    | [L1-model.md](L1-model.md)           | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today | R3, R4, R6, R8 | `accepted` |
-| L2    | [L2-agent-cli.md](L2-agent-cli.md)   | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                      | R1, R6, R8     | `accepted` |
-| L3    | [L3-agent.md](L3-agent.md)           | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract          | R1, R2, R6, R8 | `reviewed` |
-| L4    | [L4-worker-cli.md](L4-worker-cli.md) | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                              | R5, R6, R8     | `planned`  |
-| L5    | [L5-worker.md](L5-worker.md)         | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                  | R3, R4, R6, R8 | `planned`  |
-| L6    | [L6-migration.md](L6-migration.md)   | Migration                    | Specify the build order from the code of today                                                            | R7             | `planned`  |
+| Layer | File                                               | Title                        | Purpose                                                                                                                                | Round goals    | Status     |
+| ----- | -------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- |
+| L1    | [L1-model.md](L1-model.md)                         | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today                              | R3, R4, R6, R8 | `accepted` |
+| L2    | [L2-agent-cli.md](L2-agent-cli.md)                 | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                                                   | R1, R6, R8     | `accepted` |
+| L3    | [L3-agent.md](L3-agent.md)                         | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract                                       | R1, R2, R6, R8 | `reviewed` |
+| L4    | [L4-worker-cli.md](L4-worker-cli.md)               | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                                                           | R5, R6, R8     | `planned`  |
+| L5    | [L5-worker.md](L5-worker.md)                       | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                                               | R3, R4, R6, R8 | `planned`  |
+| L6    | [L6-migration.md](L6-migration.md)                 | Migration                    | Specify the build order from the code of today                                                                                         | R7             | `planned`  |
+| L7    | [L7-agent-evaluation.md](L7-agent-evaluation.md)   | The agent evaluation         | Specify the evaluation set, the eval model, the calibration, the pass rule, the fixed exit rule and the runner of the agent evaluation | R8, R9         | `draft`    |
+| L8    | [L8-worker-evaluation.md](L8-worker-evaluation.md) | The worker evaluation        | Specify the worker-level checks against a local KanthorD server, the review cases and the successor of the Worker V2 eval set          | R5, R9         | `planned`  |
 
 L1 links these anchors of later files. Each later file keeps the heading of each anchor.
 
@@ -63,7 +67,7 @@ L1 links these anchors of later files. Each later file keeps the heading of each
 
 ## Open rulings
 
-[L1](L1-model.md#open-questions-for-ulrich) holds no open question for Ulrich. [L2](L2-agent-cli.md#open-questions-for-ulrich) holds no open question for Ulrich. [L3](L3-agent.md#open-questions-for-ulrich) holds no open question for Ulrich. Each layer marks a place that depends on a ruling with **(Q<n>)**.
+[L1](L1-model.md#open-questions-for-ulrich) holds no open question for Ulrich. [L2](L2-agent-cli.md#open-questions-for-ulrich) holds no open question for Ulrich. [L3](L3-agent.md#open-questions-for-ulrich) holds no open question for Ulrich. [L7](L7-agent-evaluation.md#open-questions-for-ulrich) holds no open question for Ulrich. Each layer marks a place that depends on a ruling with **(Q<n>)**.
 
 ## Glossary
 
