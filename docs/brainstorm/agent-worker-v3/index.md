@@ -62,7 +62,7 @@ L1 links these anchors of later files. Each later file keeps the heading of each
 
 ## Open rulings
 
-[L1](L1-model.md#open-questions-for-ulrich) holds no open question for Ulrich. [L2](L2-agent-cli.md#open-questions-for-ulrich) holds no open question for Ulrich. Each layer marks a place that depends on a ruling with **(Q<n>)**.
+[L1](L1-model.md#open-questions-for-ulrich) holds no open question for Ulrich. [L2](L2-agent-cli.md#open-questions-for-ulrich) holds no open question for Ulrich. [L3](L3-agent.md#open-questions-for-ulrich) holds no open question for Ulrich. Each layer marks a place that depends on a ruling with **(Q<n>)**.
 
 ## Glossary
 

@@ -1007,9 +1007,8 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 35. **L3-D35. Applied to L1.** The tool inventory row of `agentPort` states that `agent-contract.ts` is the agent part, and that the rest of `agent-port.ts` becomes the worker port `agent.open`.
 36. **L3-D36. Applied to L2.** A failed open gives `cli.run.agent.open_failed` with the `reason` row, class `terminal`, exit `1` and no result. A signal during the open keeps the rule of L2 Shutdown, rule 5: exit `2` and no result.
 37. **L3-D37.** At the Workbench change, the runtime `bash` of the Workbench kills the process group at the end of each command, as for every other consumer, with the 600 s command limit (Ulrich, 2026-11-22). Constraint: no process of a Workbench command outlives that command.
+38. **L3-D38.** At the Workbench change, the Workbench gives each new `swe@1` session its own new directory, with `git init` and one empty commit (Ulrich, 2026-11-22). A resume of that session uses the same directory and skips `git_clean`. Constraint: two sessions never share a working directory. When a Workbench session later binds a repository, its directory is a `git worktree` of that repository.
 
 ## Open questions for Ulrich
 
-1. **Q2. The Workbench `swe@1` session with no worktree.** Aelita wants the Workbench to give each new `swe@1` session its own new directory, with `git init` and one empty commit. A resume of that session then skips `git_clean`. Reason: the coding preconditions hold for every consumer, and each new session starts clean with no commit step in the Workbench. Alternatives:
-   - Keep one directory per agent name, make it a git repository once, and let the Workbench commit the directory after each run. The files stay shared between sessions, but the Workbench owns a commit step.
-   - Give the Workbench `swe@1` session only `workspace_directory`. This needs no Workbench change, but the precondition list of a profile then depends on the consumer. That breaks the [L1 handoff](L1-model.md#handoffs-to-later-layers) rule "The list holds for every consumer".
+L3 holds no open question for Ulrich.
