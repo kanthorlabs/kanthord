@@ -440,7 +440,7 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
 ### Checks
 
 1. **AC1. No state outside the session file** ([Statelessness](#statelessness), checks 1, 2, 3, 5, 7). Owner: L2.
-   - Fixture: Auth, Stub, W, H, P, T. S and S2 are two paths in the same `0700` directory. The parent environment sets `KANTHORD_TOKEN`, `KANTHORD_ENDPOINT`, `KANTHORD_WORKER_CONFIG` and `KANTHORD_MACHINE_CONFIG` to marker values. Input 1 holds the unique marker M1, and input 2 holds the unique marker M2. The scripted turn calls `bash` with `env`.
+   - Fixture: Auth, Stub, W, H, P, T, and the network fixture of AC6. S and S2 are two paths in the same `0700` directory. The parent environment sets `KANTHORD_TOKEN`, `KANTHORD_ENDPOINT`, `KANTHORD_WORKER_CONFIG` and `KANTHORD_MACHINE_CONFIG` to marker values. Input 1 holds the unique marker M1, and input 2 holds the unique marker M2. The scripted turn calls `bash` with `env`.
    - Command: Run with input 1 and S. Then Run with input 2 and S2.
    - Pass:
      - Each run exits 0.
@@ -451,6 +451,7 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
      - Auth is byte-equal, with the same mode.
      - The `bash` tool result holds none of the four `KANTHORD_*` names.
      - No request of run 2 holds M1. The first request of run 2 holds exactly the system prompt and one user message.
+     - Under the network fixture, the only connections of each run are to Stub.
    - Today: `childEnvironment` removes the four names (`src/agent/environment.ts`).
 
 2. **AC2. The session file at the caller path, in a private place** ([Session file](#session-file), "Place"; L1-D19). Owner: L2.
@@ -506,7 +507,7 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
      12. an `openai-codex` OAuth entry whose `expires` is before the wall deadline of the run plus the refresh window (`PI_OAUTH_REFRESH_WINDOW_MS` in `src/llm/refresh-watch.ts`);
      13. no entry of the selected provider;
      14. an entry of the selected provider that fails the entry schema of L2.
-   - For cases 4 to 7, the parent environment sets `NAME` to K. For cases 11 and 12, the model selection of Run is `openai-codex`, and the network allows only loopback, or a proxy stub records each outbound connection.
+   - For cases 4 to 7, the parent environment sets `NAME` to K. For cases 11 and 12, the model selection of Run is `openai-codex`. The network fixture of these cases allows only loopback, or a proxy stub records each outbound connection.
    - Command: Run, once per variant.
    - Pass:
      - For each variant, `run agent` refuses, and the stderr line states the reason of that case. Case 3 states the ownership reason. Cases 11 and 12 state the `credential_expiring` reason.
@@ -542,7 +543,7 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
 11. **AC11. The allowlist refuses an undeclared tool** ([Tool ownership rule](#tool-ownership-rule), rules 1 and 6; L1-D8). Owner: L3.
     - Fixture: Faux, the test consumer, W, a session file path. The test consumer gives an implementation of a tool that `swe@1` does not declare, with a call counter. The scripted turn calls that tool.
     - Call: open a `swe@1` session through the agent contract and send one work prompt.
-    - Pass: the tool result is a block that names the tool. The call counter stays 0.
+    - Pass: the tool result is a block that names the tool. The call counter stays 0. L3 fixes the block text once, and AC18 to AC20 compare with it.
     - The agent CLI gives no tool implementation, so this check has no agent CLI fixture. L3 states the session of a consumer that gives no implementation of a declared consumer tool.
     - Today: `toolAllowlist` blocks with "The tool <name> is not declared for this agent." (`src/agent/hooks/tool-allowlist.ts`). Only `agentPort` adds it (`src/agent/agent-port.ts`).
 
@@ -585,22 +586,22 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
     - Today: no root `run` exists (`docs/cli/other.md`, "Closed root names and option scope").
 
 18. **AC18. A worker session holds the allowlist and the exit redaction** ([Tool ownership rule](#tool-ownership-rule), rule 6; [Session file](#session-file), "Exit redaction"; L1-D8). Owner: L5.
-    - Fixture: a local KanthorD server, a registered worker instance, Stub. The custody of the server holds K as the `openai-compatible` credential of `swe@1`, routed to Stub. One claimable `implement` execution of `coder@1`. The scripted turn calls `probe`, which `swe@1` does not declare. The scripted assistant text then holds K.
+    - Fixture: a local KanthorD server, a registered worker instance, Stub. The custody of the server holds K as the `openai-compatible` credential of `swe@1`, routed to Stub. One claimable `implement` execution of `coder@1`. The worker of the fixture gives one more worker capability, which registers a tool that `swe@1` does not declare. L5 names that test seam. The scripted turn calls that tool. The scripted assistant text then holds K.
     - Command: `kanthord run worker` with that instance. L5 names the read command for the session entries of the execution.
-    - Pass: the tool result of the `probe` call is a block that names the tool. Each session entry that the server records for the execution holds K zero times.
-    - Today: `agentPort` adds `toolAllowlist` (`src/agent/agent-port.ts`). The worker redacts each session entry (`sessionEntryRecord` in `src/worker/unit/session-entries.ts`).
+    - Pass: The tool result equals the block result of AC11 for that tool name. It is not the pi result `Tool <name> not found` (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:486`, `prepareToolCall`). The tool implementation does not run. Each session entry that the server records for the execution holds K zero times.
+    - Today: `agentPort` adds `toolAllowlist` before the capabilities (`guardsOf` in `src/agent/agent-port.ts`). The worker redacts each session entry (`sessionEntryRecord` in `src/worker/unit/session-entries.ts`).
 
 19. **AC19. A Workbench session holds the allowlist and the exit redaction** ([Other consumers](#other-consumers); L1-D8). Owner: L5, with the order of L6. It runs after `feature/workbench-v2` merges into `main`.
-    - Fixture: a local KanthorD server with the Workbench. The Workbench credential is K, for `openai-compatible`, routed to Stub. The scripted turn calls a tool that `swe@1` does not declare. The scripted assistant text then holds K.
-    - Command: a Workbench `swe@1` session with one message. L5 names the operation and the read command for the session events.
-    - Pass: the tool result of the undeclared call is a block that names the tool. Each text that the Workbench Service gives out holds K zero times.
+    - Fixture: a local KanthorD server with the Workbench. The Workbench credential is K, for `openai-compatible`, routed to Stub. The scripted turn calls a tool that the Workbench registers and that the profile of the session does not declare. L5 names that tool after the merge. The scripted assistant text then holds K.
+    - Command: a Workbench session with one message. L5 names the operation and the read command for the session events.
+    - Pass: The tool result equals the block result of AC11 for that tool name. It is not the pi result `Tool <name> not found` (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:486`, `prepareToolCall`). Each text that the Workbench Service gives out holds K zero times.
     - Today: a Workbench session holds only `toolApproval`, and the Workbench Service reads the session events with no exit redaction (`src/workbench/service.ts`).
 
 20. **AC20. A Project Service session of `env@1` holds the allowlist and the exit redaction** ([Other consumers](#other-consumers); L1-D8). Owner: L5, with the order of L6.
-    - Fixture: a local KanthorD server, a repository binding, Stub. The server agent credential is K, for `openai-compatible`, routed to Stub. The scripted turn calls `bash` with `touch <marker>`; `env@1` does not declare `bash`. The scripted assistant text then holds K.
+    - Fixture: a local KanthorD server, a repository binding, Stub. The server agent credential is K, for `openai-compatible`, routed to Stub. The Project Service of the fixture gives one more tool implementation, with a call counter, that `env@1` does not declare. L5 names that test seam. The scripted turn calls that tool. The scripted assistant text then holds K.
     - Command: the environment setup of the binding. L5 names the operation and the read command for its output.
-    - Pass: the tool result of the `bash` call is a block that names the tool. No file exists at `<marker>`. Each text that the Project Service gives out holds K zero times.
-    - Today: an `env@1` session holds only `checkoutConfinement` (`src/project/environment-agent.ts`).
+    - Pass: The tool result equals the block result of AC11 for that tool name. It is not the pi result `Tool <name> not found` (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:486`, `prepareToolCall`). The call counter stays 0. Each text that the Project Service gives out holds K zero times.
+    - Today: the Project Service registers `probe` and `environment_write` (`src/project/environment-agent-tools.ts`). An `env@1` session holds only `checkoutConfinement` (`src/project/environment-agent.ts`).
 
 21. **AC21. The default `--auth` path is in the home directory of the OS user** ([The `--auth` file](#the---auth-file-of-run-agent), item 1). Owner: L2.
     - Fixture: Stub, W, P, S, in a test container. The home directory of the OS user is H, and `HOME` is H. `H/.pi/agent/auth.json` is Auth. The parent environment sets `PI_CODING_AGENT_DIR` to a directory D2 that holds an `auth.json` with mode `0600` and the key K2.
@@ -615,16 +616,16 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
     - Today: `bindPiDirectory` refuses a pi directory that holds `auth.json` (`src/worker/unit/tasks-run.ts`).
 
 23. **AC23. No ambient credential reaches the LLM or a child process** ([Rules of today](#rules-of-today-and-their-strength-in-the-model), ambient credential removal). Owner: L2.
-    - Fixture: Auth, Stub, W, H, P, S. The parent environment sets `ANTHROPIC_API_KEY` to M3, `AWS_ACCESS_KEY_ID` to M4 and `AWS_SECRET_ACCESS_KEY` to M5. The scripted turn calls `bash` with `env`.
+    - Fixture: Auth, Stub, W, H, P, S. The profile of Run is `swe@1`, which declares `bash`. The parent environment sets these names to unique markers: `ANTHROPIC_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and the names that only `AMBIENT_CREDENTIAL_NAMES` holds: `AWS_PROFILE`, `AWS_WEB_IDENTITY_TOKEN_FILE` and `AWS_CONTAINER_CREDENTIALS_FULL_URI`. `H/.aws/credentials` holds one more unique marker. The scripted turn calls `bash` with `env; cat ~/.aws/credentials`.
     - Command: Run.
-    - Pass: the exit code is 0. No request to Stub holds M3, M4 or M5, in a header or the body. The `bash` tool result holds none of them. The session file holds none of them.
-    - Today: `childEnvironment` removes `ANTHROPIC_API_KEY` (`src/agent/environment.ts`). `withoutAmbientCredentials` removes the names of `AMBIENT_CREDENTIAL_NAMES` (`src/worker/unit/tasks-credential.ts`; `src/worker/unit/tasks-seed.ts`).
+    - Pass: the exit code is 0. No request to Stub holds a marker, in a header or the body. The `bash` tool result holds no marker. The session file holds no marker.
+    - Today: `childEnvironment` removes `ANTHROPIC_API_KEY` (`src/agent/environment.ts`). `withoutAmbientCredentials` removes the names of `AMBIENT_CREDENTIAL_NAMES` and redirects `HOME` and the AWS file paths (`src/worker/unit/tasks-credential.ts`; `src/worker/unit/tasks-seed.ts:393-407`).
 
-24. **AC24. No environment variable names an endpoint** ([LLM credential](#llm-credential), "Endpoint"). Owner: L2.
-    - Fixture: Auth, Stub, W, H, P, S. A second stub Stub2 records each connection. The parent environment sets `KANTHORD_ENDPOINT` and `AZURE_OPENAI_BASE_URL` to the address of Stub2.
+24. **AC24. No environment variable names an endpoint or a credential of the provider** ([LLM credential](#llm-credential), "Endpoint"). Owner: L2.
+    - Fixture: Auth, Stub, W, H, P, S. A second stub Stub2 records each connection. The parent environment sets `KANTHORD_ENDPOINT`, `AZURE_OPENAI_BASE_URL`, `OPENAI_BASE_URL`, `HTTPS_PROXY`, `HTTP_PROXY` and `ALL_PROXY` to the address of Stub2. It sets `OPENAI_API_KEY` to a unique marker.
     - Command: Run.
-    - Pass: the exit code is 0. Stub2 records no connection. Stub receives each request.
-    - Today: pi reads `AZURE_OPENAI_BASE_URL` (`@earendil-works/pi-ai`, `dist/api/azure-openai-config.js`).
+    - Pass: the exit code is 0. Stub2 records no connection. Stub receives each request. Each request to Stub carries K and never the marker.
+    - Today: pi reads `AZURE_OPENAI_BASE_URL` (`@earendil-works/pi-ai`, `dist/api/azure-openai-config.js`). The `openai` client reads `OPENAI_BASE_URL` and `OPENAI_API_KEY` (`openai`, `client.js:175`). pi enables the environment proxy only in its own CLI entry: `configureHttpDispatcher` sets an `EnvHttpProxyAgent` (`@earendil-works/pi-coding-agent`, `dist/core/http-dispatcher.js:73-85`), and `dist/main.js` calls it. The engine does not call it.
 
 25. **AC25. The agent runtime imports no worker, project, mission or scheduler module** ([Agent runtime and server part](#agent-runtime-and-server-part-of-the-agent-component); L1-D5). Owner: L6.
     - Fixture: the `engine` repository at the commit under test. A variant adds an import of `src/worker/contract.ts` to `src/agent/agent-session.ts`.
@@ -633,21 +634,33 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
     - Today: the check fails, because `src/agent/catalog.ts` imports `src/worker/contract.ts`.
 
 26. **AC26. The confinement guard blocks each call outside the roots** ([Tool ownership rule](#tool-ownership-rule), rule 7; L1-D9). Owner: L3.
-    - Fixture: Faux, the test consumer, W as the only confinement root, a session file path. A marker file outside W holds the unique text M6. The profile is `re@1`, which sets confinement. The first scripted call is `read` with the absolute path of the marker file. The second scripted call is `bash` with `cat <marker>`; `re@1` declares no `bash`, so the tool has no location declaration.
+    - Fixture: Faux, the test consumer, W as the only confinement root, a session file path. The profile is `re@1`, which sets confinement. A marker file outside W holds the unique text M6. W holds a file F with known text, and a symbolic link L whose target is the marker file. Each scripted call uses a tool that `re@1` declares, so the allowlist passes it (`guardsOf` in `src/agent/agent-port.ts:123-128`). The scripted calls are:
+      1. `read` with the absolute path of the marker file;
+      2. `grep` for M6 on the directory of the marker file;
+      3. `read` with a relative `../` path to the marker file;
+      4. `read` of L;
+      5. `read` of F.
     - Call: open a `re@1` session through the agent contract with the root W and send one work prompt.
-    - Pass: each of the two calls gets a block result. M6 is in no tool result and in no entry of the session file.
-    - Today: `checkoutConfinement` blocks a path outside the checkout and a tool with no location rule (`src/agent/hooks/checkout-confinement.ts`). `re@1` declares only `read`, `grep`, `find` and `ls` (`src/agent/catalog.ts`).
+    - Pass: each of calls 1 to 4 gets a block result. Call 5 returns the text of F. M6 is in no tool result and in no entry of the session file.
+    - Today: `checkoutConfinement` resolves each path with `resolveNearest`, so a symbolic link resolves to its target, and blocks a path outside the roots (`src/agent/hooks/checkout-confinement.ts`). `re@1` declares `read`, `grep`, `find` and `ls` (`src/agent/catalog.ts`).
+
+27. **AC27. `run agent` loads no extension and no context file from a path** ([Extension rule](#extension-rule), rule 3; [Statelessness](#statelessness), check 3; [E1](#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule), fit rule 5). Owner: L2.
+    - Fixture: Auth, Stub, H, P, S. W holds `.pi/extensions/x.ts`, an extension that writes the marker file M7 at load, and an `AGENTS.md` that holds the unique marker text M8. P holds an `extensions/` module that writes the marker file M9 at load.
+    - Command: Run.
+    - Pass: the exit code is 0. No file exists at M7 or M9. No request to Stub holds M8.
+    - Today: `sessionParts` gives pi `noExtensions: true` and `noContextFiles: true` (`src/agent/agent-session.ts`). E1 fit rule 5 rules that this round loads no `AGENTS.md`.
 
 ### Rules with no check, and the reason
 
 - **Statelessness check 4, resume.** L1 names no resume input of `run agent`. L2 adds the check with the input.
 - **Statelessness check 6, reads.** A read trace needs an OS file-access tracer. The gate holds no portable tracer.
-- **Statelessness check 8, network.** The check needs a network sandbox. The OS containment is an open item of [HANDOFF.md](../HANDOFF.md), Worker Service.
+- **Statelessness check 8, the network of a child process.** A child process of `bash` uses the network of its host, as today, so no check applies. AC1 covers the network of the runtime. The OS containment is an open item of [HANDOFF.md](../HANDOFF.md), Worker Service.
 - **Statelessness check 9, no model choice.** The input holds one model selection, so no public output shows a choice. AC25 blocks the imports that a choice needs.
 - **Confinement of `re@1` and `env@1` for each consumer.** AC26 covers the contract level. L3 and L5 define the roots input of each consumer. The Workbench `re@1` session exists only after the merge of `feature/workbench-v2`.
 - **Boundary rule 8, no consumer removes a guard.** The rule is an absence in the code. AC11 and AC18 to AC20 show the allowlist for each consumer.
 - **Boundary rule 9, commit before the next session.** This round runs one `agent.open` per execution (`implementWorkspaceNodes` in `src/worker/unit/chain-implement.ts`). A second session ships with layer 2 of [E1](#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule). Later owner: L5 of that round.
-- **Extension rules 1 and 3, one factory per module and no load from a file path.** The rules are code structure. AC13 covers the test file of rule 1.
+- **Extension rule 1, one factory per module.** The rule is code structure. AC13 covers the test file of rule 1. AC27 covers rule 3.
+- **Tool ownership rule 7, a declared tool with no location declaration.** The rule is a catalog structure rule. The test "a tool with no location field passes, a tool with no catalog entry is blocked and a path field of another tool is checked" covers it (`src/agent/hooks/checkout-confinement.test.ts:87`).
 - **L1-D10, one composition function.** The rule is code structure. The composed text depends on the prompt texts that L3 writes.
 - **Reach of an unconfined session.** The table states a risk, not a behavior.
 - **"Never passed in" of the LLM credential.** The list has no closed set of outputs. AC4, AC5, AC7, AC8 and AC23 cover the closed outputs.
