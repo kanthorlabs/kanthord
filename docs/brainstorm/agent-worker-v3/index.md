@@ -4,7 +4,7 @@ This set designs the next agent and worker of KanthorD. It starts from the direc
 
 ## Goals
 
-1. **R1.** An agent runs one agent profile with no KanthorD server. The agent CLI `kanthord run agent` gives it the input as options and in the pi prompt forms: `@path` text files, messages and `--append-system-prompt <path>` files. Aelita dropped the JSON input file on 2026-11-22 ([L2](L2-agent-cli.md#evaluation-of-the-direction)).
+1. **R1.** An agent runs one agent profile with no KanthorD server. The agent CLI `kanthord run agent` gives it the input as options: the work with `--prompt <text|path>` and the extra context with `--system-prompt <text|path>`. Each value is text or a file path ([L2, Text or path](L2-agent-cli.md#text-or-path)).
 2. **R2.** The coding category has the agent profiles and the tools that it needs today, and no more.
 3. **R3.** A worker adds instructions and capabilities to an agent session, and it gives the implementation of each worker tool that the profile declares. Each tool that calls the KanthorD server is a worker tool or a consumer tool.
 4. **R4.** The line runs inside the worker behind typed ports and opens an agent session only through the agent contract.
@@ -34,7 +34,7 @@ Ulrich set this order on 2026-11-22. The worker work starts only after the agent
 2. L2, the agent CLI. Then L3, the agent.
 3. L6 part A: the build steps of the agent, from the code of today to L2 and L3.
 4. The agent gate, in this order:
-   1. The acceptance checks of L1, L2 and L3 that their owner layers make runnable pass.
+   1. The acceptance checks and the unit-level rules of L1, L2 and L3 that their owner layers make runnable pass.
    2. An end-to-end run of `kanthord run agent` with a real LLM credential passes. The credential comes from the pi `auth.json` of Ulrich, through `--auth`.
    3. The evaluation of [L1-D20](L1-model.md#decisions) runs: each role profile against `swe@1`.
 5. L4, the worker CLI. Then L5, the worker.
@@ -62,7 +62,7 @@ L1 links these anchors of later files. Each later file keeps the heading of each
 
 ## Open rulings
 
-[L1](L1-model.md#open-questions-for-ulrich) holds no open question for Ulrich. Each layer marks a place that depends on a ruling with **(Q<n>)**.
+[L1](L1-model.md#open-questions-for-ulrich) holds no open question for Ulrich. [L2](L2-agent-cli.md#open-questions-for-ulrich) holds one: the refusal of a prompt path to an entry that is not readable as text. Each layer marks a place that depends on a ruling with **(Q<n>)**.
 
 ## Glossary
 
