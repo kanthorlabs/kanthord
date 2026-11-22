@@ -632,13 +632,19 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
     - Pass: with the commit under test, the exit code is 0. With the variant, the exit code is nonzero, and the output names the file and the import.
     - Today: the check fails, because `src/agent/catalog.ts` imports `src/worker/contract.ts`.
 
+26. **AC26. The confinement guard blocks each call outside the roots** ([Tool ownership rule](#tool-ownership-rule), rule 7; L1-D9). Owner: L3.
+    - Fixture: Faux, the test consumer, W as the only confinement root, a session file path. A marker file outside W holds the unique text M6. The profile is `re@1`, which sets confinement. The first scripted call is `read` with the absolute path of the marker file. The second scripted call is `bash` with `cat <marker>`; `re@1` declares no `bash`, so the tool has no location declaration.
+    - Call: open a `re@1` session through the agent contract with the root W and send one work prompt.
+    - Pass: each of the two calls gets a block result. M6 is in no tool result and in no entry of the session file.
+    - Today: `checkoutConfinement` blocks a path outside the checkout and a tool with no location rule (`src/agent/hooks/checkout-confinement.ts`). `re@1` declares only `read`, `grep`, `find` and `ls` (`src/agent/catalog.ts`).
+
 ### Rules with no check, and the reason
 
 - **Statelessness check 4, resume.** L1 names no resume input of `run agent`. L2 adds the check with the input.
 - **Statelessness check 6, reads.** A read trace needs an OS file-access tracer. The gate holds no portable tracer.
 - **Statelessness check 8, network.** The check needs a network sandbox. The OS containment is an open item of [HANDOFF.md](../HANDOFF.md), Worker Service.
 - **Statelessness check 9, no model choice.** The input holds one model selection, so no public output shows a choice. AC25 blocks the imports that a choice needs.
-- **Confinement of `re@1` and `env@1` for each consumer.** L3 and L5 define the roots input of each consumer. The Workbench `re@1` session exists only after the merge of `feature/workbench-v2`.
+- **Confinement of `re@1` and `env@1` for each consumer.** AC26 covers the contract level. L3 and L5 define the roots input of each consumer. The Workbench `re@1` session exists only after the merge of `feature/workbench-v2`.
 - **Boundary rule 8, no consumer removes a guard.** The rule is an absence in the code. AC11 and AC18 to AC20 show the allowlist for each consumer.
 - **Boundary rule 9, commit before the next session.** This round runs one `agent.open` per execution (`implementWorkspaceNodes` in `src/worker/unit/chain-implement.ts`). A second session ships with layer 2 of [E1](#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule). Later owner: L5 of that round.
 - **Extension rules 1 and 3, one factory per module and no load from a file path.** The rules are code structure. AC13 covers the test file of rule 1.
