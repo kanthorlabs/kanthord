@@ -1,4 +1,4 @@
-# L7: The agent evaluation
+# L4: The agent evaluation
 
 Back to the [index](index.md). The terms follow the [glossary](index.md#glossary). [L1](L1-model.md) is the model, [L2](L2-agent-cli.md) is the agent CLI that this page uses and [L3](L3-agent.md) is the agent that it measures. Each KanthorD path starts at `engine/`. Each pi model fact comes from `@earendil-works/pi-ai` `1.1.0`, `dist/providers/data/<provider>.json`. Each other pi path starts at `@earendil-works/pi-coding-agent/` (pi `1.1.0`). The code of today is engine `c864130e`.
 
@@ -10,7 +10,7 @@ Back to the [index](index.md). The terms follow the [glossary](index.md#glossary
 4. **G4.** Scripted hidden checks decide pass or fail. No LLM decides a pass.
 5. **G5.** The evaluation uses only `kanthord run agent` and the result file of L2. It adds no engine command and no server call.
 6. **G6.** Each credential rule of L2 holds for each run. No credential value enters a case, a result, a check record or a report.
-7. **G7.** Each public behavior of L7 is an end-to-end acceptance check or a unit-level rule with its owning module ([index](index.md#reading-order)).
+7. **G7.** Each public behavior of L4 is an end-to-end acceptance check or a unit-level rule with its owning module ([index](index.md#reading-order)).
 
 ## Evaluation of the direction
 
@@ -30,11 +30,11 @@ Back to the [index](index.md). The terms follow the [glossary](index.md#glossary
 
 (G1, G5)
 
-- L7 is a caller of the agent CLI. It is no CLI layer and no core layer.
-- Ulrich ruled on 2026-11-22: the design of L7 comes right after L3, before L6 part A.
-- The evaluation runs at step 4.3 of the [agent gate](index.md#round-order), against the agent that L6 part A builds. Calibration runs first, because it needs a built `run agent` and a real credential.
+- L4 is a caller of the agent CLI. It is no CLI layer and no core layer.
+- Ulrich ruled on 2026-11-22: the design of L4 comes right after L3, before LA.
+- The evaluation runs at step 4.3 of the [agent gate](index.md#round-order), against the agent that LA builds. Calibration runs first, because it needs a built `run agent` and a real credential.
 - An evaluation with no verdict fails gate step 4.3. Ulrich then decides the next step.
-- [L8](L8-worker-evaluation.md), the worker evaluation, owns the worker-level checks, the review cases and the successor of `~/kanthord-evalset/worker-v2/`.
+- [L7](L7-worker-evaluation.md), the worker evaluation, owns the worker-level checks, the review cases and the successor of `~/kanthord-evalset/worker-v2/`.
 
 ## Models
 
@@ -164,7 +164,7 @@ Ulrich ruled on 2026-11-22: the cap is a value that Ulrich can change. `config.j
   - Pass: `data-[state=open]:p-2`, `[&>*]:p-2`, `group-[.is-open]:hidden`. The bracket lies in a variant, not in the utility.
   - Pass: `items[0]` and `useState<string[]>([])` outside a literal.
   - `evaluation.mjs` owns the rule ([Unit-level rules](#unit-level-rules), rule 7).
-- The evaluation set holds no review case. [L8](L8-worker-evaluation.md) owns the review cases.
+- The evaluation set holds no review case. [L7](L7-worker-evaluation.md) owns the review cases.
 
 ### Content rules
 
@@ -463,9 +463,9 @@ report.sh --evaluation <id>
 
 Each check is an end-to-end test ([index](index.md#reading-order)). It runs the `run.sh` or `report.sh` of the engine repository as a process. Each run calls the built `kanthord run agent`, with a real file system, real git and the real pi runtime. The only stub is the LLM stub of [L2](L2-agent-cli.md#l2-fixtures) on loopback.
 
-### L7 fixtures
+### L4 fixtures
 
-L7 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
+L4 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
 
 - **Set.** An evaluation set repository E under `$XD/kanthord/evaluation/agent/`, where `XDG_DATA_HOME` is `$XD`.
   - E holds three cases `b1`, `b2` and `b3` with the group `backend`, `wall` `10m` and `usd` `0.5usd`. The `allowed` of each case is `["ok.txt", "b2.txt", "b3.txt"]`, and its `tests` is `["test/**"]`.
@@ -484,11 +484,11 @@ L7 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
 - **Auth.** The `--auth` file of L2 at `$H/.config/kanthord/auth.json`, the default path, with K. The user database gives H as the home of the OS user. Its `OPENAI_COMPATIBLE_MODELS` lists `stub-1`, `stub-2` with `reasoning_levels` `["off", "high"]`, and `stub-3` (`approvedModelSchema` in `src/llm/platforms.ts`).
 - **Model.** `openai-compatible/stub-1:off`. The runner passes no cost budget for it ([Run budget](#run-budget), rule 4).
 - **R.** The results directory `$XS/kanthord/evaluation/runs/<evaluation-id>/`, where `XDG_STATE_HOME` is `$XS`.
-- **Own paths.** Each check and each variant has its own `$XD`, `$XS` and E, unless the check states otherwise. The two pairs of variant 1 of L7-AC2 share them.
+- **Own paths.** Each check and each variant has its own `$XD`, `$XS` and E, unless the check states otherwise. The two pairs of variant 1 of L4-AC2 share them.
 
 ### Checks
 
-1. **L7-AC1. A comparison gives a verdict from the hidden checks.**
+1. **L4-AC1. A comparison gives a verdict from the hidden checks.**
    - Fixture: Set, Stub, Auth, Model.
    - Command: `run.sh --model openai-compatible/stub-1:off --evaluation e1 --calibrate`, then the same command with no `--calibrate`, then `report.sh --evaluation e1`.
    - Assert: each command exits `0`.
@@ -499,7 +499,7 @@ L7 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
      - Each run directory under `R/calibrate-off/` and `R/compare-off/` holds `session.jsonl` and `stderr.txt`, and no other file.
      - No workspace root remains under `$XS/kanthord/evaluation/work/`. `git -C E status --porcelain` prints nothing.
 
-2. **L7-AC2. A stop gives no verdict, and a resume completes the call.**
+2. **L4-AC2. A stop gives no verdict, and a resume completes the call.**
    - Fixture: Set, Auth, Model.
    - Variant 1: Stub answers HTTP 429 to each request. Command: `run.sh --model openai-compatible/stub-1:off --evaluation e2 --calibrate`, then `report.sh --evaluation e2`. Then Stub answers as usual, and the same two commands run again.
      - Assert, first pair: `run.sh` exits `1`. `R/results.jsonl` holds 3 lines of `swe@1` on `b1`, each with `class` `retryable` and each with its own `session` and `workspace`. `R/checks.jsonl` holds no line. `R/report.md` holds the calibration line "no verdict".
@@ -511,26 +511,26 @@ L7 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
    - Variant 4: Stub as usual. Command: `run.sh --model openai-compatible/stub-1:off --evaluation e2b` with no calibration before it.
      - Assert: exit `1`. Stub receives no request.
 
-3. **L7-AC3. A contaminated run does not count.**
+3. **L4-AC3. A contaminated run does not count.**
    - Fixture: Set, Auth, Model. Variant 1: Stub for `swe@1` calls `read` with the absolute path of `E/cases/b1/check/check.sh`, then calls `write` with `ok.txt` and the text `ok`, then answers `done`. Variant 2: the same, with `bash` and the command `cat ../../../runs/e3/calibrate-off/b1/swe@1-1-1/stderr.txt` in place of the `read`.
    - Command: `run.sh --model openai-compatible/stub-1:off --evaluation e3 --calibrate`, then `report.sh --evaluation e3`.
    - Assert: each command exits `0`. Each of the 3 lines of `R/checks.jsonl` has `contaminated` `true`. `R/report.md` shows 0 counted runs and 3 contaminated runs for `swe@1`, and the band verdict `none` with "no verdict".
    - Variant 3: Stub for `swe@1` calls `bash` with the command `git remote -v; git reflog; cat .git/config`, then calls `write` with `ok.txt` and the text `ok`, then answers `done`. Command: as above, with the evaluation id `e3c`.
      - Assert: each command exits `0`. Each of the 3 lines of `R/checks.jsonl` has `contaminated` `false`. The 3 session files hold no path of E.
 
-4. **L7-AC4. The cap stops the evaluation before a run.**
+4. **L4-AC4. The cap stops the evaluation before a run.**
    - Fixture: Set, Stub, Auth, Model. The `usd` of each case is `16usd`.
    - Command: `run.sh --model openai-compatible/stub-1:off --evaluation e4 --calibrate`, then `report.sh --evaluation e4`.
    - Assert: `run.sh` exits `4`. Stub receives no request. `R/results.jsonl` holds no line. `R/calls.jsonl` holds one line with `phase` `calibrate`, `cap_usd` `15`, `exit` `4` and `unstarted` `3`.
      - `R/report.md` holds the calibration line of `off` with the band verdict `none` and "no verdict", and the line `bee@1 no verdict`.
      - Its cost block holds the base cost `0`, the mean `none`, the cap `15`, the `unstarted` `3` and the projection `none`.
 
-5. **L7-AC5. A credential value in a session file stops the evaluation.**
+5. **L4-AC5. A credential value in a session file stops the evaluation.**
    - Fixture: Set, Stub, Auth, Model. Stub for `swe@1`: the answer text holds K once, after the `write` call.
    - Command: `run.sh --model openai-compatible/stub-1:off --evaluation e5 --calibrate`, then `report.sh --evaluation e5`.
    - Assert: `run.sh` exits `1` after the first run. Its stdout holds the count `1` and no other part of K. `R/results.jsonl`, `R/checks.jsonl`, `R/calls.jsonl`, `R/report.md` and each `stderr.txt` hold K zero times. Auth has the same SHA-256 digest and mode `0600` before and after. `E` holds K zero times.
 
-6. **L7-AC6. A role profile that wins on both models stays.**
+6. **L4-AC6. A role profile that wins on both models stays.**
    - Fixture: Set, Stub, Auth.
    - Command: `run.sh --model openai-compatible/stub-2:off --evaluation e6 --calibrate`, then the same with no `--calibrate`, then `run.sh --model openai-compatible/stub-3:off --evaluation e6 --confirm`, then `report.sh --evaluation e6`.
    - Assert: each command exits `0`.
@@ -540,7 +540,7 @@ L7 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
      - The confirm lines have the model `stub-3`, and `report.sh` accepts the file.
      - `R/report.md` holds the verdict line `bee@1 keep`.
 
-7. **L7-AC7. A second calibration level joins the same evaluation.**
+7. **L4-AC7. A second calibration level joins the same evaluation.**
    - Fixture: Set, Stub, Auth.
    - Command: `run.sh --model openai-compatible/stub-2:off --evaluation e7 --calibrate`, then `run.sh --model openai-compatible/stub-2:high --evaluation e7 --calibrate`, then `report.sh --evaluation e7`.
    - Assert: each command exits `0`.
@@ -550,7 +550,7 @@ L7 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
 
 ### Unit-level rules
 
-These rules hold with no process and no LLM stub, so their tests are unit tests ([index](index.md#reading-order)). The owning module is `scripts/evaluation/agent/evaluation.mjs` of the engine, with its test file `evaluation.test.mjs`. [L6](L6-migration.md) assigns the exact file.
+These rules hold with no process and no LLM stub, so their tests are unit tests ([index](index.md#reading-order)). The owning module is `scripts/evaluation/agent/evaluation.mjs` of the engine, with its test file `evaluation.test.mjs`. [LA](LA-agent-build.md) assigns the exact file.
 
 1. **The case schema.** `case.json` holds exactly `group`, `commit`, `wall`, `usd`, `allowed` and `tests`. `group` matches a row of [Groups](#groups). `commit` is a full hexadecimal commit id. `wall` is a wall budget of [L2 Budget](L2-agent-cli.md#budget), rule 1, of at most `2h`. `usd` is a cost budget of rule 2. The schema refuses each other value.
 2. **The calibration band.** A pass share of 30% and of 80% is `in`. 29.9% is `below`. 80.1% is `above`. No counted run is `none`. The band compares the exact fraction, so 1 of 3 is `in`, and the report shows `33.3%`. The next level follows the steps of [Calibration](#calibration), rule 6. Each condition of rule 7 gives no verdict. The fixed level is the level of the last call with `in`.
@@ -576,36 +576,36 @@ These rules hold with no process and no LLM stub, so their tests are unit tests 
 
 ## Handoffs to later layers
 
-- [L6](L6-migration.md) part A: add `scripts/evaluation/agent/run.sh`, `report.sh`, `evaluation.mjs` and `evaluation.test.mjs` to the engine, after the step that ships `run agent`. Run the L7 checks in the step that adds them.
-- [L6](L6-migration.md) part A: run the L7 checks in a container where the user database gives the home of the test user, as for L2-AC6. Add the new test file to the scripts `test`, `format`, `lint` and `format:check` of `package.json`.
-- [L6](L6-migration.md) part A: give the L7 test file a timeout above 60 seconds. Reason: variant 1 of L7-AC2 waits for three attempts with three pi retries each, about 42 seconds.
-- [L6](L6-migration.md) part A: build the evaluation set: 15 cases and `config.json` under `<data>/evaluation/agent/`, with the content rules. The set is no part of the engine repository.
-- [L6](L6-migration.md) part B: remove each role profile with the verdict `leave` from the runtime catalog, after the agent gate.
-- [L8](L8-worker-evaluation.md): the worker-level checks against a local KanthorD server, the review cases of `reviewer@1` and `re@1`, and the successor of `~/kanthord-evalset/worker-v2/`.
+- [LA](LA-agent-build.md): add `scripts/evaluation/agent/run.sh`, `report.sh`, `evaluation.mjs` and `evaluation.test.mjs` to the engine, after the step that ships `run agent`. Run the L4 checks in the step that adds them.
+- [LA](LA-agent-build.md): run the L4 checks in a container where the user database gives the home of the test user, as for L2-AC6. Add the new test file to the scripts `test`, `format`, `lint` and `format:check` of `package.json`.
+- [LA](LA-agent-build.md): give the L4 test file a timeout above 60 seconds. Reason: variant 1 of L4-AC2 waits for three attempts with three pi retries each, about 42 seconds.
+- [LA](LA-agent-build.md): build the evaluation set: 15 cases and `config.json` under `<data>/evaluation/agent/`, with the content rules. The set is no part of the engine repository.
+- [LB](LB-worker-build.md): remove each role profile with the verdict `leave` from the runtime catalog, after the agent gate.
+- [L7](L7-worker-evaluation.md): the worker-level checks against a local KanthorD server, the review cases of `reviewer@1` and `re@1`, and the successor of `~/kanthord-evalset/worker-v2/`.
 - [HANDOFF.md](../HANDOFF.md#agent-component), Agent component: the later eval model `openai-codex/gpt-6-luna:max`.
 
 ## Decisions
 
-1. **L7-D1.** The agent evaluation is the layer L7, a caller of the agent CLI (Ulrich, 2026-11-22). Constraint: the design of L7 comes after L3 and before L6 part A; it runs at gate step 4.3 against the built agent; an evaluation with no verdict fails gate step 4.3; the worker evaluation is L8.
-2. **L7-D2.** The default eval model is `anthropic/claude-haiku-5-5:high`, and the second eval model is `openrouter/deepseek/deepseek-v4.1-flash:high` (Ulrich, 2026-11-22). Constraint: calibration fixes the level; one evaluation uses one eval model; no `~`-alias id.
-3. **L7-D3.** Calibration runs `swe@1` once on each case and fixes the level when the pass share is from 30% to 80%. Constraint: the calibration runs at the fixed level count as repeat 1 of `swe@1`; a level measured before, an edge step or no counted run ends calibration with no verdict; each level of one evaluation has its own run directories.
-4. **L7-D4.** The evaluation set has 15 cases: 5 `backend`, 5 `frontend` and 5 `test`. Constraint: scripted hidden checks decide each pass; no LLM decides a pass; the set holds no review case; `repo.bundle` holds no commit after C.
-5. **L7-D5.** The `frontend` cases use a synthetic React and Tailwind fixture (Ulrich, 2026-11-22). Constraint: the fixture reproduces the dogfood finding of E1.
-6. **L7-D6.** A run passes when it ends `completed`, the diff rules pass and `check.sh` exits `0`. A run with a contaminated session does not count. Constraint: a lost run of a role profile counts as failed, and a lost run of `swe@1` counts as passed; a planned run with no check line gives no verdict; the contamination search is a heuristic.
-7. **L7-D7.** Each profile runs each case 2 times. A role profile stays when it passes at least 4 more of its 10 runs than `swe@1`, wins more cases than it loses and passes the confirming check (Ulrich, 2026-11-22). Constraint: the rule is fixed before the first run.
-8. **L7-D8.** The confirming check runs on `anthropic/claude-sonnet-5-5:high`, one run of each case of the group (Ulrich, 2026-11-22). Constraint: R passes no fewer runs than `swe@1`; the check is void when `swe@1` passes 0 runs or a run ends `budget_end`.
-9. **L7-D9.** The evaluation run has no turn limit. The wall budget and the cost budget of each case, fixed in `case.json`, bound each run (Ulrich, 2026-11-22). Constraint: `wall` is at most `2h`; the runner passes no cost budget for `openai-compatible`.
-10. **L7-D10.** One cap `cap_usd` in `config.json` covers each phase of one evaluation. The cap is in base dollars, the price of `base_model` `openrouter/deepseek/deepseek-v4.1-flash` (Ulrich, 2026-11-22). Constraint: `cap_usd` starts at 15 as a hypothesis, and Ulrich sets it again from the measured costs; the base cost of a run is its `list_price_usd` divided by `r`; the cap is a start gate, and a run starts only when the sum plus the case reserve is at or below `cap_usd`; Ulrich approves `cap_usd` before the first live run.
-11. **L7-D11.** The evaluation set lies in `<data>/evaluation/agent/`, and the results lie in `<state>/evaluation/runs/<evaluation-id>/` of the KanthorD XDG directories (Ulrich, 2026-11-22). Constraint: each directory has mode `0700`; each run directory names its phase and level; each workspace is a new clone in a random root under `<state>/evaluation/work/`; the set has no remote; nobody commits a result.
-12. **L7-D12.** The runner is `run.sh`, `report.sh` and `evaluation.mjs` in `scripts/evaluation/agent/` of the engine. Constraint: it calls only the built `kanthord run agent`, git, the case scripts, Node and the exported pi API; the runs go in sequence; a stop leaves a planned run with no check line, and the same evaluation id resumes it by the key phase, level, case, agent and repeat.
-13. **L7-D13.** The credential is the KanthorD `auth.json` file at the default `--auth` path. Constraint: no credential value enters a case, a result, a check record, a call record or a report; the runner checks the digest and the mode of the file around each run, and counts the credential values after each run; provisioning uses a private temporary pi directory and one move of `auth.json`.
-14. **L7-D14.** The refresh of an `oauth` entry uses `ModelRuntime.create` and `getAuth` of pi with an explicit `authPath` from the user database. Constraint: no pi CLI, no environment variable that selects the file, no proxy of the environment, no output of the token, and no error text of pi.
-15. **L7-D15. Applied to L1, L2 and the hub.** The L2 comparison rule names the verdict inputs of L7. L1 "Rules with no check" points L1-D16 to L7 unit-level rule 3. The hub gate step 4.1 holds the L7 checks, step 4.3 states that no verdict fails the step, L6 part A holds the runner and the set, and the glossary holds the terms of L7.
-16. **L7-D16.** The case budget `usd` of a case is in base dollars. The runner scales it to each model with one price ratio `r(m) = blend(m) / blend(base_model)`, where `blend(m) = 0.8 × cacheRead(m) + 0.2 × input(m) + 0.02 × output(m)` (Ulrich, 2026-11-22). Constraint: the ratio assumes a cache-read hit of 80%; a model with price tiers uses its highest tier; the constants are part of the rule; an exact multiple of 0.01 stays, else the scaled budget rounds up to the next 0.01.
-17. **L7-D17. Applied to L1, L2 and the hub.** L1-D16 states the margin of 4. The L2 result section points to the L7 verdict inputs, and the L2 comparison rule compares `system_prompt_digest` for each case. The hub glossary holds the term group and the new definition of case.
-18. **L7-D18.** The price read uses the exported pi API with an in-memory credential store. Constraint: the price read opens no credential file.
-19. **L7-D19.** Each workspace is a clone with no remote and no reflog. Constraint: no path of the case folder stays in the workspace.
-20. **L7-D20. Applied to L2 and the hub.** L2-D15 and the L2 comparison rule name a new clone of the case commit. The hub glossary holds the terms base model and base cost.
+1. **L4-D1.** The agent evaluation is the layer L4, a caller of the agent CLI (Ulrich, 2026-11-22). Constraint: the design of L4 comes after L3 and before LA; it runs at gate step 4.3 against the built agent; an evaluation with no verdict fails gate step 4.3; the worker evaluation is L7.
+2. **L4-D2.** The default eval model is `anthropic/claude-haiku-5-5:high`, and the second eval model is `openrouter/deepseek/deepseek-v4.1-flash:high` (Ulrich, 2026-11-22). Constraint: calibration fixes the level; one evaluation uses one eval model; no `~`-alias id.
+3. **L4-D3.** Calibration runs `swe@1` once on each case and fixes the level when the pass share is from 30% to 80%. Constraint: the calibration runs at the fixed level count as repeat 1 of `swe@1`; a level measured before, an edge step or no counted run ends calibration with no verdict; each level of one evaluation has its own run directories.
+4. **L4-D4.** The evaluation set has 15 cases: 5 `backend`, 5 `frontend` and 5 `test`. Constraint: scripted hidden checks decide each pass; no LLM decides a pass; the set holds no review case; `repo.bundle` holds no commit after C.
+5. **L4-D5.** The `frontend` cases use a synthetic React and Tailwind fixture (Ulrich, 2026-11-22). Constraint: the fixture reproduces the dogfood finding of E1.
+6. **L4-D6.** A run passes when it ends `completed`, the diff rules pass and `check.sh` exits `0`. A run with a contaminated session does not count. Constraint: a lost run of a role profile counts as failed, and a lost run of `swe@1` counts as passed; a planned run with no check line gives no verdict; the contamination search is a heuristic.
+7. **L4-D7.** Each profile runs each case 2 times. A role profile stays when it passes at least 4 more of its 10 runs than `swe@1`, wins more cases than it loses and passes the confirming check (Ulrich, 2026-11-22). Constraint: the rule is fixed before the first run.
+8. **L4-D8.** The confirming check runs on `anthropic/claude-sonnet-5-5:high`, one run of each case of the group (Ulrich, 2026-11-22). Constraint: R passes no fewer runs than `swe@1`; the check is void when `swe@1` passes 0 runs or a run ends `budget_end`.
+9. **L4-D9.** The evaluation run has no turn limit. The wall budget and the cost budget of each case, fixed in `case.json`, bound each run (Ulrich, 2026-11-22). Constraint: `wall` is at most `2h`; the runner passes no cost budget for `openai-compatible`.
+10. **L4-D10.** One cap `cap_usd` in `config.json` covers each phase of one evaluation. The cap is in base dollars, the price of `base_model` `openrouter/deepseek/deepseek-v4.1-flash` (Ulrich, 2026-11-22). Constraint: `cap_usd` starts at 15 as a hypothesis, and Ulrich sets it again from the measured costs; the base cost of a run is its `list_price_usd` divided by `r`; the cap is a start gate, and a run starts only when the sum plus the case reserve is at or below `cap_usd`; Ulrich approves `cap_usd` before the first live run.
+11. **L4-D11.** The evaluation set lies in `<data>/evaluation/agent/`, and the results lie in `<state>/evaluation/runs/<evaluation-id>/` of the KanthorD XDG directories (Ulrich, 2026-11-22). Constraint: each directory has mode `0700`; each run directory names its phase and level; each workspace is a new clone in a random root under `<state>/evaluation/work/`; the set has no remote; nobody commits a result.
+12. **L4-D12.** The runner is `run.sh`, `report.sh` and `evaluation.mjs` in `scripts/evaluation/agent/` of the engine. Constraint: it calls only the built `kanthord run agent`, git, the case scripts, Node and the exported pi API; the runs go in sequence; a stop leaves a planned run with no check line, and the same evaluation id resumes it by the key phase, level, case, agent and repeat.
+13. **L4-D13.** The credential is the KanthorD `auth.json` file at the default `--auth` path. Constraint: no credential value enters a case, a result, a check record, a call record or a report; the runner checks the digest and the mode of the file around each run, and counts the credential values after each run; provisioning uses a private temporary pi directory and one move of `auth.json`.
+14. **L4-D14.** The refresh of an `oauth` entry uses `ModelRuntime.create` and `getAuth` of pi with an explicit `authPath` from the user database. Constraint: no pi CLI, no environment variable that selects the file, no proxy of the environment, no output of the token, and no error text of pi.
+15. **L4-D15. Applied to L1, L2 and the hub.** The L2 comparison rule names the verdict inputs of L4. L1 "Rules with no check" points L1-D16 to L4 unit-level rule 3. The hub gate step 4.1 holds the L4 checks, step 4.3 states that no verdict fails the step, LA holds the runner and the set, and the glossary holds the terms of L4.
+16. **L4-D16.** The case budget `usd` of a case is in base dollars. The runner scales it to each model with one price ratio `r(m) = blend(m) / blend(base_model)`, where `blend(m) = 0.8 × cacheRead(m) + 0.2 × input(m) + 0.02 × output(m)` (Ulrich, 2026-11-22). Constraint: the ratio assumes a cache-read hit of 80%; a model with price tiers uses its highest tier; the constants are part of the rule; an exact multiple of 0.01 stays, else the scaled budget rounds up to the next 0.01.
+17. **L4-D17. Applied to L1, L2 and the hub.** L1-D16 states the margin of 4. The L2 result section points to the L4 verdict inputs, and the L2 comparison rule compares `system_prompt_digest` for each case. The hub glossary holds the term group and the new definition of case.
+18. **L4-D18.** The price read uses the exported pi API with an in-memory credential store. Constraint: the price read opens no credential file.
+19. **L4-D19.** Each workspace is a clone with no remote and no reflog. Constraint: no path of the case folder stays in the workspace.
+20. **L4-D20. Applied to L2 and the hub.** L2-D15 and the L2 comparison rule name a new clone of the case commit. The hub glossary holds the terms base model and base cost.
 
 ## Open questions for Ulrich
 
