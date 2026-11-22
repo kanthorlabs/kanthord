@@ -204,7 +204,7 @@ The set of each category is closed. `unattributed` has no subcategory.
 - **llm_provider**: `rate_limited`, `quota_exhausted`, `unavailable`
 - **model**: `work_defect`, `standard_violation`, `verification_failed`, `no_progress`, `reply_invalid`, `protocol_violation`, `output_truncated`, `budget_exhausted`, `judgement_wrong`
 - **environment**: `setup_failed`, `command_absent`, `affected_invalid`, `affected_timeout`, `flaky_verification`, `verification_hang`, `repository_hook`
-- **infrastructure**: `verification_killed`, `network`, `execution_lost`, `prompt_record`
+- **infrastructure**: `verification_killed`, `network`, `disk_low`, `execution_lost`, `prompt_record`
 - **human**: `intervention`, `configuration`
 
 The subcategory of a reviewer that judged a stated item of `Add password reset` unmet is `work_defect`.

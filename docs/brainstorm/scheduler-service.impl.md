@@ -59,11 +59,11 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 - `WorkPull` is the input of `scheduler.work.pull`: `resource_identity` and `runtime_identity`. The resource identity equals the resource identity of the machine identity, and the runtime identity equals the live registration of that client identity. A mismatch of either field answers 403 `scheduler.work.claimant_mismatch`.
 - The answer of `scheduler.work.pull` is `{ kind: "claimed", execution: ExecutionRecord }` or `{ kind: "no-work" }`, each with HTTP 200.
 - `ExecutionRelease` is the input of `scheduler.execution.release`: `further_work` as a boolean, and `stop` as `null` or `{ reason, code, detail?, cause? }`. `detail` is a string of 1 to 2048 characters. The worker cuts a redacted cause text to 300 characters.
-  `cause` is the [cause of the stop](worker-service.impl.md#the-cause-of-a-stop) that the worker computes. The execution row stores `reason`, `code` and `detail` only. The cause lives on the root span end alone.
+  `cause` is the [cause of the stop](worker-service.impl.md#the-cause-of-a-stop) that the worker computes. The execution row stores `reason`, `code`, `detail` and `cause` (`storedStopOf` of `src/scheduler/execution-store.ts`), and `scheduler.execution.get` answers them. The cause also lives on the root span end.
   `false` states that the execution of the attempt requires no further work.
   `stop.reason` is `operation_failed | judgement_invalid | report_absent | action_unsettled | assessment_absent | budget_end | provider_failed | no_progress | environment_failed`.
   For a failure, `stop.code` is the error code of the failed operation or `null`. For `budget_end`, it is `turns | wall_time`.
-  For `provider_failed`, it is `rate_limited | quota_exhausted | unauthorized | bad_request | unavailable`. For `no_progress`, it is `null`. For `environment_failed`, it is `setup_failed | command_absent | affected_invalid | affected_timeout`.
+  For `provider_failed`, it is `rate_limited | quota_exhausted | unauthorized | bad_request | unavailable`. For `no_progress`, it is `null`. For `environment_failed`, it is `setup_failed | command_absent | affected_invalid | affected_timeout | verification_timeout | disk_low | base_failed`.
   A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance).
   A `stop` requires `further_work: true`, and a `stop` with `further_work: false` answers 400 `gateway.request.validation_failed`.
   The Mission Service reads both fields for routing in the release transaction. The execution row stores `stop`, and nothing stores `further_work`.
@@ -230,7 +230,8 @@ The collaborations of the match are below.
 
 ## The environment gate
 
-- The stop reason `environment_failed` ends an execution whose environment fails, under [the environment classification](worker-service.impl.md#the-environment-classification) and [the affected test run](worker-service.impl.md#the-stops). Its `stop.code` is `setup_failed`, `command_absent`, `affected_invalid` or `affected_timeout`, the closed set `EnvironmentFailure` of `src/scheduler/contract.ts`.
+- The stop reason `environment_failed` ends an execution whose environment fails, under [the environment classification](worker-service.impl.md#the-environment-classification) and [the affected test run](worker-service.impl.md#the-stops). Its `stop.code` is `setup_failed`, `command_absent`, `affected_invalid`, `affected_timeout`, `verification_timeout`, `disk_low` or `base_failed`, the closed set `EnvironmentFailure` of `src/scheduler/contract.ts`.
+- The code `base_failed` stops an execution whose verification command fails on the head and fails the same way on the base commit. [The base run of a failed verification](worker-service.impl.md#the-base-run-of-a-failed-verification) states the rule. `countsFailure` of `src/scheduler/settlement.ts` answers false for it, so it neither counts nor ends the count. The release does not call `environmentFailed`, because `recordStop` of `src/scheduler/release.ts` skips the environment repositories for this code.
 - DECIDED 2026-10-23 by Aelita, pending Ulrich: the first layer, before the Onboarding component exists, gives consecutive `environment_failed` releases of a node the growing stop backoff, and the node moves to `Paused` at `mission.consecutive_failure_limit`. The code of the first layer holds this rule.
 - The Onboarding component replaces that rule with the gate below. From then on, an `environment_failed` stop with `digests` neither counts nor ends the count of [the loss settlement](#loss-settlement), and it sets no `available_at`. The node returns to `Available` or `Waiting`. An `environment_failed` stop without `digests` sets no environment `failed`, so it counts as a failure.
 - After the commit of an `environment_failed` release, the release calls `environmentFailed(input)` of the [Onboarding component](project-service.impl.md#the-failure-of-an-execution) with the resource identities of the repository bindings of the node. The environment of each binding whose digest matches its entry in `digests` is then `failed`.
@@ -261,6 +262,13 @@ The loss declaration counts the lost rows and the stopped rows of the attempt af
 A `budget_end` row is no stopped row, and the count excludes it.
 A release with a `stop` other than `budget_end` counts the same rows, itself included, in the release transaction.
 A row with an advancing `provider_failed` stop is neutral. It neither counts nor ends the count.
+A revocation for a lost instance leaves a row with the stop `instance_lost`. The row is neutral: it neither counts nor ends the count, and it sets no hold. The transaction inserts the job when the node is claimable.
+A row with a host fault stop is neutral too. `isHostFault` of `src/scheduler/settlement.ts` holds when `stop.cause` has the category `infrastructure` and the subcategory `network`. A row with the code `base_failed` is neutral for the same reason.
+`NO_FAILURE_STOPS` holds the reasons `instance_archived`, `instance_lost`, `worker_stopped` and `human_paused`. A row with one of them never counts.
+A release with a stop holds the repeat flag. `repeatsStop(earlier, stop)` compares the stop with the last ended execution of the attempt, read before this release. It holds when both have the same `reason`, `code` and `detail`. It ignores `cause`. It never holds for a stop with a reason of `NO_FAILURE_STOPS` or for `budget_end`. `earlier` is null for the first ended execution of an attempt, so a stop of an earlier attempt never repeats.
+With the repeat flag, `recordFailure` hands `{ repeated: true }` to `failure` of the Mission Service. The node moves to `Paused` at once, whatever the count is. The transition holds the rule `repeated_stop` with no count and no limit. A node that is already `Paused` stays there.
+A host fault that does not repeat calls `transitions.stopped`, which moves the node as a neutral stop does. `recordHostFault` then holds the job for `scheduler.stop_backoff` seconds, as a first consecutive failure does. A host fault that repeats takes the repeat path above.
+`pauseFacts` answers `repeated_stop`, true when the last two ended executions of the attempt hold the same stop. The paused read computes the rule `repeated_stop` from it before it tests `failure_limit`. A loss declaration never sets the repeat flag.
 The Mission Service consumes the loss or the stop in that transaction.
 Below `mission.consecutive_failure_limit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
 It inserts a job only when the node is claimable.
@@ -290,9 +298,11 @@ Each write follows the commit of the transaction that changes the execution row.
   - `finished` for a release;
   - `lost` for a loss declaration of the sweep or of an inline settlement;
   - `revoked` for a revocation at a Mission transition.
-- A revocation holds `kanthord.revoke.cause`: `assessment` when the assessment of that execution decides the node, and `human` for a human act. A forced archive of an instance is a human act.
+- A revocation holds `kanthord.revoke.cause`. The cause is `assessment` when the assessment of that execution decides the node, and `human` for a human act. It is `instance_lost` (`RevokeCause.InstanceLost`) when the Worker Service ends the execution of a lost instance. A forced archive of an instance is a human act.
+- A revocation with the cause `instance_lost` stores the stop `{ reason: "instance_lost", code: null, detail }` on the execution row. `detail` is the canonical JSON `{ instance, loss }`, and `loss` is `heartbeat_lost` or `pool_failed` (`InstanceLoss` of `src/mission/contract.ts`). `revokeForInstanceLoss` of `src/mission/control-hold.ts` hands the cause `infrastructure.execution_lost` to the revocation. The node moves to `Available`, or to `Waiting` for an evaluation claim, and a `Paused` node stays `Paused`. The revocation writes no `scheduler.transition` span.
 - The root span ends with `Ok` for a release with no stop and for a revocation with the cause `assessment`.
 - The root span ends with `Error` for a stop, a loss and a revocation with the cause `human`.
+- A release writes one log record `scheduler.execution.released` (`EXECUTION_RELEASED` of `src/scheduler/release.ts`) with `execution_id`, `node_id`, `attempt`, `further_work`, `stop_reason`, `stop_code` and `cause`. The last three are null for a release with no `stop`. A stop with no cause logs `unattributed` with no suspects.
 - A revoked trace keeps `stop_reason` null, because no stop reason exists. `kanthord.execution.end` holds `revoked`.
 - The root end holds the `kanthord.cause.*` attributes of the cause. `RootSpanEnd.cause` holds the cause of the end: `stop.cause` for a stop, the Scheduler cause for `lost` and for the revoke cause `human`, and the rework cause for the revoke cause `assessment`.
 - The Scheduler assigns the cause of the two endings that no worker stop describes, with the assigner `rule`:
@@ -306,13 +316,15 @@ Each write follows the commit of the transaction that changes the execution row.
 - The transition span holds `kanthord.node.state.from`, the node state before the transaction, and `kanthord.node.state.to`, the node state at the commit.
 - A transition to `Completed` also writes `kanthord.node.lead_time_ms`: the milliseconds from the first `Available` of the node to the transition. The Mission Service hands the time of the first `Available` with the states of a transition to `Completed`. An analytics read adds up and divides it, and no service decides from it.
 - The Mission Service hands both states to the release, to the loss and to the revocation by an assessment.
-- The transition span holds `kanthord.transition.rule`, with one of five values:
+- The transition span holds `kanthord.transition.rule`, with one of seven values:
   - `failure_limit` when the count of consecutive failures moves the node to `Paused`;
   - `further_work_limit` when the count of stalled releases moves the node to `Paused`;
   - `rework_limit` when a `criterion-not-met` assessment of the final round (round limit + 1) moves the node to `Blocked`;
   - `plan_defect` when a current `criterion-not-met` assessment with a cause of the category `plan` moves the node to `Blocked`;
+  - `human_acceptance` when a current passing `examine` assessment, or a `criterion-not-met` assessment with only `person` blockers as action items, moves the node to `Blocked`;
+  - `repeated_stop` when a stop that repeats the stop before it moves the node to `Paused`;
   - `none` otherwise.
-- With the rule `failure_limit`, `further_work_limit` or `rework_limit`, the transition span holds `kanthord.transition.count` and `kanthord.transition.limit`. The rules `none` and `plan_defect` hold neither.
+- With the rule `failure_limit`, `further_work_limit` or `rework_limit`, the transition span holds `kanthord.transition.count` and `kanthord.transition.limit`. The rules `none`, `plan_defect`, `human_acceptance` and `repeated_stop` hold neither.
 - A transition of a loss and of a release with a stop other than `budget_end` holds `kanthord.transition.failure_count`. The value is the count of consecutive failures that the Scheduler hands to the Mission Service. A stop that does not count gives the count of the earlier failures.
 - When the stop backoff delays the job of the node, the transition span also holds `kanthord.node.available_at`: the value that the Scheduler writes to `scheduler_job.available_at`. A node with no job, for example a `Paused` node, gives no such attribute.
 - A transition span of a node that keeps its state holds the same state in both attributes.

@@ -186,7 +186,22 @@
               decision for every proposal of one assessment. Its body holds
               <code>expected_mission_version</code>,
               <code>approved_proposal_ids</code> (1 to 10 distinct proposal
-              identities of the assessment) and an optional <code>reason</code>.
+              identities of the assessment), optional <code>edits</code> and an
+              optional <code>reason</code>.
+            </li>
+            <li>
+              <code>edits</code> holds at most 10 edits. Each edit holds the
+              <code>proposal_id</code> of an approved proposal and at least one
+              of <code>name</code>, <code>requirement</code>,
+              <code>criterion</code> and <code>task</code>. A
+              <code>task</code> holds <code>name</code>,
+              <code>requirement</code>, <code>criterion</code> and a nonempty
+              <code>verifications</code> list. The new node takes each given
+              value in place of the value of the proposal. The proposal record
+              keeps its content. Two edits of one proposal, or an edit of a
+              proposal that <code>approved_proposal_ids</code> does not list,
+              fail with <code>400 gateway.request.validation_failed</code> at
+              the <code>edits</code> path.
             </li>
             <li>
               In one transaction, the decision creates one

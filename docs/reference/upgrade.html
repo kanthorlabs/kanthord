@@ -75,6 +75,8 @@
               one migration, version 1. <code>gateway</code> holds no migration
               and records no row. A schema change edits that migration, and the
               command offers no upgrade path for a database of an earlier text.
+              <code>kanthord upgrade --reset-changed</code> rebuilds the
+              services whose text changed and keeps every other service.
             </li>
           </ul>
           <p>
@@ -127,7 +129,8 @@
                     <code>system.database.migration.schema_mismatch</code>
                   </td>
                   <td>
-                    Run the
+                    Stop the server and run
+                    <code>kanthord upgrade --reset-changed</code>. See the
                     <a href="#reset-a-pre-release-database">reset procedure</a>.
                   </td>
                 </tr>
@@ -167,8 +170,11 @@
               <code>system.database.migration.incompatible_history</code> before
               it writes anything. A schema that differs fails with
               <code>system.database.migration.schema_mismatch</code> before it
-              writes anything. Then check that <code>master_key</code> matches
-              <code>kanthord.db</code>. A mismatch fails with
+              writes anything. With <code>--reset-changed</code>, the command
+              finds the changed services of each file instead, and it checks the
+              reset refusals of each file with a changed service. Then check
+              that <code>master_key</code> matches <code>kanthord.db</code>. A
+              mismatch fails with
               <code>system.config.master_key_mismatch</code> before it writes
               anything.
             </li>
@@ -178,7 +184,12 @@
             <li>
               Take <code>kanthord.db</code>, then <code>tracking.db</code>. For
               each file with a pending migration, write its backup, then apply
-              its pending migrations.
+              its pending migrations. With <code>--reset-changed</code>, a file
+              with a changed service also gets the backup. Before the
+              migrations, the command drops the tables of each changed service
+              in one transaction and deletes the migration history of that
+              service. The migrations then rebuild the service from its
+              migration text.
             </li>
             <li>Replace the configuration file atomically.</li>
           </ol>
@@ -228,6 +239,14 @@ config_version: 1 -&gt; 3</code></pre>
                   </td>
                 </tr>
                 <tr>
+                  <td><code>dropped: &lt;table&gt;</code></td>
+                  <td>
+                    A table that <code>--reset-changed</code> dropped, in drop
+                    order. It prints after the backup row of its database and
+                    before the migrated rows.
+                  </td>
+                </tr>
+                <tr>
                   <td><code>renamed: &lt;old&gt; -&gt; &lt;new&gt;</code></td>
                   <td>
                     A configuration key that a configuration step renamed.
@@ -256,7 +275,11 @@ config_version: 1 -&gt; 3</code></pre>
                 </tr>
                 <tr>
                   <td><code>up_to_date: &lt;path&gt;</code></td>
-                  <td>Nothing changed, and the command wrote nothing.</td>
+                  <td>
+                    Nothing changed, and the command wrote nothing. With
+                    <code>--reset-changed</code>, a changed service counts as a
+                    change.
+                  </td>
                 </tr>
                 <tr>
                   <td>Exit code <code>0</code></td>
@@ -282,9 +305,29 @@ config_version: 1 -&gt; 3</code></pre>
           </h3>
           <p>
             Before the first tag, a schema change edits the one migration of a
-            service. The command offers no upgrade path for that data. Reset the
-            data of a pre-release build:
+            service. The command offers no upgrade path for that data. The dev
+            reset rebuilds only the changed services:
           </p>
+          <ol>
+            <li>Stop the server.</li>
+            <li>
+              Run <code>kanthord upgrade --reset-changed</code>. The command
+              writes the backup of each database that holds a changed service,
+              drops the tables of that service and builds them again. Every
+              other service keeps its rows, and the credentials stay.
+            </li>
+            <li>Start the server.</li>
+          </ol>
+          <p>
+            The reset refuses two cases before it writes anything. A changed
+            migration text of the <code>custody</code> service fails with
+            <code>system.database.reset.custody_refused</code>, because the
+            reset never drops a custody table. A table of another service that
+            references a table that the reset drops fails with
+            <code>system.database.reset.foreign_key</code> and names each
+            dependent table.
+          </p>
+          <p>Reset all the data of a pre-release build instead:</p>
           <ol>
             <li>Stop the server.</li>
             <li>
@@ -366,7 +409,7 @@ config_version: 1 -&gt; 3</code></pre>
             operation, with no API endpoint or cURL equivalent.
           </p>
           <h2 id="cli-shape">CLI shape</h2>
-          <pre><code class="language-text">kanthord upgrade [--config &lt;path&gt;]</code></pre>
+          <pre><code class="language-text">kanthord upgrade [--config &lt;path&gt;] [--reset-changed]</code></pre>
           <pre><code class="language-sh">kanthord upgrade --config /absolute/path/kanthord.yaml</code></pre>
           <p>There are no positional arguments.</p>
           <div class="table-wrap">
@@ -386,6 +429,14 @@ config_version: 1 -&gt; 3</code></pre>
                     configuration path
                   </td>
                   <td>Selects the stored server configuration to upgrade.</td>
+                </tr>
+                <tr>
+                  <td><code>--reset-changed</code></td>
+                  <td>Off</td>
+                  <td>
+                    Drops and rebuilds only the services whose live schema
+                    differs from their migration text.
+                  </td>
                 </tr>
               </tbody>
             </table>

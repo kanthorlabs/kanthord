@@ -393,6 +393,8 @@ An execution reuses a checkout that the node key holds. Else it takes a tree of 
 A push record of the node keeps the commits of a failed push on the node branch at the next execution.
 Before the reuse, the execution confirms that no earlier execution still acts in that workspace, and it brings the checkout to the head of the node branch of its attempt at the repository through the Repository component.
 When the checkout holds another branch, the execution also removes the ignored files of that branch, except the output of the setup.
+Before the setup of a checkout or a clone, the execution measures the free disk of its directory. The execution compares the free bytes with the disk free ratio of the [Footprint Service](footprint-service.impl.md#configuration) times the total bytes. When the free bytes are below that value, the execution stops with `environment_failed` and the code `disk_low`. The stop runs no setup command and no verification. Its cause is `infrastructure.disk_low`, because a full disk is a host fault and no code failure.
+A `detected` environment runs its setup commands in each checkout and each clone at every placement.
 The workspace stays until a human cleanup.
 The workspace of the evaluation method is fresh, and the Worker Service removes it at the release.
 The workspace of the steps method on an `examine` node holds one base-branch checkout for each repository binding of the pinned revision, and no checkout when the node names none.
@@ -427,6 +429,11 @@ The agent runs only coding turns: a work turn, a revision turn and a merge confl
 For each work unit the agent performs the steps in the workspace.
 After every agent turn, the execution runs gate G: it checks that each checkout is on its node branch, holds the head before the turn in its history and has no git operation in progress, and then commits every change of the turn.
 A violation of the git state restores the head before the turn and stops the execution with `operation_failed` and a code that names the violation.
+The turn commit follows three staging rules.
+A new path that the ignore rules of the checkout match stays out of the commit. This holds also when the agent adds it with `git add -f`. The file stays in the work tree.
+A new untracked path that a verification run of the agent wrote stays out of the commit until the agent changes it. A verification run is a `bash` call whose command equals a verification command of the pinned revision.
+A moved gitlink of a submodule is in the commit only when the `requirement` of the node names its path in a code span. For each other moved gitlink, the gate keeps the gitlink of `HEAD` and puts the submodule back at that commit.
+After a verification that the execution runs and after a violation, the execution also puts each initialized submodule back at the gitlink commit of `HEAD`.
 The execution is the only author of the commits on the node branch, and a commit of the agent becomes part of the commit of the execution.
 A checkout with no change keeps its head, and a revision that changes no checkout counts as no progress.
 Two revision turns in a row with no progress stop the execution with `no_progress`.
@@ -730,10 +737,15 @@ After the action performer submits the request evidence of a `kanthord` landing 
 It passes the evidence identity of that submission.
 The Intake Service records this call as `github.pull_request_merge` and merges the pull request.
 When the base branch already contains the snapshot commit, the request evidence holds a `branch_push` address, and the action performer makes no merge call.
+Before each merge request, the action performer reads the checks of the head commit. It requests no merge while a check of the head commit is pending or failed, except the `ignored_checks` of the binding. A check that the base branch rules do not require counts too. When the read fails, it requests no merge, and the deferred check of the Mission Service requests it later.
 After the dispatch loop, the action performer also requests the merge for every `kanthord` landing pull request with an unresolved request evidence and no changed gate file.
 This request uses the current tested commit, so a rework or a restart gets its merge.
 A failed merge changes no return item of the action performer and logs a warning with the evidence identity.
 With a changed gate file, the action performer requests no merge, and a human merges the pull request.
+A `push` action with a changed gate file records a `branch_push` request and pushes nothing. The action performer logs a warning that tells the human to land the node branch with a merge commit. A squash or a rebase of that branch never contains the tested commit, so it never completes the node.
+The pull request that the action performer opens has the title `<commit_type>: <node name>` with one commit type. Its body holds the newest coder report of the attempt, then the gate file text when gate files exist.
+After a 502 answer to a merge request, the Intake Service compares the base branch tree with the tested commit tree before any retry. Equal trees count as a merge, because a squash landed. Different trees keep the answer `unknown_outcome`.
+The check of an open pull request can find the tested commit as its head. The check then completes the node when the base branch tree equals the tested commit tree.
 
 For a reviewer execution of kanthord's own harness, the evaluation method invokes the action performer through `worker.action.request`.
 An external harness invokes the tool of the action performer through the MCP server for its reviewer execution.

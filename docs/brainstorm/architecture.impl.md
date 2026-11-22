@@ -187,11 +187,12 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - From the first tag, a published migration is immutable. A correction appends a migration, and it never edits a migration that a database recorded. Two divergent histories share no data directory.
 - RULED 2026-10-07 by Ulrich. The snake_case rename resets the migration history once. Each table has one `CREATE TABLE` with its current columns, and no migration copies or alters data of an earlier schema. A data directory from before the reset is not supported: wipe it.
 - RULED 2026-10-18 by Ulrich. Before the first tag, no migration is published. Each service that owns tables holds exactly one migration, version 1, that creates its final schema. `gateway` holds no migration and records no row. A schema change edits that migration in place. No upgrade path exists for the data of a pre-release build: the reset below replaces it.
+- The dev reset is `kanthord upgrade --reset-changed`. It rebuilds the services whose live schema differs from their migration text and keeps every other service and every custody table. [The upgrade](#the-upgrade) states the steps.
 - The runner validates the whole recorded history of every participating database before it applies any migration and before it checks the live schema. It rejects a service that the binary does not know, a duplicate version, a gap in the recorded versions, and a recorded version above the highest version that the binary holds.
 - After the history passes, the runner checks the live schema. For each recorded service, it runs the migrations in an empty in-memory database. It stops at the recorded version. It compares the `type`, `name`, `tbl_name` and `CREATE` text of each `sqlite_master` object of the service with the live database. A difference stops the runner with `system.database.migration.schema_mismatch` and the fields `path`, `service` and `object`. The field `object` names the first differing object in the order of type, then name.
 - The objects of a service are the objects that its migrations create and the indexes and triggers of its tables. Each object with the name prefix `<service>_` also belongs to the service. The compare skips `sqlite_` objects and tables of no service. It skips a service with no recorded row.
 - The compare reads the `CREATE` text as stored. A change of whitespace in a migration text therefore also stops the runner.
-- The reset procedure for a database that stops with `system.database.migration.schema_mismatch`:
+- The reset procedure for a database that stops with `system.database.migration.schema_mismatch`, in its dev form: stop the server, run `kanthord upgrade --reset-changed`, then start the server. The full reset deletes both files:
   1. Stop the server.
   2. Delete `kanthord.db` and `tracking.db` of the data directory, with their `-wal` and `-shm` files.
   3. Start the server. The first start creates both files.
@@ -229,12 +230,13 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The data version is the migration history of each service, as [the migration](#the-migration) defines.
 - Every reader of the configuration file refuses a version other than `CONFIG_VERSION`. An older version fails with `system.config.version_behind`, and its message names `kanthord upgrade`. A newer version fails with `system.config.version_ahead`. A value that is not a positive safe integer fails with `system.config.invalid_field`. Each message says "configuration version", never "version" alone.
 - The start of the server validates the migration history. A database that records a migration and has a pending migration stops the start with `system.database.migration.pending`, and its message names `kanthord upgrade`. A history that the binary does not hold stops the start with `system.database.migration.incompatible_history`. A database of another migration text stops the start with `system.database.migration.schema_mismatch`. The start checks the history, then the schema, then the pending migrations, and reports the first failure.
-- `kanthord upgrade [--config <path>]` is the one command that changes the configuration file or migrates an existing database. It runs these steps in this order:
+- `kanthord upgrade [--config <path>] [--reset-changed]` is the one command that changes the configuration file or migrates an existing database. It runs these steps in this order:
   1. Read the configuration file and apply the steps from its version in memory. Validate the result. A newer version stops with `system.config.version_ahead`.
   2. If `kanthord.db` exists, open it with its exclusive lock, then validate its history and check its schema. Do the same for `tracking.db` when it exists. A missing `tracking.db` stays missing. A running server or a second upgrade holds the lock, so this step fails before any write. Then verify [the master_key record](custody.impl.md#the-master_key-record) with the `master_key` of the upgraded configuration. A mismatch stops the command with `system.config.master_key_mismatch`, so no backup pair holds a configuration file that does not match its database.
-  3. If no step and no migration is pending, print `up_to_date: <path>` and write nothing.
+     With `--reset-changed`, step 2 finds the changed services of each file with `Store.changedServices` instead of the schema check. It then calls `Store.assertResettable` for each file with a changed service. A changed `custody` migration text stops the command with `system.database.reset.custody_refused`, with the fields `path` and `service`. A table of a service outside the reset can reference a table of a reset service. That reference stops the command with `system.database.reset.foreign_key`, with the fields `path`, `service` and one `table` for each dependent table. Both checks run before any backup or change.
+  3. If no step and no migration is pending, print `up_to_date: <path>` and write nothing. With `--reset-changed`, a changed service counts as a pending change.
   4. Write the configuration backup `<path>.bak-<timestamp>` with mode `0600` and one UTC timestamp, while the lock is held. Write it only when a configuration step applies.
-  5. Take `kanthord.db`, then `tracking.db`. For each file with a pending migration, write `<file>.bak-<timestamp>` in the data directory through `VACUUM INTO`, outside a transaction, with a bound path. Then apply the pending migrations of that file with the runner of [the migration](#the-migration). An existing backup path stops the command.
+  5. Take `kanthord.db`, then `tracking.db`. For each file with a pending migration, write `<file>.bak-<timestamp>` in the data directory through `VACUUM INTO`, outside a transaction, with a bound path. Then apply the pending migrations of that file with the runner of [the migration](#the-migration). An existing backup path stops the command. With `--reset-changed`, a file with a changed service also gets the backup. Before the migrations, `Store.resetServices` drops the live tables of each changed service in one transaction with `PRAGMA defer_foreign_keys = ON`. It deletes the `migration` rows of that service. The command prints `dropped: <table>` for each table, in drop order. The migrations then rebuild the service.
   6. Replace the configuration file atomically.
 - Steps 1 to 3 write nothing. `Store.plan` runs reads only.
 - The command prints the backup path of a database before the migrated rows of that database. It then prints each rename and the configuration versions.
@@ -1449,7 +1451,7 @@ The attempts block:
 - An execution whose cause equals the cause of the previous failed execution of the attempt shows `Repeat`. The current trace shows `This trace`.
 - A repeated `plan` or `prompt` cause shows "A retry does not fix this. Change the plan or the prompt."
 - A setup stop with `agent.prompt.source_invalid` and the stop detail `changed` has the cause `infrastructure.prompt_record`, because the next execution composes again from the current text. A stop with another stop detail, for example `too_large`, `not_utf8`, `unreadable` or `control_character`, has the cause `prompt.source_invalid`.
-- A stop with `project.bindings.repository.ssh_unreachable` has the cause `infrastructure.network`. A stop with `project.bindings.repository.base_branch_absent` has the cause `human.configuration`. A stop with `worker.execution.prompt_not_pinned` or `worker.execution.prompt_record_failed` has the cause `infrastructure.prompt_record`.
+- A stop with `project.bindings.repository.ssh_unreachable`, or with a failed git operation whose reason is `host_unreachable`, has the cause `infrastructure.network`. A stop with the reason `instance_lost` has the cause `infrastructure.execution_lost`. A stop with the code `base_failed` has an `unattributed` cause with the suspects `environment` and `plan`. A stop with `project.bindings.repository.base_branch_absent` has the cause `human.configuration`. A stop with `worker.execution.prompt_not_pinned` or `worker.execution.prompt_record_failed` has the cause `infrastructure.prompt_record`.
 - The current execution shows `Prompt changed` when the digest of a `part` and `name` pair of `kanthord.prompt.sources`, or `kanthord.prompt.templates_digest`, differs from the previous execution.
 - The comparison reads the spans of the previous execution once. No other execution carries the mark.
 - An execution row opens its trace on the `Summary` tab. A failed read shows its error and `Retry`.
@@ -1511,7 +1513,7 @@ The prompt block:
   The agent labels are `Session <agent name>`, `Turn <index>`, the tool name of an `agent.tool`, and `Progress`.
   `scheduler.transition` shows `Transition <from state> -> <to state>`.
   The root span of an act trace shows the label of its act: `Paused`, `Resumed`, `Ready`, `Blocked`, `Unblocked`, `Discarded`, `Overridden`, `Proposals decided` or `Evidence deleted`.
-- The span detail of a `scheduler.execution` root with `kanthord.execution.end` `revoked` shows "Revoked by a human" or "Revoked by a review", by `kanthord.revoke.cause`.
+- The span detail of a `scheduler.execution` root with `kanthord.execution.end` `revoked` shows "Revoked by a human" or "Revoked by a review", by `kanthord.revoke.cause`. The engine also writes the value `instance_lost` for an execution that the server released because its worker instance was lost.
 - The tree takes the keyboard: up and down move the selection, right expands, left collapses, and Enter opens the span detail.
 - The waterfall bar uses the theme tokens only. Its text repeats the duration, so the bar holds no information alone.
 
@@ -1600,6 +1602,7 @@ The prompt block:
 - The page has two tabs, `Flow` and `Cost`. `Flow` is the default. The URL param `tab` takes `flow` or `cost`.
 - The `Flow` tab holds Out of bounds, the flow of six stages, Why, the stop reasons and the data footer, in that order.
 - The six stages are Queued, Executing, Verification, Release gate, Evaluation and Outcome.
+- The counts of a stage follow the [conservation rule](tracking-service.impl.md#the-flow-read) of the flow read. An execution that hands on with no gate span counts in `unobserved` of its stage and in no exit.
 - A range with no claimed execution shows "No executions claimed in this range." with `Scheduler` and `Workers` in place of Out of bounds and the flow.
 - The `Cost` tab holds the cost and token scorecard `Cost and tokens`: rows of tiles, then a split table.
 - The `Cost` tab shows "No LLM turns in this range." in place of the split table when the range holds no turn.
@@ -1789,6 +1792,7 @@ The deck rules follow.
 - The workforce fact and the cooling lines follow the summary.
 - Primary: the card at the cursor. It holds the rank pill "#k", the tab label and the project pills. It also holds "Waiting <age> · since <hh:mm>". It holds "<n> nodes wait on this" when one node or more waits.
 - The primary card also holds the title, the cause, the lead act and More. A tool approval card adds the "Change asked" rows.
+- An agent answer renders GitHub Markdown, tables included (`remark-gfm` in `apps/src/features/workbench/chat/components/agent-text.tsx`).
 - An Inbox card adds the message as plain text. It never renders Markdown or HTML, because an untrusted actor can write the text. A card of an untrusted actor adds the label "not trusted".
 - The "Change asked" rows hold the operation. They add one "<field> becomes" row for each input field of the call that waits, from the session read.
 - Secondary: the first tilted card shows the plain text "Next #k <subject>". It is not a button.
@@ -1797,7 +1801,10 @@ The deck rules follow.
 - The Left and Right arrow keys move the cursor in the deck. A key press in a text field or in the tab filter does nothing.
 - A touch swipe of at least 40 px on the primary card moves the cursor at 390 px. A swipe never runs an act.
 - Cursor: it is a client-only id. A reload resets it to #1. The engine holds no cursor field, and no setting stores it.
+- The cursor follows item #1 until the first complete read of the overview (`loaded` of `useOverview`), unless the person moves it. After that read, it stays at its item. `following` of `DeckState` in `apps/src/features/home/use-home-deck.ts` holds this. A move of the cursor, a click on a row and an exit after an act set `following` to false.
 - A new item never replaces the primary.
+- The deck identity of a tool approval item is `tool_approval:<session id>:<tool call id>` (`approvalItemsOf` of `apps/src/lib/approval-attention.ts`). A new pending approval of a session shows as its own item. `queueEntryOf` of `apps/src/lib/home-deck.ts` finds the approval of the open conversation by its kind and its session id.
+- The deck tool card of a run that a guest started shows the line "Requested in a run started by <name> (guest)" above "Change asked". `requestLineOf` of `apps/src/lib/board-change.ts` builds it from `guestRequestLineOf` of `apps/src/lib/guard-line.ts`.
 - Count line: it reads "<k> of <N> waiting · <acts> · <nodes>". It holds the button "Expand (<N>)".
 - Inline list: the list opens directly under the count line. It holds a search on subject, cause, author and project, and tab filter chips.
 - Each row of the inline list holds a rank pill. The list shows 50 rows per page, with "Show 50 more".
@@ -1819,6 +1826,7 @@ The deck rules follow.
 - Settled elsewhere: the item leaves with no act of this client, or after the client cancels the act dialog. The card then shows "The selected item no longer waits." for 1.5 s. Then the same exit follows.
 - Queue line: the pending approval of the open Home conversation renders in the stream as one line. It reads "<subject> is #k in your queue."
 - The "#k" link of the queue line moves the cursor.
+- When the snapshot of the open Home conversation holds a pending approval that the deck does not hold, Home reads the overview once at once. The queue line then replaces the approval card. `useApprovalQueueRefresh` of `apps/src/features/home/use-approval-queue-refresh.ts` reads once for each tool call id, after the first complete read.
 - In the Home chat, an action card whose target holds a node or project deck item renders as the queue line "<subject> is #k in your queue." with no card. The "#k" link moves the cursor to that item. A card whose target holds no deck item renders as in the Workbench chat.
 - Yumi off: the deck and every board act work. Ask Yumi leaves every card, and `environment_failed` leads with "Open project".
 - With Yumi off, the composer is disabled and shows no command list.

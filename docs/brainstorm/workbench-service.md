@@ -145,7 +145,7 @@ It describes no mechanism of another service.
 - An approve and a reject leave no entry in the conversation. The guest view shows no request.
 - Replace, Stop and queue removal are owner-only. Guests see the queue with no Edit, no Remove and no Stop.
 - Owner-started runs stay unscoped. Guests see every answer of the conversation, the owner's own runs included. The share dialog warns about it.
-- A guest note is data, never an instruction, also in a run that the owner started.
+- In a run that the owner started, a guest note is data, not an instruction.
 - The fork material marks guest text with `<name> (guest)`.
 - Ruling C6: in a conversation with a live invite, only a leading mention starts a run. An untagged message of the owner or a guest is a note. D8 applies again when the last invite ends.
 - Ruling C9: guests see the whole history, and the share dialog states it. The guest view includes the history from before the invite.
@@ -216,6 +216,10 @@ It describes no mechanism of another service.
 ## Tools
 
 - A workbench session holds the built-in tools that the declaration of its agent enables.
+- The `bash` of a workbench session runs in a sandbox. A call of `bash` fails when no sandbox is available, and no command runs outside it. The sandbox limits the files that a command reads and writes and the hosts that it reaches. A project file cannot change the sandbox.
+- A file tool of a workbench session refuses a path outside the working directory of the session.
+- Each run holds a closed list of workbench tools for its run kind. The run kind is `owner` or `guest`. A run that a guest started is a `guest` run, and every other run is an `owner` run. A workbench tool that no list names is active in no run.
+- An `owner` run holds `offer_action` and `evidence_read`. A `guest` run holds `request_owner_act` and `evidence_read`.
 - It also holds one tool for each operation that the declaration of its agent lists. A listed operation has `human` access, is no stream and carries no secret material. The tool invokes the operation under the human identity of the run.
 - The owning service authorizes each call.
 - A workbench session holds no tool of an operation that carries secret material or answers a presigned URL.
@@ -232,6 +236,8 @@ It describes no mechanism of another service.
 - A rejected card decides that one call only.
 - Auto mode is a setting of the conversation. It is on for a new conversation. Only the [auto mode switch](workbench-service.vocabulary.md#auto-mode-switch) changes it, and it stays across a restart.
 - A rejected call reaches the agent as a blocked call.
+- The owner view of a conversation lists each member with its current configuration. A guest view lists the members with no configuration.
+- An `action_offer` for a credential records the credential name and its newest live revision.
 - A pending approval waits at most the [approval wait](workbench-service.vocabulary.md#approval-wait). Then the call returns blocked as expired, and the run ends.
 - A kanthord restart ends the active run and every pending approval.
 - An agent that cannot do an act offers one [action card](workbench-service.vocabulary.md#action-card) through the tool `offer_action`. The owner clicks the card, and the act runs as the owner's own act through the dashboard route.
@@ -269,6 +275,7 @@ Setup cards:
 - The grant is per node and per conversation. The grant of one conversation never reaches another.
 - Grants live in memory and end at a restart. A closed session that opens again starts empty, and a fork is a new session that starts empty.
 - A call that names an asset that is not in the evidence waits on no card and fails with no content.
+- The list of the evidence of a node carries no asset content and no command output.
 - An owner-started run whose message holds a node id grants that node with no card. This applies only while auto mode is on (EV6).
 - `guard@1` never decides an evidence read. Auto mode decides only the message grant.
 - The owner downloads an asset from the node page or from the evidence row of the chat. The node page offers the download for a `produced` asset and for a published `object` asset.

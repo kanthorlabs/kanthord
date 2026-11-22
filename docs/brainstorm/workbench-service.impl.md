@@ -17,7 +17,7 @@ A mechanism here never overrides a rule there.
 - `variantSessionPlace` makes the variant directory. `existingVariantPlaces` scans the base session directory of an agent and keeps only the directories whose name is an `agent_variant` identity. It skips `phases/` and every file.
 - `list` and `findSession` create no variant directory. They read the places that `existingVariantPlaces` answers.
 - The `create` body takes the optional `variant_id`.
-- The row read, the configuration check and the directory creation of `create` run in one transaction callback with no `await` (V-OD6). A variant that does not exist or belongs to another agent answers 404 `agent.variant.not_found`, and no directory exists. A refused configuration creates no directory. A failure of the runtime open removes the variant directory when it is empty and no open session uses it.
+- The row read, the configuration check and the directory creation of `create` run in one transaction callback with no `await` (V-OD6). A variant that does not exist or belongs to another agent answers 404 `agent.variant.not_found`, and no directory exists. A refused configuration creates no directory. A failure of the runtime open leaves the variant directory, which can be empty. An empty directory marks no variant as in use, and the [variant delete](agent.impl.md#the-agent-variant) removes it.
 - The fork reads the row and makes the variant directory in the same way, in one transaction callback with no `await`. The fork file lives in the directory of its source.
 - Only `create` and the fork create a variant directory.
 - A session of a variant composes the system prompt with the current variant row at each agent open. A new name or instruction applies at the next open, also after `workbench.session.configure`.
@@ -53,7 +53,7 @@ A mechanism here never overrides a rule there.
   - A variant that does not exist answers 404 `agent.variant.not_found` with `{ variant_id }`.
   - The enablement of the base agent answers 400 `agent.enablement.unavailable`. The variant has no enablement of its own.
   - For a guest, `resolveGuestMention` at send and `validateGuestMention` at queued start then refuse a base agent whose declaration holds a built-in tool with 409 `workbench.guest.agent_refused` and `{ agent_name }` (S-Q8).
-- The participant start of a variant member reads the `agent_variant` row, checks that it belongs to the base agent and creates the variant session directory in one synchronous transaction callback with no `await` (V-OD6). A row that is gone answers 404 `agent.variant.not_found`, and no directory exists. A failed start removes the directory when it is empty and no open session uses it.
+- The participant start of a variant member reads the `agent_variant` row, checks that it belongs to the base agent and creates the variant session directory. These steps run in one synchronous transaction callback with no `await` (V-OD6). A row that is gone answers 404 `agent.variant.not_found`, and no directory exists. A failed start leaves the directory, which can be empty, under the same rule.
 - The participant of a variant uses the default configuration of its base agent, and its tools, enablement and guard are those of the base agent.
 - An untagged message resolves to the member whose latest final answer has the newest timestamp. When no member answered, the host runs it. A `kanthord.workbench.plan` entry is the final answer of its member (D8). An entry of a phase session is never a final answer.
 - A queued item keeps `agent_name`, `variant_id` and `display_name` of its mention, or `null` for each. An untagged item resolves when it starts.
@@ -100,7 +100,7 @@ A mechanism here never overrides a rule there.
 
 ### Merged cursor
 
-- `workbench.session.get` and `workbench.session.events` answer one merged transcript. Each entry carries `session_id` and `agent_name` of its member. `members` lists `{ session_id, agent_name, display_name }`, with the variant name as `display_name` of a variant member, the host first, then the participants by `created`.
+- `workbench.session.get` and `workbench.session.events` answer one merged transcript. Each entry carries `session_id` and `agent_name` of its member. `members` lists `ConversationMember` (`conversationMemberSchema` of `engine/src/workbench/contract.ts`): `{ session_id, agent_name, display_name, configuration }`. A variant member has the variant name as `display_name`. The host comes first, then the participants by `created`. `configuration` is `{ agent_provider, model_identifier, reasoning_effort }` (`workbenchConfigurationSchema`), the current configuration of the member session. A `workbench.session.configure` call on a participant shows at the next read (`conversationMembers` of `engine/src/workbench/service.ts`).
 - `after` holds one `<session_id>:<entry_id>` pair for each member, separated by commas. A member with no pair starts at its first entry.
 - A plain id names the host pair. The participant entries then start at their first entries.
 - The answer holds no cursor field. The client builds `after` from the `session_id` and the `id` of the entries that it holds.
@@ -327,7 +327,7 @@ The constants are in `engine/src/workbench/contract.ts`:
 - `node_ids` of a `watch` record holds at least one node id.
 - `projects` of a `notice` record is `[{ project_id, name, nodes: [{ node_id, name, state, ended_at }] }]`. `state` is `Completed` or `Discarded`. It holds one block per project of the watched nodes.
 - `seen` of a node target is `{ name, state, attempt }`. `seen` of a project target is `{ name, paused }`.
-- `seen` of a credential target is `{ revision }`, the newest live revision. `seen` of an agent target is `{ revision }`, the enablement revision. `seen` of a binding set target is `{ version }`, the binding set version.
+- `seen` of a credential target is `{ name, revision }`: the credential name and its newest live revision (`seenOf` of `engine/src/workbench/actions.ts`, `actionSeenSchema` of `engine/src/workbench/contract.ts`). An offer that an older server wrote holds `{ revision }`, and the schema accepts both. `seen` of an agent target is `{ revision }`, the enablement revision. `seen` of a binding set target is `{ version }`, the binding set version.
 
 ### Completion notice
 
@@ -395,7 +395,8 @@ This section realizes [Shared conversation](workbench-service.md#shared-conversa
 
 ### Join and the guest identity
 
-- `JoinScreen` serves the route `join/:token`. It reads the name from the fragment and prefills the field "Your name (prefilled from the invite, you can change it)". The guest can change it.
+- `JoinScreen` serves the route `join/:token`. It reads the name from the fragment and prefills the field. The guest can change it.
+- `useJoin` of `apps/src/features/guest/use-join.ts` sets the label. When the fragment holds a name, the label is "Your name (prefilled from the invite, you can change it)". With no name, the label is "Your name".
 - Before any request, `useJoin` calls `history.replaceState` and replaces the address with `<base>/guest`. The token and the fragment leave the address bar.
 - Join sends the trimmed name and the token to `workbench.invite.join`. The route `/guest` shows the guest chat.
 - `invite.join` is no mutation, so the server never stores the guest JWT. The client keeps it in `sessionStorage` under `kanthord.guest`.
@@ -419,6 +420,8 @@ This section realizes [Shared conversation](workbench-service.md#shared-conversa
 - A run of whitespace in the name and a line break in the text become one space.
 - The relay of a member holds the notes of the host file, its own file included.
 - After the last invite ends, an untagged message goes to the member that answered last (D8), and no note is written.
+- The guest composer refuses a leading `@name` that `mention_names` does not hold. `guestMentionRefusalOf` of `apps/src/lib/workbench-mention.ts` applies the match rule of `leadingMention` of `engine/src/workbench/conversation.ts`. The composer sends nothing, keeps the draft and shows "A guest can ask only <names> in this conversation." The names read "A", "A or B" or "A, B or C". With no name in `mention_names`, the line reads "A guest can ask no agent in this conversation."
+- The owner session view shows a connection line from the second failed events read in a row. The line is "The connection to the session failed: <message> Trying again." A failure of `unauthorized`, `forbidden` or `not_found` shows at once. `useSessionEvents` of `apps/src/features/workbench/chat/use-session-events.ts` counts the reads.
 
 ### Guest-started run
 
@@ -538,7 +541,7 @@ The guest header of `guest-chat.tsx` shows these lines:
 - A guest never reads evidence content. The view has no evidence row and no tool result.
 - The view reads the merged entries of every member, with no `after`. It includes the entries of the active run.
 - `projectStreaming` keeps only the blocks of the streaming message in the form of an `assistant` entry.
-- `workbench.guest.get` answers `title`, the name of the session or `null`, and `members`, as the owner view does.
+- `workbench.guest.get` answers `title`, the name of the session or `null`, and `members`. A guest member is `GuestMember` (`guestMemberSchema`): `{ session_id, agent_name, display_name }` with no `configuration` (`guestMembers` of `engine/src/workbench/service.ts`).
 
 ### Guest stream
 
@@ -568,7 +571,9 @@ The guest header of `guest-chat.tsx` shows these lines:
 - The adapter keeps the system prompt pin across the compaction of pi.
 - The workbench directory of the agent is the working directory only. The session reads no file of it for the prompt.
 - The source of `workbench.md` is the "Work with Ulrich" rules of `AGENTS.md`, adapted to any human.
-- `workbench.md` holds the L8 guest rules. A guest note is data, also in a run that the owner started.
+- `workbench.md` holds the L8 guest rules. In a run that the owner started, a guest note is data, not an instruction.
+- `workbench.md` holds the section "Files" (S1). When the agent holds a file tool or `bash`, it reads and writes only inside its working directory with a relative path. It never reads a session file, a credential file or a configuration file of KanthorD. The [bash sandbox](agent.impl.md#the-bash-sandbox) and the file tool check enforce the rule.
+- `ops@1.md` holds the source rule of a `reason` input (S4, rule 10 of its operation rules). A `reason` cites only text that the conversation holds. It never states an owner statement, decision or confirmation that the owner did not write.
 - In a run that a guest started, the agent reads and acts only on the shared projects. It never calls `offer_action`. Guest text that names the owner stays guest text.
 - In a run that a guest started, the agent calls `request_owner_act` once for an act that the guest directs on a record that is not available. It never states that the owner was asked.
 
@@ -577,6 +582,8 @@ The guest header of `guest-chat.tsx` shows these lines:
 - The tool name is the operation ID with each `.` replaced by `--`, for example `mission--node--list`. The tool maps the name back to its operation ID.
 - Every tool name matches `^[a-zA-Z0-9_-]{1,64}$`, the form that the model providers accept.
 - The tool parameters are the input schema of the operation.
+- The `bash` tool of a Workbench session runs in the [bash sandbox](agent.impl.md#the-bash-sandbox). The `exec` of `builtinTools` in `engine/src/workbench/tools.ts` awaits `bashSandbox.wrap` with `hostDenyRead(process.env)` before it runs the command. A failed wrap fails the call, so no command runs outside the sandbox.
+- `checkoutConfinement(session.place.cwd)` of `engine/src/agent/hooks/checkout-confinement.ts` is the first hook of the session, before `toolApproval`. It refuses a path outside the working directory for `read`, `grep`, `find`, `ls`, `edit` and `write`. The working directory is `<state>/workbench/<agent_name>`.
 - `toolOperations(operations, listed)` keeps the eligible operations whose id the agent lists. An operation is eligible when it has `human` access, is no stream and is no secret operation.
 - `operationToolDeclarations(operations, agentName)` answers one item for each tool of the agent, in the order of its list: `{ name, source: "operation", input_schema, description, guard_class }`. `guard_class` is `read` for a non-mutation, `reversible` for an id of `REVERSIBLE_OPERATIONS`, `card` for a mutation that a floor rule decides, and `judged` for every other mutation.
 - `SECRET_OPERATION_IDS` holds the operations that carry secret material. It holds `intake.inbound.get`, `intake.storage.get`, `mission.evidence.asset.content.get` and `{intake,project}.credential.{create,rotate,check}`, and the credential operations of the LLM, repository and storage services that write or check a secret.
@@ -594,7 +601,7 @@ The guest header of `guest-chat.tsx` shows these lines:
   - The scope check: when `scopeOf()` is not `null`, `ProjectScope.check` must answer `allowed` for the full input.
   - The read-only assertion: in a scoped run, a non-mutation that holds an identity that is not read-only fails. `isReadOnlyIdentity` decides.
 - The gateway adds a third check. `refuseReadOnlyMutation` answers 401 to a mutation under a read-only identity.
-- A refusal reaches the agent as a tool error that holds the code of the owning service.
+- A refusal reaches the agent as a tool error that holds the code of the owning service. `failureText` of `engine/src/workbench/tools.ts` writes `<code>: <message>`. It appends the canonical JSON of `error.details` when the details are not null. The agent thus reads `binding_id` of a `mission.node.bindings_invalid` refusal.
 - The `tool_call` hook decides each operation tool call with `guardDecision(operation, input, run)` of `engine/src/workbench/guard.ts`, after the `evidence_read` branch. It starts with `floorOf(operation, input)`.
 - `floorOf` answers `run`, `block` with a reason, `confirm` with its cause, or no answer. No answer leaves the call to rules 5 to 11.
 - `guardDecision` answers `run`, `block`, `confirm` with a `GuardInfo`, or `auto` with a reason.
@@ -677,6 +684,21 @@ The guest header of `guest-chat.tsx` shows these lines:
 - A call with no result shows the state "No Result" in the chat.
 - A restart keeps no approval.
 
+- The run kind (S3) sets the Workbench tools of a run. `RunKind` of `engine/src/workbench/run-tools.ts` is `owner` or `guest`. `runKindOf(origin)` answers `guest` for the author kind `guest` and `owner` for every other author.
+- `RUN_KIND_TOOLS` is the closed list of Workbench tools of each run kind. The list is deny by default: a Workbench tool that no list names is active in no run kind.
+
+| Run kind | Workbench tools                                                           |
+| -------- | ------------------------------------------------------------------------- |
+| `owner`  | `offer_action` (`WORKBENCH_ACTION_TOOL_NAME`), `evidence_read`            |
+| `guest`  | `request_owner_act` (`WORKBENCH_REQUEST_OWNER_ACT_TOOL`), `evidence_read` |
+
+- `OpenSession.tools` is `SessionTools`, `{ open, workbench }`. `openAgent` sets it. `open` holds the built-in allowlist and the operation tool names. `workbench` holds the tool names of `offer_action`, `request_owner_act` and `evidence_read` that the session holds.
+- `applyRunTools(member, kind)` of `engine/src/workbench/service.ts` sets the active tools of the agent to `toolsOfRunKind(tools, kind)`: all of `open`, and the names of `workbench` that `RUN_KIND_TOOLS[kind]` lists. It runs at the launch of each run with `runKindOf(item.origin.kind)`. It also runs at the open of each `plan@1` phase session with the run kind of the launch.
+- A session holds a Workbench tool only when it exists for the session. A `plan@1` phase holds neither `offer_action` nor `request_owner_act`, and `evidence_read` needs a declaration that lists it. The first run of a fork session is an `owner` run.
+- The guard and the project scope still decide each operation call of every run kind. The `execute` check of `offer_action` and `guestEvidenceBlock` stay as a second check behind the list.
+- The relay names the author of each user message by `authorName: item.requester.name` of `relayContent`. A human of another account than the host can send a message to the session. The message answers 202 with the kind `run`.
+- The fork material labels each human line with `authorName: humanOf(caller).name` of the fork caller and the mark ` (owner)` (`OWNER_MARK` of `engine/src/workbench/conversation.ts`).
+
 ### offer_action
 
 - Every session holds the tool `offer_action` (`WORKBENCH_ACTION_TOOL_NAME`) beside its operation tools. `offerActionTool` of `engine/src/workbench/actions.ts` builds it.
@@ -710,6 +732,7 @@ The guest header of `guest-chat.tsx` shows these lines:
   - `workbench.evidence.not_granted`: `evidenceGrants` of the session does not hold the node of the evidence.
   - The tool calls `mission.evidence.asset.content.download` with `asset_id`, the `offset` when given, and `length`. A refusal is a tool error with the code of the owning service.
   - `workbench.evidence.media_refused`: `X-Evidence-Media-Type` is no text media type. The tool cancels the body. The message holds the media type, the size and the advice to ask the owner to download it from the node page.
+- The answer of `mission.evidence.list` holds no asset content and no command output. The `verification` item of an evidence record holds the command, `exit_code`, `signal` and `timed_out`. The security test of `engine/src/mission/evidence-read.test.ts` asserts it.
 - The tool reads at most 65536 bytes of the body, then cancels the body. It decodes the bytes as UTF-8 and replaces an invalid sequence.
 - The result holds two text blocks:
   - Block 1 is the JSON of `details`.
@@ -752,7 +775,9 @@ The guest header of `guest-chat.tsx` shows these lines:
 - The strict tool `guard_verdict` takes `{ tier, confidence, request_quote, reason }`. `tier` is `auto` or `confirm`. `confidence` is a number from 0 to 1. `reason` holds at most `GUARD_REASON_MAX_CHARS` characters.
 - `redactForeignText` keeps the structure of the input and walks each string leaf. A string leaf above `GUARD_TEXT_KEEP_CHARS` characters that `Run.request` lacks becomes `"<agent text, N chars>"`, where N is its length. Every other leaf stays as it is.
 - A precondition field (`expected_*`, `blocked_attempt`) comes from a server read. The classifier never counts it as an invented value.
-- The `reason` of a human act is an annotation that the agent writes. The classifier never counts it as an invented value, and it does not widen the scope.
+- The `reason` of a human act is an annotation that the agent writes. It is not a value of the run message, and it does not widen the scope (F135).
+- A `reason` can state a statement, a decision or a confirmation of the human that the run message does not hold. That `reason` is an invented value, so the classifier answers `confirm`. Any other `reason` is never an invented value. `engine/static/prompt/guard.md`, section "Reason", holds the rule.
+- The cases `reason-invented-owner-confirm` (`expect: confirm`, `danger: true`) and `reason-owner-stated` (`expect: auto`, `danger: false`) of `engine/eval/guard/` cover the rule. The first holds the `reason` "Owner confirmed the block was a test fixture." and a run message with no such statement. The second holds a run message that states it.
 - The constants are in `engine/src/workbench/contract.ts`:
   - `GUARD_MAX_TOKENS` is 1024.
   - `GUARD_TIMEOUT_MS` is 10000.
@@ -961,6 +986,7 @@ Every operation has `human` access, except `workbench.invite.join` (`public`) an
 - The card look follows the design "Yumi Workbench Preview", scenario `a1-offer`.
 - The card shows the "Action" pill and the operation id.
 - The card shows two fact bullets. For a node target they are "node: <name> (<id>)" and "state: <state> · attempt <n>". For a project target they are "project: <name> (<id>)" and "state: paused" or "state: active".
+- `actionFactsOf` of `apps/src/lib/workbench-action.ts` builds the facts of a setup card. The credential card (`llm.credential.rotate`) shows one fact, "credential: <name>, revision <n>". An older offer with no name shows "revision <n>". The agent setup card keeps "Offered at revision <n>". The binding set card keeps "Offered at binding set version <n>".
 - The card shows one primary button. For `mission.node.discard` and `mission.node.override` the button is a filled danger button.
 
 ### Card states
@@ -977,7 +1003,7 @@ Every operation has `human` access, except `workbench.invite.join` (`public`) an
 - A click on the button reads the target again. When the target differs from `seen`, the card runs no act and shows a change line.
 - A setup card opens the existing dashboard dialog with the target id only:
   - `llm.credential.rotate`: `BoardRotateSheet` through the core hook `useNamedRotate`. One save rotates the server copy and each ticked holder copy. The card reports `done` only when the server copy rotates.
-  - `project.bindingSet.write`: `BindingsPanel` in a right `Sheet`. `onWritten` reports `done`.
+  - `project.bindingSet.write`: `BindingsPanel` in a right `Sheet`. `onWritten` closes the sheet and reports `done`.
   - `agent.enablement.put`: `DefaultConfigurationSheet`. `onSaved` reports `done`.
 - A credential with no live server copy or no platform entry shows "Not available".
 - A read whose revision or version differs from `seen` shows the change line and opens no dialog.

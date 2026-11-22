@@ -430,8 +430,42 @@
                   <td>object</td>
                   <td>
                     Only in state <code>Blocked</code>: the
-                    <code>outcome</code> that closed the attempt and its request
-                    evidence in <code>requests</code>.
+                    <code>outcome</code> that closed the attempt, its request
+                    evidence in <code>requests</code> and <code>rule</code>.
+                    <code>rule</code> is <code>human_acceptance</code> when an
+                    execution assessment closed the attempt with
+                    <code>success</code>. It is also
+                    <code>human_acceptance</code> after a
+                    <code>criterion-not-met</code> execution assessment with an
+                    <code>action: person</code> blocker and no open reviewer
+                    finding with <code>action: yes</code>. Otherwise
+                    <code>rule</code> is <code>null</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>live_execution</code></td>
+                  <td>object or <code>null</code></td>
+                  <td>
+                    Only in <code>node get</code>: the unended execution of the
+                    node before its <code>expired_at</code>, else
+                    <code>null</code>. It holds <code>execution_id</code>,
+                    <code>attempt</code>, <code>pinned_revision</code>,
+                    <code>runtime_identity</code>,
+                    <code>instance_name</code> (string or <code>null</code>),
+                    <code>worker_name</code>, <code>trace_id</code> and
+                    <code>started_at</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>last_stop</code></td>
+                  <td>object or <code>null</code></td>
+                  <td>
+                    Only in <code>node get</code>: the stop of the last ended
+                    execution of the current attempt, else <code>null</code>. It
+                    holds <code>execution_id</code>, <code>reason</code>,
+                    <code>code</code> (string or <code>null</code>),
+                    <code>detail</code> (string or <code>null</code>) and
+                    <code>trace_id</code>.
                   </td>
                 </tr>
               </tbody>

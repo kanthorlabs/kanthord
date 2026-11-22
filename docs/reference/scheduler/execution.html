@@ -140,13 +140,38 @@
             <code>budget_end</code> resets the failure count: a release with no
             stop, a <code>budget_end</code> release and a revoked claim. An
             <code>environment_failed</code> stop neither counts as a failure nor
-            ends the count. A <code>budget_end</code> stop counts toward
+            ends the count, and a stop with the code
+            <code>base_failed</code> never counts. A stop with the cause
+            <code>infrastructure</code> / <code>network</code> is a host fault.
+            It neither counts nor ends the count, and the Scheduler holds the
+            job for <code>scheduler.stop_backoff</code> seconds. A
+            <code>budget_end</code> stop counts toward
             <code>mission.further_work_limit</code>. Any other end of an
             execution resets that count: a release with no stop, a release with
             any other stop, a revoked claim and a lost claim. A revoked claim,
             for example after a human pause, ends the execution with no stop and
             is no failure. <a href="../erd/02-execution.html">ERD 2</a> holds
             the exact count rules.
+          </p>
+          <p>
+            A stop that repeats the <code>reason</code>, the
+            <code>code</code> and the <code>detail</code> of the stop before it
+            in the same attempt pauses the node at once. The transition rule is
+            <code>repeated_stop</code>, and it holds no count and no limit. The
+            compare ignores <code>cause</code>. A host fault repeats like any
+            other stop. A <code>budget_end</code> stop, a stop with the reason
+            <code>instance_archived</code>, <code>instance_lost</code>,
+            <code>worker_stopped</code> or <code>human_paused</code>, and a stop
+            of an earlier attempt never repeat.
+          </p>
+          <p>
+            The server writes one log record
+            <code>scheduler.execution.released</code> for each release. It holds
+            <code>execution_id</code>, <code>node_id</code>,
+            <code>attempt</code>, <code>further_work</code>,
+            <code>stop_reason</code>, <code>stop_code</code> and
+            <code>cause</code>. The last three are <code>null</code> for a
+            release with no <code>stop</code>.
           </p>
           <p>
             A <code>stop</code> can also carry <code>detail</code>, the cause
@@ -199,6 +224,9 @@
               <code>affected_timeout</code> at the node head, the facts hold
               <code>binding_id</code>, <code>commit</code> of the node head,
               <code>command</code> and <code>time_limit_s</code>. For
+              <code>base_failed</code>, the facts hold <code>index</code>,
+              <code>command</code>, <code>exit_code</code>,
+              <code>timed_out</code> and <code>last_line</code>. For
               <code>command_absent</code> from the affected test run, the facts
               hold <code>binding_id</code>, <code>commit</code> of the base
               head, <code>command</code> and <code>exit_code</code>. An invalid
@@ -322,7 +350,8 @@
                   <td><code>infrastructure</code></td>
                   <td>
                     <code>verification_killed</code>, <code>network</code>,
-                    <code>execution_lost</code>, <code>prompt_record</code>
+                    <code>disk_low</code>, <code>execution_lost</code>,
+                    <code>prompt_record</code>
                   </td>
                 </tr>
                 <tr>
@@ -359,6 +388,14 @@
               <code>project.bindings.repository.base_branch_absent</code> gives
               <code>human</code> / <code>configuration</code>.
             </li>
+            <li>
+              A failed git operation with
+              <code>repository.connector.git_failed</code> or
+              <code>worker.git.commit_failed</code> and the git failure reason
+              <code>host_unreachable</code> gives <code>infrastructure</code> /
+              <code>network</code>. A git step that ends at its deadline keeps
+              the cause of its git step.
+            </li>
           </ul>
           <p>
             After a refused execution setup, the worker releases a
@@ -372,9 +409,10 @@
             It stands only with the category <code>unattributed</code>, and
             <code>subcategory</code> stands with every other category. The
             Scheduler writes <code>cause</code> on the root span end as
-            <code>kanthord.cause.*</code>. The execution record stores no
-            <code>cause</code>, so <code>stop</code> in the record holds
-            <code>reason</code>, <code>code</code> and <code>detail</code> only.
+            <code>kanthord.cause.*</code>. The execution record stores the
+            <code>cause</code> too, so <code>stop</code> in the record holds
+            <code>reason</code>, <code>code</code>, <code>detail</code> and
+            <code>cause</code>.
           </p>
           <div class="table-wrap">
             <table>
@@ -405,7 +443,10 @@
                   <td><code>environment_failed</code></td>
                   <td>
                     <code>setup_failed</code>, <code>command_absent</code>,
-                    <code>affected_invalid</code>, <code>affected_timeout</code>
+                    <code>affected_invalid</code>,
+                    <code>affected_timeout</code>,
+                    <code>verification_timeout</code>, <code>disk_low</code>,
+                    <code>base_failed</code>
                   </td>
                 </tr>
                 <tr>
@@ -420,6 +461,17 @@
               </tbody>
             </table>
           </div>
+          <p>
+            A verification command that fails on the node head runs again on the
+            base commit. The two runs can have an equal exit code, time-out
+            state and last output line, with each digit run read as
+            <code>0</code>. The execution then stops with
+            <code>environment_failed</code> and the code
+            <code>base_failed</code>. The cause is
+            <code>unattributed</code> with the suspects
+            <code>environment</code> and <code>plan</code>. The agent gets no
+            revision turn.
+          </p>
           <p>
             A native steps execution sends <code>operation_failed</code> with
             these codes of its own:

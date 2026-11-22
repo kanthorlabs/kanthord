@@ -83,7 +83,7 @@ A node update that names the identity of a task of another node answers `mission
 An absent or empty `verifications` list answers `mission.node.verifications_missing`.
 A nonlist `verifications` value or a blank or nontext item answers `mission.node.content_invalid`.
 A node with no verification need holds an always-successful command such as `true`.
-An absent or nonlist `bindings` value, an unresolved name or a rule-table violation answers `mission.node.bindings_invalid`.
+An absent or nonlist `bindings` value, an unresolved name or a rule-table violation answers `mission.node.bindings_invalid`. Some node writes take binding identities: `node create`, `node update` and `node unblock`. In these writes, a value that is a binding name answers `details: { binding, binding_id }` with the identity of that binding (`bindingIdResolver` of `src/mission/node-create.ts`). Any other unresolved value answers `details: { binding }`.
 The identity, node revision, state, attempt, priority and edges stay outside the content.
 A task's content belongs to the node revision of its node.
 Test-kind guidance changes no validation rule.
@@ -103,6 +103,8 @@ An import carries no priority.
 - `StartPoint` is an enum in code with the values `base_branch` and `node_branch`. The column `mission_attempt.start_point` holds it with no `CHECK` constraint.
 - Attempt 1 records `base_branch`, whatever act opens it. An unblock records the value of its optional body field `start_point`, and `node_branch` when the field is absent. The request schema refuses another value with 400 `gateway.request.validation_failed`, and the act writes nothing.
 - The `Attempt` read answers `start_point`.
+- `mission_attempt.unblock_reason` is a nullable `TEXT` column. `unblockReasonOf` of `src/mission/control-unblock.ts` gives the value: `reason` of the body, else `reason` of `change`, else null. `openAttempt` writes it, and attempt 1 and every other opener write null.
+- `unblock_reason` reaches the worker through `ReviewRound`, under [The read shape](#the-read-shape).
 - The claim admission answers `kind`, `project_id`, `attempt` and `node_revision`. It answers no node branch.
 - The Scheduler asks for the node branch of an execution through the `MissionBranches` port. `nodeBranchesOf(tx, keys)` answers one branch for each `{ node_id, attempt }` key, in key order.
 - The node branch of attempt N is the branch of the latest attempt k <= N that records `base_branch`. `nodeBranchOf(node_id, k)` of the Repository component builds `kanthord/<node id>` for k = 1 and `kanthord/<node id>-a<k>` for a later k.
@@ -177,6 +179,7 @@ The service also derives one `FrozenAction` for each pair of a `reply` action an
 - An import sets `filename` from the file name, and `node create` requires it.
 - Node reads return `filename`, and every export writes it unchanged.
 - A node update that changes `filename` changes content and creates a node revision.
+- `kanthord mission node update --plan-file` sends the `filename` that `node get` answers (`nodeUpdateBody` of `src/apps/cli/plan-file.ts`). The local node file name never renames a node, and a rename uses `--file`.
 - A task change creates a node revision of its node.
 - A task holds `filename` in the content of its node. A task plan file name is unique among the node and task plan file names of the current nodes of its mission that are not retired.
 - A node write that takes a used node or task plan file name answers 409 `mission.node.filename_conflict`. A proposal decision follows the same rule.
@@ -220,6 +223,7 @@ The service also derives one `FrozenAction` for each pair of a `reply` action an
 - An import covers the whole mission and carries no scope.
 - Every `node` and `depends_on` resolves inside the import set; no boundary reference exists.
 - The preview lists every current node that the import set omits as a retirement.
+- An entry with no `id` matches the current node of the same `filename`. For a task file, it matches the current task of the same `filename` (`matchByFilename` of `src/mission/import.ts`). With no match, the entry creates. An entry with an `id` resolves by that `id` alone. An `id` that another entry of the import set holds never matches by file name (`unclaimedOf`). `classifyEntry` lists an entry in `creates` only when it matches no current node and no current task.
 - The import compares the bindings of a nonterminal node by binding name, so a new binding revision changes no node. The node keeps its pinned binding revision, and [the rebind](#the-rebind) moves it. A name that now names a binding with another `resource_identity` is a change. A pin from before a removal of its binding resolves to the latest revision, so the node changes.
 - An import compares no content of a terminal node. A terminal node with an unchanged `filename` is a no-op.
 - The import resolves no binding name and no `depends_on` name of a terminal node, and it writes no revision for it. The node keeps its pinned bindings and its dependencies. The import compares a task of a terminal node by its `filename` and its node alone.
@@ -385,6 +389,8 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - In one transaction, the decision creates one `implement` node for each approved proposal, in the order of `approved_proposal_ids`. Each node holds the one task of its proposal and copies `bindings` and `tags` from the node of `dependency_id`.
 - The same transaction adds the dependency of the proposer `examine` node on each new node and reads the unmatched pairs of the Scheduler Service.
 - It sets `created_node_id` and `approved_at` of each approved proposal and `rejected_at` of every other open proposal of the assessment.
+- The body also takes `edits`, an optional list of `ProposalEdit` (`proposalEditSchema` of `src/mission/contract.ts`) with at most 10 items: `{ proposal_id, name?, requirement?, criterion?, task? }`. An item holds at least one editable field, and `task` replaces the whole proposed task with `name`, `requirement`, `criterion` and `verifications`. Each `proposal_id` is in `approved_proposal_ids` and appears once. Another list, or an item with no editable field, answers 400 `gateway.request.validation_failed` with an issue at `edits`. `dependency_id`, `finding_labels`, the bindings, the tags and the file names stay fixed. `editedContent` of `src/mission/proposal-decide.ts` applies the edit before `createNode`. The stored proposal keeps its proposed content, and the created revision holds the edited content.
+- A decision with an empty `approved_proposal_ids` answers 400. To reject every proposal, a human runs `node unblock` on the examine node, and `kanthord mission proposal decide --help` states it (`PROPOSAL_DECIDE_HELP` of `src/apps/cli/mission-help.ts`).
 - It then unblocks the proposer once into a new attempt with the default start point `node_branch`.
 - The decision answers `{ created: NodeChange[]; rejected_proposal_ids: string[]; proposer: ControlResult }`. `created` holds one `NodeChange` for each approved proposal, in the order of `approved_proposal_ids`.
 - The proposer routes to `Pending` and stays unclaimable until every new node reaches `Completed`, under the dependency rule.
@@ -631,7 +637,7 @@ The read computes these values, and no column stores them.
 | Enum                        | Values                                                                                          |
 | --------------------------- | ----------------------------------------------------------------------------------------------- |
 | `FindingKind`               | `blocker`, `suggestion`                                                                         |
-| `FindingAction`             | `yes`, `no`                                                                                     |
+| `FindingAction`             | `yes`, `no`, `person`                                                                           |
 | `FindingGround`             | `stated`, `standard`, `unstated`, `conflict`. The worker imports it as the ground of a blocker. |
 | `FindingRoute`              | `fix`, `report`, `record`                                                                       |
 | `FindingStatus` (read only) | `open`, `fixed`                                                                                 |
@@ -645,7 +651,8 @@ The read computes these values, and no column stores them.
 
 - `label` of a reviewer finding matches `^[BS][1-9][0-9]{0,2}$` and is unique inside one assessment. The service derives `kind` from it.
 - `label` of a human finding is `H<n>`, where n is 1 plus the count of the human findings of the node. The service gives it, and the partial unique index keeps it unique in the node.
-- A reviewer blocker holds `action: yes` and a `ground`. A reviewer suggestion holds `ground: null`.
+- A reviewer blocker holds `action: yes` or `action: person` and a `ground` (`requireFinding` of `src/mission/finding-admit.ts`). A reviewer suggestion holds `ground: null`.
+- `action: person` marks an item that only a person can close. It is no action item.
 - A human finding holds `action: yes`, `ground: null`, the `kind` that the human gives and a `cause_owner`.
 - `task_id` names a task of the revision that the assessment names, or it is null for the node criterion or the default standard.
 - `name`, `description`, `fix` and `why` each hold nonblank text of at most `FINDING_TEXT_MAX_BYTES` UTF-8 bytes. The worker schema checks that limit without the server configuration. 100 findings with 4 fields of 8 KiB give 3.2 MiB, under the 32 MiB body limit.
@@ -664,6 +671,7 @@ The route at the insert:
 | `action: yes`, `implement`, its assessment causes a rework    | `fix`    |
 | `action: yes`, its assessment is current and causes no rework | `report` |
 | `action: yes`, `examine`, its assessment causes a rework      | `record` |
+| `action: person`, its assessment is current                   | `report` |
 | A human finding                                               | `report` |
 
 - A current assessment that causes no rework changes the route of each finding of the attempt with `route: fix` and `status: open` to `report`. The change runs in two paths: the close branch, and a current `success` that waits for the external actions.
@@ -681,6 +689,8 @@ The route at the insert:
 - A current assessment writes its own identity into `fixed_assessment_id` of each listed finding. A non-current assessment writes nothing.
 - `action_items` of a submit is the count of its findings with `action: yes`, plus the count of the open findings of the attempt with `route: fix` that `fixed_finding_ids` does not list. A current `success` of an `implement` node causes a rework when `action_items` is above 0 and the round is not final.
 - The worker submits a round that ends before the judgement with an empty `fixed_finding_ids`, so the open findings stay open.
+- `reworkDueOf` of `src/mission/assessment-submit.ts` adds two conditions. A rework is not due when `personOnlyOf` holds: the result is `criterion-not-met`, `action_items` is 0 and a blocker holds `action: person`. A rework is not due when `unchangedOf` holds. `unchangedOf` holds when the result is `success` and `tested_input` equals, as canonical JSON, the `tested_input` of the latest earlier `success` execution assessment of the attempt.
+- With `personOnlyOf`, `limitedOf` answers the rule `human_acceptance` with no count and no limit. The route of a `person` finding is `report` (`routeOf`). With `unchangedOf`, the open findings with `route: fix` change to `report`, as for any current assessment that causes no rework.
 
 ### The human finding
 
@@ -711,7 +721,9 @@ The route at the insert:
 | `mission.finding.create`             | `POST /api/mission/node/:node_id/finding`                        | `human`                       | `Finding`                                             |
 | `mission.finding.update`             | `PATCH /api/mission/finding/:finding_id`                         | `human`                       | `Finding`                                             |
 
-- `ReviewRound` holds `round`, `final`, `review_base` and `findings`. `round` is the round of the next assessment of the claimed attempt.
+- `ReviewRound` (`reviewRoundSchema`) holds `round`, `final`, `review_base`, `findings`, `unblock_reason` and `earlier_verdicts`. `round` is the round of the next assessment of the claimed attempt.
+- `unblock_reason` is `mission_attempt.unblock_reason` of the claimed attempt, or null.
+- `earlier_verdicts` holds one `EarlierVerdict` (`earlierVerdictSchema`) for each execution assessment of an attempt before the claimed attempt, in `sequence` order: `{ attempt, round, result, rationale, findings }`. `findings` holds each finding of that assessment, open or not. An `examine` claim answers both fields too.
 - `final` is true when `round - 1 >= mission.rework_limit` or the attempt holds a request evidence.
 - `review_base` is `TestedInput | null`: the tested input of the latest earlier base round of the attempt.
 - `findings` lists each finding of the attempt with `route: fix` and `status: open`, in the order of the list, with `id`. An `examine` claim answers `findings: []` and `review_base: null`.
@@ -748,6 +760,7 @@ The route at the insert:
 - A release that fails the predicate answers 409 `mission.release.obligation_unmet` with `details: { obligation }`, where `obligation` is `evidence`, `assessment` or `request`. The refusal writes no execution row, no node state and no job, and the execution stays `running`.
 - The predicate is the same for every harness. The execution code of a worker that kanthord hosts satisfies it before the release, and an external harness meets it through the same check.
 - A reviewer release that moves the node to `External.Requested` calls `foldExternalState` on the node in the same transaction. If one required external action holds end state `other`, `foldExternalState` sets `External.Failed`. `closeExternalAttempt` then moves the node to `Blocked`, even when sibling actions are unresolved. If every required external action holds end state `expected`, `foldExternalState` sets `External.Success` and `closeExternalAttempt` moves the node to `Completed`. Otherwise the node stays in `External.Requested`.
+- A pull request that the base branch holds through a squash has a tree equal to the base tree. The check of such a request answers `expected` under [the read-backs of the Intake Service](intake-service.impl.md#outbound-operations-and-checks). The deferred check thus completes the node with the base head commit.
 - After a reviewer release to `External.Requested`, the service calls `scheduleDeferredCheck`. That function schedules `runDeferredCheck` through `setImmediate`. The deferred check reads the node and its unresolved `pull_request`, `branch_push` and `comment` evidence in one transaction, then calls `intakeCheck.check` for each. It applies the result with `applyEndState` when no live claim exists. A failed check logs a warning and changes no state. When `projectPaused` holds, the round makes no call and arms the same round again after 60 s. `requestMerge` answers `Retry` for a thrown `mission.authorization.refused`. `checkNode` calls `scheduleDeferredCheck` after its commit when the node has an open attempt. `DeferredRounds` keeps one owner run for each node attempt; a run that lost the ownership requests no further merge.
 - At quiescence, the Mission Service cancels every scheduled deferred check round and starts no new round. A round in flight completes its current Intake call, then checks no further request and requests no merge. The drain joins every round in flight. The `intakeCheck.check` and `intakeCheck.merge` calls use the shutdown context of the service, so quiescence does not cancel them. `stop()` cancels that context. At the next start, `resumeDeferredChecks` schedules the deferred check again for each `External.Requested` node with an unresolved request, up to 50 nodes.
 - Tests release a steps claim on an `implement` node with no evidence, with a produced-only evidence and with an unpublished repository evidence, and assert 409 `mission.release.obligation_unmet` with `obligation: evidence` and no change to the execution, the node and the queue. Tests release a reviewer claim with no assessment and with an eligible unrequested action, and assert `obligation: assessment` and `obligation: request`. A test asserts that a release with `further_work: true` checks no record. A test releases a reviewer claim with a `stop` and no assessment and asserts `Evaluating -> Waiting`.
@@ -914,6 +927,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
   `--attempt <n>` selects the records of attempt n.
   `--attempt 0` selects the records that the service writes while the attempt reads 0.
 - Every transition into `Blocked` writes an outcome, so the blocked read always returns one.
+- A current `success` assessment of an `examine` node with no required external action closes the attempt into `Blocked` (`closedStateOf` of `src/mission/assessment-submit.ts`). The outcome holds `result: success`, and its derived `closing_event` is `assessment-passed`. `limitedOf` hands the rule `human_acceptance` with no count and no limit to the transition. `TransitionRule` of `src/mission/contract.ts`, of `src/scheduler/contract.ts` and of `src/tracking/contract.ts` holds `human_acceptance`.
+- A person closes that block with `mission.node.override` and `result: success`. The override writes a human assessment and a new outcome, and the node reaches `Completed`. An unblock opens a new attempt instead.
   For a node blocked while its attempt reads 0, the read returns that outcome with no request evidence.
 - An outcome stores no closing event. The read derives `closing_event` in this order:
   - `success-override` for a human assessment with `result: success`.
@@ -953,6 +968,10 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - A node read holds `depends_on`: the node identities that the dependency edges of the node name, as a duplicate-free list in ascending order.
 - `depends_on` of a node read holds node identities. `depends_on` of a plan file holds plan file names.
+- `mission.node.get` answers `NodeGet` (`getNode` of `src/mission/node-read.ts`): `Node` plus `live_execution` and `last_stop`. `node list` and the control answers hold neither field.
+- `live_execution` is `LiveExecution | null`: `{ execution_id, attempt, pinned_revision, runtime_identity, instance_name, worker_name, trace_id, started_at }`. It is null with no live execution. `instance_name` is null when the registration holds no name. `trace_id` and `started_at` come from `ExecutionAttribution` of `src/scheduler/contract.ts`, from the execution row.
+- `last_stop` is the stop of the last ended execution of the current attempt, for every node state: `{ execution_id, reason, code, detail, trace_id }`. It is null when the attempt is 0, when no execution ended, or when the last execution ended with no stop. It comes from `pauseFacts`.
+- A node read of a blocked node answers `blocked_context` (`blockedContextSchema`): `{ outcome, requests, rule }`. `rule` is `human_acceptance` or null. `humanAcceptanceRuleOf` of `src/mission/record-read.ts` gives `human_acceptance` when the current outcome names an execution assessment and either its result is `success`, or `personOnlyRound` holds. `personOnlyRound` holds when the assessment has the result `criterion-not-met`, a reported `person` blocker and no reported `yes` finding. It also requires that no earlier open reviewer finding of the attempt with `action: yes` and a route other than `record` remains. A human block, a human discard and every other block give null.
 - A node read and `node list` answer `intent` and `tags` at the revision that the open attempt pins, else at the current revision. `node list` filters by `intent`.
 - A node read answers `tasks: TaskContent[]` of that revision. The `Tasks (<count>)` section of the node card reads it.
 - No operation reads the [dependency closure](mission-service.md#mission-structure-and-nodes) of one node.
@@ -1157,6 +1176,7 @@ Each import apply writes one trace through `serverTraceSpan` of [the server span
 - For an execution identity, it follows the live claim through the Scheduler Service to the node, the open attempt and the `FrozenAction` or the evidence. It resolves the pinned binding revision through the Project Service.
 - For `github.pull_request_merge`, the authorization checks the request evidence of `merge_evidence_id`. That evidence belongs to the same attempt, names the same action key as the `FrozenAction`, holds a `pull_request` address kind, and has no end state. The action is a `pull_request` with `landing: kanthord`. The `merge_address` field of the action facts carries that address.
 - `gateFilesOf` reads the paths of one binding from `gate_files` of the current assessment of the attempt. Each entry of `actions` of `ActionContext` and the `ActionFacts` hold these paths in `gate_files`.
+- `authorizeFrozenAction` sets `ActionFacts.report` for a `pull_request` action to `coderReportOf` of `src/mission/coder-report.ts`: the inline text of the newest evidence of the attempt with the subject `CODER_REPORT_SUBJECT`. Another action and the service merge get null. The Intake Service sends it as the pull request body.
 - A merge of a `pull_request` action, or a `merge_push` action, answers `gate_file_changed` when its binding holds a changed gate file in the current assessment.
 - For a human identity, it follows the evidence asset to its storage binding revision.
 - It takes no association from the caller.

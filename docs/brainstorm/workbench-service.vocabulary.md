@@ -170,7 +170,7 @@ Yumi finds a blocked node and offers `mission.node.unblock` on it. Ulrich clicks
 
 An [action card](#action-card) for a credential rotation, a binding edit or an agent enablement edit. It opens the existing dashboard dialog with the target id only.
 The closed set of acts is `llm.credential.rotate`, `project.bindingSet.write` and `agent.enablement.put`.
-Yumi finds a refused credential and offers `llm.credential.rotate` on it. Ulrich clicks the card and types the new secret in the rotate sheet.
+Yumi finds a refused credential and offers `llm.credential.rotate` on it. The card line reads "credential: codex-main, revision 3". Ulrich clicks the card and types the new secret in the rotate sheet.
 
 ## action offer
 

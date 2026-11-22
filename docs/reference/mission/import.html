@@ -54,7 +54,10 @@
             for each task that the plan keeps:
           </p>
           <ul>
-            <li>An entry without <code>id</code> creates a node or a task.</li>
+            <li>
+              An entry without <code>id</code> updates the current node or task
+              of the same file name. With no such node or task, it creates one.
+            </li>
             <li>
               An entry with the <code>id</code> of a current node or task
               updates it.
@@ -317,18 +320,20 @@
           </p>
           <h3 id="re-import-an-applied-plan">Re-import an applied plan</h3>
           <p>
-            The import matches a plan file to a current node or task by its
-            <code>id</code> alone. A file name never matches a current node. A
-            plan file without <code>id</code> creates a node or a task. The
-            import retires every current node that no plan file names by
-            <code>id</code>. An edited copy of plan files without
-            <code>id</code> lines, for example the files of the first import,
-            thus replaces the whole plan. Its preview lists every current node
-            in <code>retirements</code> and every file in <code>creates</code>.
-            A retired node that holds an attempt adds
-            <code>mission.import.condition_failed</code>, and a retired terminal
-            node adds <code>mission.import.terminal_change</code>. To remove a
-            node that holds an attempt, follow the
+            The import matches a plan file with an <code>id</code> to the
+            current node or task of that <code>id</code>. A plan file without
+            <code>id</code> matches the current node or task of the same file
+            name. An <code>id</code> that another plan file holds never matches
+            by file name. A plan file that matches no current node or task
+            creates a node or a task. The import retires every current node that
+            no plan file matches. An edited copy of plan files without
+            <code>id</code> lines thus updates the nodes of the same file names.
+            The files of the first import are an example. Its preview lists the
+            files that match no node in <code>creates</code> and the other nodes
+            in <code>retirements</code>. A retired node that holds an attempt
+            adds <code>mission.import.condition_failed</code>, and a retired
+            terminal node adds <code>mission.import.terminal_change</code>. To
+            remove a node that holds an attempt, follow the
             <a href="#import-condition">retirement exit</a>.
           </p>
           <p>To edit an applied plan:</p>
@@ -437,7 +442,10 @@ kanthord mission import apply mission_01M4C5J3SA6W8RBBC92HA9SSDS plan/*.md --fil
                 <tr>
                   <td><code>creates</code></td>
                   <td>array of file names</td>
-                  <td>Entries without <code>id</code>.</td>
+                  <td>
+                    Entries that match no current node or task. An entry without
+                    <code>id</code> matches by file name.
+                  </td>
                 </tr>
                 <tr>
                   <td><code>updates</code></td>

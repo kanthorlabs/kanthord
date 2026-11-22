@@ -109,7 +109,9 @@
             Let a paused project admit claims again. The service sets
             <code>paused_at</code> to <code>null</code> and wakes the waiting
             work pulls of the project. A resume of an active project changes
-            nothing. The operation takes no body and no version.
+            nothing. The operation takes no body and no version. A resume of a
+            paused project fails when the environment of a repository binding is
+            not <code>ready</code> or <code>none</code>.
           </p>
           <h2 id="expected-response">Expected response</h2>
           <p>
@@ -311,6 +313,18 @@
                   <td>
                     A different project holds the name.
                     <code>details.id</code> holds the ID of that project.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>409 project.environment.not_ready</code></td>
+                  <td><code>resume</code></td>
+                  <td>
+                    The project is paused, and the environment of a repository
+                    binding is not <code>ready</code> or <code>none</code>.
+                    <code>details.environments</code> lists each such binding as
+                    <code>{ binding_name, status, class }</code>.
+                    <code>class</code> is the failure class of a
+                    <code>failed</code> environment, else <code>null</code>.
                   </td>
                 </tr>
                 <tr>

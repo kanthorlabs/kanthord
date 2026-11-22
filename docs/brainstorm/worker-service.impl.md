@@ -207,7 +207,7 @@ The instance configuration holds `name`, `endpoint`, `instance_id` and `private_
 - `KANTHORD_ENDPOINT` and `--endpoint` override `endpoint`.
 - A Reset key gives a new instance configuration. The operator replaces the file with `kanthord worker join --force` or replaces the env value.
 - A stateless host sets `KANTHORD_WORKER_CONFIG` at each start and needs no volume for the identity. With no data volume, a restart loses the workspaces, and a resumed execution prepares its workspace again from the node branch.
-- `childEnvironment` of `src/agent/environment.ts` removes `KANTHORD_WORKER_CONFIG`, `KANTHORD_TOKEN` and `KANTHORD_ENDPOINT` from each child process. A tool that reads `/proc` still reads the initial environment of the process, under [Trust boundary](#trust-boundary).
+- `childEnvironment` of `src/agent/environment.ts` removes `KANTHORD_WORKER_CONFIG`, `KANTHORD_TOKEN` and `KANTHORD_ENDPOINT` from each child process. It also removes each variable whose name starts with `EVAL_` (S2, F137). A worker thus holds no `EVAL_*` variable in the environment of an agent tool or a verification command. A tool that reads `/proc` still reads the initial environment of the process, under [Trust boundary](#trust-boundary).
 - The template unit `kanthord-worker@.service` is a systemd user unit. It runs `kanthord serve worker --instance %i` with `Restart=on-failure` and `RestartPreventExitStatus=3`, and it sets no `XDG_*_HOME`.
 - [architecture.impl.md](architecture.impl.md#the-command-surface) states the commands `kanthord worker join` and `kanthord worker instance`.
 - Tests cover each source, the conflict, the absence with its paths and an invalid value. They also cover a file name mismatch, another `--instance`, the file modes and the environment of a child process.
@@ -401,6 +401,14 @@ The Docker form of `Container on this host`:
    rm <name>.env
    ```
 
+### Start at boot
+
+- KanthorD supplies no service unit. After a host reboot, no `serve worker` process runs until the host service manager starts it. The operator runs one service for each instance, with `kanthord serve worker --instance <name>` and the absolute path of the binary. A service needs no new option and holds no secret.
+- The instance file stays in `<XDG configuration directory>/kanthord/workers/<name>.yaml` with mode `0600`. The service sets `XDG_CONFIG_HOME` only for an instance file outside the default directory.
+- A stop with `SIGTERM` exits 0 after a successful deregistration, so neither service manager restarts it. A process that another process supersedes exits 3 with `worker.instance.superseded` (`INSTANCE_SUPERSEDED_CODE` of `src/worker/contract.ts`, `ExitCode.Superseded` of `src/apps/cli/constants.ts`).
+- On Linux, `Restart=on-failure` with `RestartPreventExitStatus=3` restarts a failed process and keeps a superseded process stopped. `loginctl enable-linger <user>` starts the user manager at boot with no login.
+- On macOS, a launchd agent `com.kanthorlabs.kanthord.worker.<name>` runs the instance with `RunAtLoad` and `KeepAlive` with `SuccessfulExit` set to false. Launchd restarts the process after exit 3 too, and the restarted process takes the connection back from the second process. The operator stops the second process first, or stops the agent with `launchctl bootout`. A launchd agent starts at the login of its user, so the host needs an automatic login for a start after a reboot.
+
 ### The machine copy block
 
 The machine copy block writes the machine configuration once for each machine, before the first instance of the machine starts. `<machine>` is the machine name.
@@ -448,6 +456,7 @@ A container host kind sets `KANTHORD_MACHINE_CONFIG` in place of the machine fil
 - The `server` wrapper passes `state/kanthord/` of the slot root of the instance for both. The `worker` wrapper passes the data directory and the log directory of [The worker application](#the-worker-application).
 - The worker unit registers each entry. Every request of a registration renews its heartbeat, and an idle registration sends a heartbeat inside the heartbeat window.
 - While idle, the worker unit keeps one outstanding work pull on each registration. When one pull answers a claim, it aborts the other pulls and starts no pull until the execution ends.
+- A registration that the server refuses with `worker.registration.slot_unavailable` (`WorkerErrorCode.SlotUnavailable`), or that ends with `worker.start.registration_indeterminate` (`REGISTRATION_INDETERMINATE` of `src/apps/worker/registration.ts`), starts a retry in `WorkerUnit` (`armRetry`, `retryEntry`). The retry runs every `HEARTBEAT_INTERVAL_MS`, 60 s, at the `worker` and the `server` placement, until the slot frees or the binding drops the instance. `quiesce` and `remove` clear the timer. Another error code ends the retries, and the unit logs the warning `Worker registration retry failed` with the code.
 - A no-work answer that the server held for the backoff delay or longer resets the backoff, and the pull loop pulls again at once. A shorter no-work answer waits for the rest of the delay. A refused pull therefore keeps its place in the [queue order](scheduler-service.impl.md#the-claim-selection) of its instance.
 - Both wrappers add and remove entries when the binding entries change: the `worker` wrapper at a new connection answer, the `server` wrapper at a `bindings` message of the slot channel. An entry in the state `draining` ends its live execution first, then deregisters and leaves the list.
 - `log` is a log destination, or a line sink for a test.
@@ -783,6 +792,9 @@ The heartbeat and the renewal:
 - Each record holds `instance`, `connection_name` and `last_heartbeat_at`. A connection that an archive drops logs no disconnected record. A new connection replaces the current connection and logs no disconnected record for it.
 - After a server restart, a Gateway request that re-creates the connection logs `connection_name` null.
 - When the server cannot write a disconnected record, it logs `worker.instance.connection_log_failed` and continues.
+- The same sweep then releases the executions of the lost instance (`releaseLostExecutions` of `src/worker/instances.ts`). It revokes each live execution of the instance that holds no stop order, through `revokeForInstanceLoss`, with the loss `heartbeat_lost`. The stop is `instance_lost` with the code null, and Mission counts no failure. An execution with a stop order keeps its 60 s deadline.
+- A failed revoke logs `worker.instance.loss_failed` with `instance_id`, `loss` and `err`. The sweep tries again at each later run until one of these events occurs. The revoke succeeds, the instance sends a heartbeat, a new connection opens or `LOSS_RELEASE_ATTEMPT_LIMIT`, 5 attempts, has failed. After the fifth failure the server logs `worker.instance.loss_abandoned` once and stops the retry.
+- A lapsed instance that sends a heartbeat again opens no lost execution again. `renewConnection` clears the retry.
 - An increment of `gateway.auth.version` fails every token with 401. The process takes a new worker token and connects with its `connection_id`. When a `client_secret` changed, it exits 1 with `worker.instance.secret_changed`. The restart resumes each registration and each `running` execution with a fresh handover.
 - The renewal reads only the monotonic clock, so a difference of the two clocks stops nothing.
 
@@ -938,11 +950,14 @@ The container runtime store:
 - `worker.server_instance_limit` caps the live server instances of the server over both placements, as a positive safe integer with the default `16`. A create at the cap refuses, under [The instance record](#the-instance-record).
 - A server start with more live server instances than the cap starts the oldest ones by `created_at` up to the cap. Each other one stays pending.
 - The pool host writes `worker.pool.instance_limit` with `instance` to the server log for each pending instance. It starts the oldest pending instance when a started one ends.
-- An instance exit without a stop request restarts the instance with a backoff of 1 s that doubles up to 30 s. The backoff resets after the instance lives 30 s.
+- An instance exit without a stop request restarts the instance with a backoff of 1 s that doubles up to `POOL_BACKOFF_MAX_MS`, 300 s. The backoff resets after the instance lives 300 s.
 - The pool host writes `worker.pool.instance_failed` with `instance`, `placement`, `exit_code` and `err` to the server log.
-- The registrations stay live during the backoff, so the new instance resumes each registration and its `running` execution.
+- After that record, the pool host calls `instanceFailed` of the Worker Service (`WorkerInstances.instanceFailed` of `src/worker/instances.ts`). It revokes each live execution of the instance with the stop `instance_lost` and the loss `pool_failed`, as [the instance exchange](#the-instance-exchange) states. A failed release logs `worker.pool.instance_failed_release` and does not stop the restart. The connection sweep then retries the release, at most 5 attempts in all. A new connection or a heartbeat of the restarted instance ends the retry, and the execution then holds its node until its `expired_at`. A restart of the server ends the retry.
+- The registrations stay live during the backoff, so the new instance resumes each registration.
 - At server stop, `stopPool` runs first, before quiesce. The pool host sends the `stop` control to each instance through its slot driver.
 - The pool host calls `terminate()` for an instance that does not end within the pool stop deadline of 5 s. The server watchdog is 10 s.
+- The server watchdog is `STOP_WATCHDOG_MS` of `src/apps/server/index.ts`. `stop()` arms it at the start of the stop and clears it when the stop ends. It therefore does not cover the `exit()` call after the stop.
+- After `SIGTERM`, the server can hang in `exit()` in `uv_thread_join` (findings F7, F40). The investigation found no engine cause. The idle libuv pool threads point to the runtime. For the next stuck pid, record a full `sample` and the Node and libuv versions.
 - A stopped instance cancels its live execution. Only a worker unit with a live execution keeps its registration. An idle worker unit deregisters.
 - The archive of a server instance stops it with the same `stop` control and deadline.
 - The project pause reaches a server instance through its work pull, as it reaches every instance. The pool reads no pause.
@@ -1080,6 +1095,7 @@ Tests of the slot driver:
   8. `runtime_failed` when rootless Podman answers a `version.Version` below `PODMAN_AUTO_UIDMAPPING_MIN_VERSION`, the first version that accepts `auto:uidmapping=` for a rootless user. `detail` is "podman `<version>` refuses --userns=auto:uidmapping=. Upgrade Podman to `<minimum>` or later."
   9. `runtime_rootful` when the host is Linux, the runtime is rootful and the server uid is not 0. Podman is rootful when `host.security.rootless` is false. Docker is rootful when `SecurityOptions` holds no `name=rootless`. Docker Desktop, whose `OperatingSystem` is `Docker Desktop`, is exempt.
 - The driver keeps the newest answer for 10 s and reuses it. A launch with no answer yet waits for one.
+- The environment image build calls `check()` first (`composeServices` of `src/apps/server/index.ts`). With an unavailable status, the build starts nothing and answers `ImageBuildOutcome.Failed` with the class `EnvironmentFailureClass.BuildFailed`. The `tail` is the `detail` of the status, else its `reason`, else "the container runtime is unavailable".
 - The driver uses the runtime of the newest available answer.
 - The runtime CLI runs with the full server `env`, because Podman reads `HOME`, `XDG_RUNTIME_DIR`, `XDG_DATA_HOME` and `CONTAINER_HOST`, and Docker reads `DOCKER_HOST` and `DOCKER_CONTEXT`. Only the named `--env` variables reach the container.
 - A server with a custom `XDG_CONFIG_HOME` or `XDG_DATA_HOME` loses the Podman machine connection, because Podman keeps the connection list under those directories. The check then answers `runtime_failed`.
@@ -1670,7 +1686,18 @@ The agent catalog `src/agent/catalog.ts` owns `EVIDENCE_UPLOAD_PARAMETERS`, the 
 `agent.get` lists a host tool with the source `host`.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the four sources.
-No worker agent process outlives its bash call. At the end of the call, the worker kills the process group of the call. A process that calls `setsid` escapes that kill.
+No worker agent process that keeps the marker variable or the fd 3 marker file outlives its execution (E6, F79, F3). At the end of a bash call, the worker kills the process group of the call. A process that calls `setsid` escapes that kill, and the end of the execution ends it, as follows.
+`ToolProcesses` of `src/worker/unit/tool-table.ts` holds one `marker`, a random UUID for each execution. `processBashOperations` sets the variable `KANTHORD_PROCESS_GROUP_MARKER` (`GROUP_MARKER_VARIABLE` of `src/kernel/process-group.ts`) to the marker in the environment of each bash command. On macOS it also passes a descriptor of the marker file `<tmpdir>/kanthord-group-<marker>`, with mode `0600`, as the fourth file descriptor of the command.
+`markedGroups(marker)` lists the process groups that hold the variable in their environment (`/proc/<pid>/environ` on Linux, `ps -E` on macOS). It also lists the groups that hold the marker file open (`lsof`, macOS only). It skips the groups of the worker and a group at or below 1.
+The end of the execution finds a descendant only through this variable. On macOS, it also finds a descendant through the marker file that each bash call holds as fd 3. A descendant that clears its environment escapes the cleanup on Linux. On macOS, a descendant escapes when it closes the inherited descriptors and `ps -E` cannot show its environment. A platform binary such as `/bin/sleep` is an example.
+`NativeAgent.dispose` of `src/worker/unit/native-agent.ts` calls `ToolProcesses.endGroups`. `endMarkedGroups` runs `endProcessGroups`: it sends `SIGTERM` to each live group, waits `GROUP_GRACE_MS`, 3000 ms, and sends `SIGKILL` to each group that still lives. A zombie is no live process. `endMarkedGroups` then removes the marker file. A failure of either step raises the process warning `AgentProcessGroupEndWarning` and throws nothing.
+The bash tool of `swe@1` runs in the [bash sandbox](agent.impl.md#the-bash-sandbox) (S2, F121, F128). `sessionTools` of `src/worker/unit/tool-table.ts` awaits `bashSandbox.wrap` with the `SandboxScope` of the unit before it runs the command, so a command never runs outside the sandbox. The sandbox covers the bash tool only. The verification commands and the local git run outside it.
+`allowWrite` holds the workspace of the execution and the `TMPDIR` of the instance. Each command exports that `TMPDIR`. `packageCacheEnvironment` sets `pnpm_config_store_dir`, `pnpm_config_cache_dir` and `npm_config_cache` to directories under it.
+`denyRead` holds the host credential paths of the server process, as `hostDenyRead` of `src/agent/bash-sandbox.ts` lists them, and the pi directory of the instance. `instanceDenyRead` of `src/apps/worker/index.ts` builds the scope of a `worker` instance with `root` set to the data directory of the instance. The `thread` driver passes `slotThreadData` as `deny_read`, and `thread.ts` sets `sandbox_root` to the parent of `XDG_STATE_HOME`.
+With `root`, `denyRead` holds each child of an ancestor of `root` that is not on the path to `root`. The other instance roots of the host therefore stay denied. The list is computed at each call, so an instance root that appears later is denied too.
+The network allowlist names the hosts of the worker (`BASH_NETWORK`). These hosts are `registry.npmjs.org`, the two GitHub asset hosts and the git and API hosts of GitHub, GitLab and Bitbucket.
+The worker disposes the sandbox runtime when it stops, and the `thread` driver and the slot do the same.
+A `container` placement does not support the coder bash, because the sandbox needs user namespaces. The default seccomp profile of the slot container blocks them (`engine/docs/cli/other.md`). The bash call then fails with an error tool result.
 The Workbench keeps the background processes of a bash call.
 
 The [Repository implementation](repository.impl.md#platform-connector-and-platform-implementations) owns platform methods, result schemas and payload decoders.
@@ -1747,21 +1774,25 @@ Gate G is the worker step after every agent turn. `src/worker/unit/turn-gate.ts`
 
 The steps for each checkout:
 
-| #   | Mode       | Check or act                                                                                                                                                                          |
-| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| G0  | checkpoint | When `MERGE_HEAD` exists, run `git merge --abort`.                                                                                                                                    |
-| G1  | all        | `git symbolic-ref -q HEAD` is `refs/heads/<node branch>`. Else `worker.turn.branch_changed`.                                                                                          |
-| G2  | all        | `before` is an ancestor of `HEAD`. Else `worker.turn.history_rewritten`.                                                                                                              |
-| G3  | conflict   | `MERGE_HEAD` is the commit that step M merged. Else `worker.turn.merge_missing`.                                                                                                      |
-| G3  | all        | No `rebase-merge`, `rebase-apply`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, and no `MERGE_HEAD` outside conflict mode. Else `worker.turn.git_in_progress`.                                |
-| G4  | all        | When `HEAD` is not `before`, run `git reset --soft <before>`.                                                                                                                         |
-| G5  | all        | Stage with `git add --all`. A path whose only change is a line-ending conversion is unstaged. `changed` is true when the stage differs from `HEAD`, and always true in conflict mode. |
-| G6  | conflict   | Scan only the unmerged paths of step M with `git grep --no-index -l -E '^(<{7}\|>{7})( \|$)'`. A match aborts the merge and stops with `worker.merge.markers_left`.                   |
-| G7  | all        | Commit when `changed` is true, with the message of the unit. In conflict mode, commit to conclude the merge. Make no empty commit outside conflict mode.                              |
-| G8  | all        | Read `HEAD` into `checkout.head`. Assert invariant I.                                                                                                                                 |
-| G9  | all        | With two or more checkouts, remove each entry of the agent root that is not a checkout or `.kanthord-scratch`. Log `root entries removed` with the names.                             |
+| #   | Mode       | Check or act                                                                                                                                                                                                                   |
+| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| G0  | checkpoint | When `MERGE_HEAD` exists, run `git merge --abort`.                                                                                                                                                                             |
+| G1  | all        | `git symbolic-ref -q HEAD` is `refs/heads/<node branch>`. Else `worker.turn.branch_changed`.                                                                                                                                   |
+| G2  | all        | `before` is an ancestor of `HEAD`. Else `worker.turn.history_rewritten`.                                                                                                                                                       |
+| G3  | conflict   | `MERGE_HEAD` is the commit that step M merged. Else `worker.turn.merge_missing`.                                                                                                                                               |
+| G3  | all        | No `rebase-merge`, `rebase-apply`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, and no `MERGE_HEAD` outside conflict mode. Else `worker.turn.git_in_progress`.                                                                         |
+| G4  | all        | When `HEAD` is not `before`, run `git reset --soft <before>`.                                                                                                                                                                  |
+| G5  | all        | Stage with `git add --all`. Then apply the turn staging rules below. A path whose only change is a line-ending conversion is unstaged. `changed` is true when the stage differs from `HEAD`, and always true in conflict mode. |
+| G6  | conflict   | Scan only the unmerged paths of step M with `git grep --no-index -l -E '^(<{7}\|>{7})( \|$)'`. A match aborts the merge and stops with `worker.merge.markers_left`.                                                            |
+| G7  | all        | Commit when `changed` is true, with the message of the unit. In conflict mode, commit to conclude the merge. Make no empty commit outside conflict mode.                                                                       |
+| G8  | all        | Read `HEAD` into `checkout.head`. Assert invariant I.                                                                                                                                                                          |
+| G9  | all        | With two or more checkouts, remove each entry of the agent root that is not a checkout or `.kanthord-scratch`. Log `root entries removed` with the names.                                                                      |
 
-- Invariant I: the checkout is on `refs/heads/<node branch>`, `HEAD` equals `checkout.head`, the index matches `HEAD`, no untracked file exists apart from ignored files, and no git operation is in progress.
+- The turn staging rules of G5 run in `trimTurnStaging` of `src/worker/unit/local-git.ts` after `git add --all`, in a turn commit only. `concludeMerge` runs none of them, so the merge of the base keeps the gitlinks of the merge.
+  - A path can match the ignore rules of the checkout (`git ls-files --cached --ignored --exclude-standard`) and be added by the turn (`--diff-filter=A`). That path leaves the index with `git update-index --force-remove`. It stays in the work tree. This holds also after `git add -f` and after an agent commit. A tracked file of `HEAD` that an ignore rule matches stays staged.
+  - A new path that a verification run wrote leaves the index the same way, under [the verification writes](#the-verification-writes).
+  - A gitlink can move from one commit to another. It stays in the commit only when `namedPointers` of `src/worker/unit/turn-gate.ts` finds its path as a code span of the `requirement` of the revision. The span is exact, so `` `engine` `` names the gitlink `engine` and `` `engine/src` `` names no gitlink. For each other moved gitlink, `unstageGitlinkMoves` runs `git update-index --cacheinfo 160000,<commit of HEAD>,<path>`. `restoreGitlink` then puts the submodule back at that commit with `git checkout --detach <commit> --`, with no `--force`. An uncommitted edit in a file that differs between the two commits makes git refuse, and the turn stops with the git failure. The edit stays until the next prepare, which restores the gitlink with `--force`.
+- Invariant I: the checkout is on `refs/heads/<node branch>`, `HEAD` equals `checkout.head` and the index matches `HEAD`. No untracked file exists apart from ignored files and the verification writes, and no git operation is in progress. `isCommitted` of `src/worker/unit/local-git.ts` takes the verification writes as `--exclude` patterns.
 - A turn with `changed` true sets the unchanged-turn counter to zero.
 - The gated agent keeps the set of commits that its gate made. [The done record](#the-done-record) reads it.
 
@@ -1777,10 +1808,18 @@ The restore sequence brings a checkout back to invariant I from any state. `rest
 
 1. For each operation whose state exists, run `git rebase --quit`, `git am --quit`, `git cherry-pick --quit`, `git revert --quit` or `git merge --abort`.
 2. Run `git checkout --force -B <node branch> <target> --`.
-3. Run `git reset --hard HEAD` and `git clean -ffd`.
+3. Run `git reset --hard HEAD`. `restoreGitlinks` of `src/worker/unit/local-git.ts` then runs `git checkout --detach --force <commit> --` in each initialized submodule whose commit differs from the gitlink of `HEAD`. A gitlink with no initialized submodule directory stays as it is. Then run `git clean -ffd`.
 4. Assert invariant I.
 
-The target is `before` in the violation path, the head of the checkout step in prepare, and `checkout.head` after each live verification. Prepare keeps its `git clean -ffdx` on a branch switch under [Workspace](#workspace).
+The target is `before` in the violation path, the head of the checkout step in prepare, and `checkout.head` after each live verification. Prepare keeps its `git clean -ffdx` on a branch switch under [Workspace](#workspace). Step 3 restores the gitlinks, so a verification that moves a submodule leaves it at the gitlink commit. The next turn commit thus records no gitlink move.
+
+### The verification writes
+
+- `VerificationWrites` of `src/worker/unit/verification-writes.ts` records the new untracked paths that a verification run wrote. A verification run is a `bash` call of the working agent whose trimmed command equals one trimmed verification command of the pinned revision (`verificationCommands`). `track` of the `bash` tool in `sessionTools` of `src/worker/unit/tool-table.ts` wraps the call.
+- The record covers the checkouts of the workspace. It takes each path that `git status --porcelain=v1 -z --untracked-files=all` lists as new after the run and not before it (`untrackedPaths`). A new nested repository counts as its directory, and its gitlink stays out of the commit.
+- The record lasts for the execution. `NativeAgent.verificationWrites(directory)` gives the paths of one checkout to the turn commit and to `isCommitted`. The worker deletes no file and writes no git exclude file.
+- A `write` call or an `edit` call on a recorded path removes the path from the record (`ownership` hook). Another `bash` call removes each recorded path whose fingerprint (size, modification time and content) differs before and after the call (`guard`). The path then goes in the next turn commit.
+- In a write execution, `sessionTools` sets `executionMode` of the `bash` tool to `sequential`. Each tool call of a message that holds a `bash` call thus runs one at a time. The record names the writer of each path.
 
 ## The done record
 
@@ -1825,6 +1864,9 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 
 - A verdict holds a text and a judged commit for each binding that the review saw.
 - A verdict also holds the open findings of the attempt. `readPrior` reads them from `findings` of `mission.execution.review_round.get`.
+- For an attempt after attempt 1, `readPrior` reads the review round once and also answers `unblockReason` and `earlierVerdicts` from `unblock_reason` and `earlier_verdicts`. `StepsState` keeps both.
+- `criterionRevisionInstruction` of `src/worker/unit/judgement.ts` renders `criterion-revision` with the rationale, the findings, the earlier verdicts and the unblock reason. `earlierVerdictsText` writes one block for each verdict: the attempt, the round, the result and the rationale, then one line for each finding of that verdict. With no rationale, the text omits "Previous judgement".
+- With an unblock reason and no recorded verdict, `unrecordedNodeInstruction` of `src/worker/unit/steps-implement.ts` still gives the coder a node instruction that holds the reason. This holds also when every task is done. The coder answers the reason with FIXED or OPEN in its final reply, and that answer is no blocker of its finding list.
 - The `criterion-revision` text lists each open finding with its id, its label, its round, its name, its description, its fix and its why. The coder answers each finding id with FIXED or OPEN and the reason in its final reply. A finding answer is no blocker of the finding list of the coder.
 - With no failed check, the judged commit of a `criterion-not-met` assessment is the commit of each `repository` address of its `tested_input`. A `success` assessment gives no judged commit. With a failed check, the failed checks give the judged commits. The judged commit of change requests is the `commit_id` of the latest change request of each binding, by `submitted_at`.
 - `judgedCheckouts` keeps a judged commit only when the checkout holds it and it is an ancestor of `HEAD`. It logs `judged commit off the node history` for each other one.
@@ -1853,6 +1895,7 @@ The verdict is the latest review that asks for more work. `readPrior` of `src/wo
 - The execution writes the change requests into one requested-changes text. The text holds the reviewer, the commit and the body of each change request, and it names the repository binding of each change request. It also holds the path, the line and the body of each review comment of that change request.
 - The requested-changes text stops at 4 KiB.
 - The requested-changes text is the verdict text. It enters [The verdict unit](#the-verdict-unit).
+- `readHumanRequests` of `src/worker/unit/node-reads.ts` joins the requested-changes text and the link-updates text. The evaluation prompt holds it as the human change requests.
 - When the read finds no current change request, an execution of attempt 2 or later reads `mission.execution.cleared_assessment.get`. A cleared assessment that is not `success` gives its rationale as plain instruction text.
 - A change request routes no task. The verdict unit sends the whole text to the agent. The verdict rule asks for a commit until the last turn of the limit.
 - A platform failure of the read answers 502 `repository.platform.github.<class>`. The execution stops with `operation_failed` and that code.
@@ -1911,6 +1954,13 @@ A patch over `INLINE_BYTES_MAX` (5 MiB) keeps its first part and ends with the t
 `isSupportEvidence` excludes `ROUND_PATCH_SUBJECT`, as it excludes `AFFECTED_SUBJECT`, so a later round places no old patch.
 `prepareEvaluation` places only the newest evidence of the attempt with the subject `CODER_REPORT_SUBJECT`, by evidence identity. An earlier coder report describes an earlier round.
 The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids is a blocker with the ground `stated`. The exception is a change that correct work needs for a criterion, a verification or an affected test.
+The judgement instruction is `static/prompt/template/evaluation.md`, and the `examine` instruction `static/prompt/template/examine.md` is the report counterpart. Four rules govern the findings of the reviewer. The `evaluation` template holds the first three for an `implement` node and an `examine` node alike.
+
+- The citation rule: the requirement or a task can cite a code path or a type for a stated value, shape or code. The reviewer then reads that path or type in the checkouts and compares each statement of the change with it. A statement that differs from the cited code is a blocker with the ground `stated`. A cited path that is not in the checkouts makes the statement not established.
+- The complete violation list: when a rule is violated, the reviewer checks every changed file against that rule. It lists each violation as its own finding, with its file and its place. The `examine` instruction holds the same rule. A finding that reports one example and leaves the other violations out breaks it.
+- The repository code rule: the reviewer checks each code rule of a repository prompt against each changed file. For example, a repository prompt can state "a component body holds no business logic". A component body with a derivation, a sequence of calls or an error mapping then violates that rule.
+- The round limit: in a later review round, the round rule limits these checks to the lines that the round patch adds or changes (`patch_paths`). A prior finding that the reviewer does not list as fixed stays open.
+
 `runEvaluation` checks the node state of the submit answer before the result. An answer with no outcome and a node state other than `Evaluating` ends the execution as `revoked`. A `success` answer with the node still `Evaluating` goes to `requestAndRelease`.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
@@ -1956,12 +2006,18 @@ Tests assert that the action performer does not reuse an open pull request of th
 
 ## The environment setup
 
-- The execution setup answers `environment` for each repository binding of the node, from the current revision of that binding at the claim: `{ source: "stored", document, digest }`, `{ source: "repository", digest }` at the `container` placement, `{ source: "detected" | "universal", document, digest }` at the `image` target, or null.
-- `digest` is the current digest of the group in the [Onboarding component](project-service.impl.md#the-digest-and-the-tag).
+- The execution setup answers `environment` for each repository binding of the node, from the current revision of that binding at the claim (`executionEnvironment` of `src/worker/execution-setup.ts`). The value is one of these:
+  - `{ source: "stored", document, digest }`.
+  - `{ source: "repository", digest }` at the `container` placement.
+  - `{ source: "detected", document }` at every placement.
+  - `{ source: "universal", document }` at the `container` placement.
+  - null.
+- `digest` of a `stored` or a `repository` environment is the current digest of the group in the [Onboarding component](project-service.impl.md#the-digest-and-the-tag).
 - `worker/unit/environment-setup.ts` runs the setup of each checkout: each script of `updateContentCommand`, then each script of `postCreateCommand`. The object form runs its values one after another in key order.
 - The setup runs at the prepare, in each release tree, in the reviewer checkouts and in the examine checkouts.
+- The execution setup also answers `disk_free_ratio`, the value of `footprint.disk_free_ratio` (`executionSetupSchema` of `src/worker/contract.ts`). Before any setup command of the entries, `assertDiskFree` of `src/worker/unit/environment-setup.ts` measures each checkout directory with `freeDiskOf` of `src/kernel/disk.ts`. A directory with `free_bytes` below `disk_free_ratio` times `total_bytes` stops the execution with `environment_failed` and the code `disk_low` (`EnvironmentFailure.DiskLow`). A free disk equal to the limit passes. The stop detail is the JSON `{ free_bytes, total_bytes, disk_free_ratio, directory }`.
 - Each command has the command limit of a verification, and the setup uses the wall deadline of the execution. Its time counts toward the budget of the execution.
-- At the `server` and the `worker` placements, only the setup commands of a stored environment run. The repository devcontainer reaches the worker only at the `container` placement, and the worker reads it at `origin/<base branch>` of its checkout. A non-regular entry counts as absent.
+- At the `server` and the `worker` placements, only the setup commands of a stored or a `detected` environment run. The repository devcontainer reaches the worker only at the `container` placement, and the worker reads it at `origin/<base branch>` of its checkout. A non-regular entry counts as absent.
 - After a setup passes in a checkout, the worker appends each untracked path to `.git/info/exclude`, so no task commit takes the setup output.
 - A setup that changes a tracked file stops the execution with `environment_failed`, the code `setup_failed` and the paths in the detail, because KanthorD commits no change that the agent did not make.
 - The setup writes only inside the checkout, `$HOME` and `/tmp`, because the root file system of the container is read-only. A system install belongs in `onCreateCommand`, which runs at the build as root.
@@ -2050,11 +2106,13 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - `failed` and `flaky` list test ids. A test id is `{ file, name }`. `name` is the full name of the test: the names of its suites and its own name, joined with a space, `>` and a space. A file that fails to load gives one id with the file path as its name.
 - Each `file` of `failed` and `flaky` is in `tests`. `failed` and `flaky` hold no common id.
 - The selector retries a failed test file once. A test that fails and then passes is flaky.
+- An entry of `flaky` is `{ file, name }`. In a version 3 report, an entry of `flaky` also holds `lines` and `imports`. `lines` is `{ start, end }`, the first and the last line of the top-level test call that holds the first part of `name`. `end` is not below `start`. `imports` lists the paths of the import closure of `file`, without `file`. An entry holds both keys or neither. A report of another version with `lines` is invalid. `flakyEntry` of `scripts/affected-tests.mjs` writes both keys only when exactly one top-level call of the file holds that first part of `name`. Otherwise it writes the plain id.
+- When the report is above its size bound, `fitReport` first drops `lines` and `imports` from every `flaky` entry. It cuts the longest list only after that.
 - The KanthorD selectors rerun the failed test files only when 8 or fewer files hold a failed id, the limit `RERUN_FILE_LIMIT`. With more files, the report lists every failed id in `failed` and an empty `flaky`.
 - `excluded_e2e` lists each e2e test file that the selection reached and left out.
 - The report is at most 1 MiB. Each list holds at most 10000 entries, and each text is at most 1024 bytes.
 - KanthorD parses the report with a strict schema. A missing report, an invalid report, or an exit code that does not match `failed`, is an invalid report.
-- `version` is 1 or 2. Version 2 adds the optional object `floor`. Every other key keeps its version 1 rule, and a version 1 report stays valid.
+- `version` is 1, 2 or 3 (`affectedReportSchema` of `src/worker/unit/affected.ts`). Version 2 adds the optional object `floor`. Version 3 adds the optional keys `lines` and `imports` of a `flaky` entry. Every other key keeps its version 1 rule, and a version 1 and a version 2 report stay valid. `scripts/affected-tests.mjs` writes version 3 (`REPORT_VERSION`).
 - The floor is the set of test files whose import closure holds every production file of the repository. The selector computes it from its import graph.
 - A production file is a file in the import closure of the entry that the program runs. The engine entry is `src/main.ts`.
 - `floor` holds `tests`, `seconds` and `total_seconds`. `tests` is the count of floor test files. `seconds` is the test time of the floor test files that ran. `total_seconds` is the test time of every test file, or null unless `selection` is `all`.
@@ -2095,12 +2153,13 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 
 ### The verdict of one repository
 
-- KanthorD counts a flaky test as failed when its file is in the change set, and lists it in `promoted_flaky`. A flaky test in another file passes, and the report, the evidence and the span name it.
+- KanthorD counts a flaky test as failed under the flaky rule (`flakyTouched` of `src/worker/unit/affected.ts`), and lists it in `promoted_flaky` as a plain `{ file, name }`. A flaky test that the rule does not count passes, and the report, the evidence and the span name it.
+- An entry with `lines` and `imports` counts when the change set holds a path of `imports`. It also counts when a changed line range of its file overlaps `lines`. `changedLineRanges` of `src/worker/unit/local-git.ts` reads the ranges with `git diff --unified=0 <merge base> <head> -- <path>`. It takes the new-side range of each hunk, and a pure deletion counts as its line. A plain entry counts when its file is in the change set.
 
 | Verdict    | Condition                                                                                                                                                                                               |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `absent`   | The repository holds no declaration.                                                                                                                                                                    |
-| `passed`   | Exit 0, a valid report, and no flaky test in a file of the change set.                                                                                                                                  |
+| `passed`   | Exit 0, a valid report, and no flaky test that the flaky rule counts.                                                                                                                                   |
 | `failed`   | A valid report with a failed test id after the flaky rule, and no `base_red`. Also exit 127 at the head with a valid base report. Also an invalid report at the head, with a valid base result in time. |
 | `base_red` | Valid reports at the head and at the base, and each failed test id of the head is a failed test id of the base.                                                                                         |
 
@@ -2114,6 +2173,15 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - After a test failure at the head, an invalid report or a time-limit end of the base run gives no `base_red`, and the head failure counts.
 - KanthorD does not rerun the whole command after a test failure.
 - A setup failure of the base-head tree stops the execution with `environment_failed` and the class `setup_failed`.
+
+### The base run of a failed verification
+
+- `baseline(command)` of `src/worker/unit/verification.ts` runs a verification command on the base head, after the setup of the base clone. `BaseHead.runOf` of `src/worker/unit/environment-setup.ts` answers `BaseResult`, `{ exit_code, timed_out, last_line }`, and memoizes it for the same commits, digests and command.
+- A command that fails at the head with the class `code_failure` or `timeout` runs on the base head (`baseOutcome`). The failure is the same when the exit code and the `timed_out` value are equal. The last nonblank output line must also be equal after `sameLine` reads each digit run as `0`.
+- A command that fails the same way on the base head gets the class `base_failure` (`VerificationClass.BaseFailure`). `environmentStop` stops the execution with `environment_failed` and the code `base_failed`, and the agent gets no revision turn. The stop detail is the JSON `{ index, command, exit_code, timed_out, last_line }` after `redactReason`.
+- A command that exits 127 at the head still uses the base exit code to decide between `Environment` and `CodeFailure`.
+- A time-limit end at the head that also ends at the base gets `base_failed`, not `verification_timeout`.
+- The stop `base_failed` does not count toward `mission.consecutive_failure_limit`, and it sets no environment `failed`.
 
 ### The stops
 
@@ -2140,6 +2208,11 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 3. It submits the evidence `Affected test results`.
 4. The verdict `failed` gives `criterion-not-met` with the stage `affected` and the affected failure report as the rationale. No agent judges it.
 5. The verdicts `passed` and `base_red` go to the reviewer in the [evaluation prompt](agent.impl.md#prompt-templates).
+
+- `askJudgement` passes the earlier verdicts, the unblock reason and the human change requests of the round to `evaluationInstruction`. The `evaluation` text states that a human change request and the unblock reason outrank the default standard and the own rule of the reviewer. It also states that a change that an earlier verdict accepted stays accepted.
+- A blocker of the judgement holds `action` `yes` or `person` (`evaluationJudgementSchemaOf`). `EvaluationFacts.person_labels` lists the labels of the `person` findings.
+- `reworkCauseOf` answers the cause `human` with the subcategory `intervention`, assigned by the reviewer, when every unmet blocker holds `action: person` (`personOnlyBlockers` of `src/worker/unit/rework-cause.ts`).
+- `unchangedAssessmentOf` of `src/worker/unit/evaluation.ts` reads the rework assessment. It answers that assessment when its result is `success` and its `tested_input` equals the tested input of the round as canonical JSON. The evaluation then runs no verification, no affected test and no reviewer agent. `unchangedEvaluation` submits `success` with no finding, no proposal and the rationale "No commit followed assessment <id>. The review of the same commits stands."
 
 - The assessment submit holds the changed gate files of each repository in `gate_files`, as `{ binding_id, paths }`. The evaluation omits the key when no gate file changed.
 - `prepareEvaluation` excludes the evidence with the subject `Affected test results` from the support assets, from `snapshotOf` and from `placedOf`.
@@ -2310,6 +2383,7 @@ The request key is `<node id>/<attempt>/<FrozenAction.key>/merge/<tested commit>
 A failed call changes no return item and logs a warning with the evidence identity.
 `gate_files` of an action context entry holds the changed gate files of the binding in the current assessment of the attempt.
 When a nonempty `gate_files` skips a merge, the action performer logs the warning "merge skipped: gate files changed" with `evidence_id` and `gate_files`. The pull request then waits for a human.
+A `push` action with a nonempty `gate_files` gets no push. After the action performer records the `branch_push` request, `warnHumanLanding` of `src/worker/action-performer.ts` logs a warning. The warning is "human landing: merge the node branch into the base branch with a merge commit" with `evidence_id`, `gate_files`, `base_branch` and `tested_commit`. A human lands that branch with a merge commit. The check completes the node when the base branch contains the tested commit, and a squash or a rebase never contains it.
 
 The operation and the tool answer `{ tool_name: "repository-action-request", items: ActionResultItem[] }`.
 `ActionResultItem` is discriminated on `kind`, with one value per return class.
@@ -2386,7 +2460,7 @@ The tool of the action performer takes the execution identity only.
 - `src/kernel/commit-message.ts` builds every worker commit message and the pull request title of `src/intake/action-perform.ts`.
 - `commit_type` is an optional closed enum on the node content: `feat`, `fix`, `docs`, `style`, `refactor`, `test` or `chore`. `commitTypeOf` gives `feat` when it is absent. The Mission Service validates it before the write, and the store keeps `null` when it is absent.
 - The header is `<commit_type>: <subject>` with no scope. The subject of a task commit is the task `name`. The subject of a node unit commit and of a verdict commit is the node `name`. The subject of a merge commit is `merge <base_branch>`. The subject of a checkpoint commit is the `name` of the current unit. The pull request title uses the node `name`.
-- The builder replaces each run of whitespace with one space, writes the first letter in lowercase, cuts the subject so that the header holds at most `COMMIT_HEADER_MAX_LENGTH` (100) characters, keeps a surrogate pair whole, and removes every final full stop and space.
+- The builder replaces each run of whitespace with one space. It removes a leading header prefix of the subject, `<type>: ` or `<type>(<scope>): ` with a type of the closed enum (`COMMIT_HEADER_PREFIX` of `src/kernel/commit-message.ts`). The header thus holds the `commit_type` only. It writes the first letter in lowercase and keeps a surrogate pair whole. It cuts the subject so that the header holds at most `COMMIT_HEADER_MAX_LENGTH` (100) characters. It removes every final full stop and space.
 - `isCommitHeader` checks `^(<type>)(\(<scope>\))?: \S.*$`, the length and the final full stop before each commit. A node or task `name` that gives no valid subject for some type fails the write with `mission.node.content_invalid` and `details.field` `name`.
 - The body holds the unit id on its own line. The done record follows after a blank line. The worker writes no other trailer.
 - Today the body names the unit and no attempt. The evidence of the attempt names the head commit.
@@ -2466,6 +2540,9 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | `provider_failed`                         | `unauthorized`                                                           | `human.configuration`                                              |
 | `provider_failed`                         | `bad_request`                                                            | `unattributed`, suspects `worker_action`, `prompt`, `llm_provider` |
 | `environment_failed`                      | `setup_failed`, `command_absent`, `affected_invalid`, `affected_timeout` | `environment.<code>`                                               |
+| `environment_failed`                      | `disk_low`                                                               | `infrastructure.disk_low`                                          |
+| `environment_failed`                      | `base_failed`                                                            | `unattributed`, suspects `environment`, `plan`                     |
+| `operation_failed`                        | a git failure whose reason is `host_unreachable`                         | `infrastructure.network`                                           |
 | failed `worker.git` step                  | `fetch_base`, `push`                                                     | `unattributed`, suspects `infrastructure`, `worker_action`         |
 | failed `worker.git` step                  | `merge_base`                                                             | `unattributed`, suspects `worker_action`, `environment`            |
 | `operation_failed`                        | `worker.verification.infrastructure_failed`                              | `infrastructure.verification_killed`                               |
@@ -2481,7 +2558,7 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | `operation_failed`                        | other `worker.*` code                                                    | `unattributed`, suspects `worker_action`, `infrastructure`         |
 | `operation_failed`                        | prefix `gateway.`, or no code                                            | `unattributed`, suspects `infrastructure`, `worker_action`         |
 | `no_progress`                             | the last verification of the stop detail holds `timed_out: true`         | `unattributed`, suspects `environment`, `plan`                     |
-| `no_progress`                             | other                                                                    | `unattributed`, suspects `model`, `prompt`, `plan`                 |
+| `no_progress`                             | other                                                                    | `model.no_progress`                                                |
 | `budget_end`, `assessment_absent`         | the last verification of the stop detail holds `timed_out: true`         | `unattributed`, suspects `environment`, `plan`, `model`            |
 | `budget_end`, `assessment_absent`         | other                                                                    | `unattributed`, suspects `plan`, `model`                           |
 | `judgement_invalid`, `report_absent`      | any                                                                      | `unattributed`, suspects `model`, `prompt`                         |
@@ -2496,6 +2573,9 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | none of the above                         | none                                                                     | `unattributed`                                                     |
 
 - The stop classes `affected_invalid` and `affected_timeout` take the cause `environment.<code>`, as `setup_failed` and `command_absent` do.
+- The `host_unreachable` row applies to a failed git operation with `worker.git.commit_failed` or `repository.connector.git_failed`. `RepositoryComponent.gitFailureReasonOf` reads the innermost cause, and `ExecutionRun` hands the reason to `stopCauseOf` as `git_failure`. A git step that ends at its deadline keeps the cause of its git step. The row comes before the git step rows.
+- A stop with the cause `infrastructure.network` is a host fault under [Loss settlement](scheduler-service.impl.md#loss-settlement). It does not count toward the failure limit.
+- Every release with a stop carries the cause. `budget_end` takes its cause through `stopCauseOf` with `git_failure` null.
 - A verification that fails and then passes at the same commit gets no environment cause. The workspace can differ between the two runs.
 - The reviewer execution computes the cause of a `criterion-not-met` assessment with the `criterion-not-met` rows. It hands that cause with the assessment submit. The Scheduler writes it on the root span end of that execution, as for a stop.
 - The `worker.evaluation` span keeps the facts: `kanthord.evaluation.stage` (`setup`, `verification`, `affected` or `judgement`) and `kanthord.evaluation.unmet_grounds`.
@@ -2524,7 +2604,7 @@ The host of every `worker` application sits inside it. That host holds the insta
 At the `worker` placement, one instance is one trust boundary over every project that it serves, under [worker-service.md](worker-service.md#instances-and-hosting).
 The host of a `server` application that runs an instance at the `server` placement sits inside it for the same reason. A worker thread is no containment boundary for the code that the repository supplies.
 Its child processes run with the rights of the server process.
-A tool process at the `server` placement can therefore read the configuration file, its `master_key` and the database files. It can open every credential and sign a JWT of the server. kanthord accepts this reach in v1.
+The bash tool of an agent runs in the [bash sandbox](#tool-table), which denies the read of the configuration file and the database files. A verification command and the local git run outside the sandbox. A process of such a command can therefore read the configuration file, its `master_key` and the database files. It can open every credential and sign a JWT of the server. kanthord accepts this reach in v1.
 An instance at the `container` placement keeps C1 to C6 of [The guarantees of a slot driver](#the-guarantees-of-a-slot-driver).
 The container is the boundary for the files of the server. The memory of the instance stays inside the boundary, as at the `worker` placement.
 
