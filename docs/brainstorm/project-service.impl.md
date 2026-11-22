@@ -579,12 +579,12 @@ The component computes the status of a group in this order. The first rule that 
 - After the run, the component collects the garbage of the group. It then calls `environmentReady` of the Worker Service, which drains the `container` instances that run another image of the group. Only after that call returns, it wakes the work pulls of the project through `wake(projectId)` of the Scheduler.
 - A run has a deadline of 30 minutes. A run that reaches it during the build ends with the class `build_failed`. During the proof, the stopped command goes through the classification of [the proof](#the-proof).
 - The stop of the server cancels the run, and the cancellation kills the process group of each child. A cancelled run writes no proof file.
-- A binding-set write that changes the row or the target of the group while a run is active sets `read_succeeded` of the record to false (`bindingsChanged` of `src/project/onboarding.ts`). The run then releases no secrets, because `releaseSecrets` answers `SecretReleaseOutcome.Stale`. It starts no build, and the component computes the group again for the new target. A binding set with no `container` instance thus gives the target `host` and no build, also when the set changes after the run started.
+- A binding-set write can change the row or the target of the group while a run is active. That write sets `read_succeeded` of the record to false (`bindingsChanged` of `src/project/onboarding.ts`). The run then releases no secrets, because `releaseSecrets` answers `SecretReleaseOutcome.Stale`. It starts no build, and the component computes the group again for the new target. A binding set with no `container` instance thus gives the target `host` and no build, also when the set changes after the run started.
 - The component logs `project.onboarding.run_started` and `project.onboarding.run_ended` with the binding, the digest, the target, the status and the class.
 
 ### The image build
 
-- The build starts only when the container runtime check answers available. With an unavailable runtime, the build answers `ImageBuildOutcome.Failed` with the class `build_failed` and the runtime `detail` or `reason` as the tail, and no image build starts. [The runtime check](worker-service.impl.md#the-runtime-check) states the check.
+- The build starts only when the container runtime check answers available. With an unavailable runtime, no image build starts. The build answers `ImageBuildOutcome.Failed` with the class `build_failed` and the runtime `detail` or `reason` as the tail. [The runtime check](worker-service.impl.md#the-runtime-check) states the check.
 - The host exports the repository at the base-branch head into `environments/run-<id>/workspace` of the state directory.
 - The component writes the build document to `environments/run-<id>/devcontainer.json`, outside the workspace, with the flag `wx`. The build document holds the accepted keys only.
 - It runs `node <@devcontainers/cli>/devcontainer.js build --docker-path <runtime> --workspace-folder <workspace> --config <build document> --image-name <tag>-base --label io.kanthord.owner=<owner>`.
@@ -618,7 +618,7 @@ The component computes the status of a group in this order. The first rule that 
 - The steps are `volume`, `cache volume`, `start`, `bundle`, `clone`, `remove container` and `remove volume`.
 - The message is `The environment proof failed at <step>: <message>`. `<message>` is the trimmed last 4096 bytes of the step output. A runtime command step gives its error output.
 - A step with blank output gives the message `The environment proof failed at <step>.`. The message becomes `tail` of the proof file.
-- At the `host` target, the host clones the base-branch head into `environments/run-<id>/checkout`. Each command runs with the variables that a `server` instance gives its commands. A `detected` source runs its setup commands there as the server user, with the `HOME` of that user, so the install scripts of the repository run on the server host.
+- At the `host` target, the host clones the base-branch head into `environments/run-<id>/checkout`. Each command runs with the variables that a `server` instance gives its commands. A `detected` source runs its setup commands there as the server user, with the `HOME` of that user. The install scripts of the repository thus run on the server host.
 - The proof runs no agent and spends no LLM budget.
 
 ### The failure of an execution

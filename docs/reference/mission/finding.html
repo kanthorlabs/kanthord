@@ -101,9 +101,11 @@
           <p>
             A reviewer finding has the label <code>B&lt;n&gt;</code> for a
             blocker or <code>S&lt;n&gt;</code> for a suggestion. A blocker holds
-            <code>action: yes</code> and a <code>ground</code>. A suggestion
-            holds <code>ground: null</code>. The reviewer reports each defect
-            once. It names each open finding that the change fixes in
+            <code>action: yes</code> or <code>action: person</code>, and a
+            <code>ground</code>. <code>action: person</code> marks a finding
+            that only a person can close. A suggestion holds
+            <code>ground: null</code>. The reviewer reports each defect once. It
+            names each open finding that the change fixes in
             <code>fixed_finding_ids</code> of the next assessment. A finding
             that the reviewer does not name stays open.
           </p>
@@ -135,6 +137,10 @@
                 <tr>
                   <td>A finding of an assessment that is not current</td>
                   <td><code>record</code></td>
+                </tr>
+                <tr>
+                  <td><code>action: person</code></td>
+                  <td><code>report</code></td>
                 </tr>
                 <tr>
                   <td>

@@ -463,9 +463,9 @@
           </div>
           <p>
             A verification command that fails on the node head runs again on the
-            base commit. When the exit code, the time-out state and the last
-            output line are equal, with each digit run read as
-            <code>0</code>, the execution stops with
+            base commit. The two runs can have an equal exit code, time-out
+            state and last output line, with each digit run read as
+            <code>0</code>. The execution then stops with
             <code>environment_failed</code> and the code
             <code>base_failed</code>. The cause is
             <code>unattributed</code> with the suspects

@@ -497,8 +497,8 @@ A human who needs further work on a completed node adds a new node.
 An edit writes the WHAT, and a correction writes a new outcome record.
 
 Four conditions reach `Blocked`, and each follows the evaluation except the human block.
-They are a current assessment that does not pass and causes no [rework](#rework-limit), a current passing assessment of an `examine` node, the end state other of a request evidence and a human reason on a paused node.
-A passing current assessment of an `examine` node with no required external action closes the attempt into `Blocked`, not into `Completed`, with the transition rule `human_acceptance`.
+They are a current assessment that does not pass and causes no [rework](#rework-limit), and a current passing assessment of an `examine` node. They are also the end state other of a request evidence and a human reason on a paused node.
+A passing current assessment of an `examine` node with no required external action closes the attempt into `Blocked`, not into `Completed`. The transition rule is `human_acceptance`.
 The transition holds no count and no limit, and the outcome keeps the result `success`.
 A dependent of that node waits, because the node is not `Completed`.
 A person accepts the work with an override that asserts success and gives a reason, and the node reaches `Completed`.
@@ -566,7 +566,7 @@ A finished execution of the attempt with no stop ends the count: a release with 
 A stop that [advances the fallback chain](agent.md#advance) is neutral. It neither counts nor ends the count.
 A stop with the cause `infrastructure` and the subcategory `network` is a host fault. A host fault is neutral too, and the Scheduler holds the job for `scheduler.stop_backoff` seconds.
 An `environment_failed` stop with the code `base_failed` is neutral, because the same command fails on the base commit.
-A stop that repeats the reason, the code and the detail of the stop before it in the same attempt pauses the node at once with the transition rule `repeated_stop`, and the transition holds no count and no limit.
+A stop that repeats the reason, the code and the detail of the stop before it in the same attempt pauses the node at once. The transition rule is `repeated_stop`, and the transition holds no count and no limit.
 A host fault repeats like any other stop. A `budget_end` stop, a stop of an operator and a stop of an earlier attempt never repeat.
 A human resume resets nothing, so it grants one more try.
 Below the limit, a loss or a release with a `stop` returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
@@ -612,8 +612,8 @@ When a current round causes no rework, its findings with `action: yes` and the o
 KanthorD fixes no report-only finding, and a human reviews each one under [Review finding](#review-finding).
 A human unblock opens the next attempt, and that attempt counts its rounds from 1.
 The next execution reads the assessment that caused the latest rework of its attempt, and the open findings of the attempt.
-The execution of each round also reads the verdicts of the attempts before its attempt, the human change requests and the unblock reason of its attempt.
-A human change request and the unblock reason outrank the default standard and the own rule of the reviewer, and the reviewer raises no finding that reverses them.
+The execution of each round also reads the verdicts of the earlier attempts. It reads the human change requests and the unblock reason of its attempt.
+A human change request and the unblock reason outrank the default standard and the own rule of the reviewer. The reviewer raises no finding that reverses them.
 A change that an earlier verdict accepted stays accepted, unless the change differs or a stated rule forbids it.
 The configuration file of the server sets the limit.
 
@@ -655,7 +655,7 @@ Take "Add password reset" with the limit 2.
 A review finding is the record of one blocker or one suggestion of a review round.
 The reviewer gives each finding a label, an action, a name, a description, a fix and a why.
 The action is `yes`, `no` or `person`.
-The action `person` marks an item that only a person can close, for example a live model run, a paid eval, a merge, a pull request description or a browser check.
+The action `person` marks an item that only a person can close. Examples are a live model run, a paid eval, a merge, a pull request description and a browser check.
 A blocker holds the action `yes` or `person`, and it also holds its ground.
 The Mission Service records each finding of a submit in the transaction of its assessment.
 An assessment holds no finding list, and each finding names its assessment.

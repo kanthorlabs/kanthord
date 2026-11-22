@@ -74,11 +74,11 @@
           </p>
           <p>
             The instruction is not blank and holds at most 32768 UTF-8 bytes. A
-            used variant cannot be deleted: a delete is refused while an open
-            session holds the variant, or while the session directory of the
-            variant holds a session file. A delete removes an empty session
-            directory of the variant. A human renames the variant or rewrites
-            its instruction instead.
+            used variant cannot be deleted. A delete is refused while an open
+            session holds the variant. It is also refused while the session
+            directory of the variant holds a session file. A delete removes an
+            empty session directory of the variant. A human renames the variant
+            or rewrites its instruction instead.
           </p>
           <p>The dashboard calls these operations. They have no CLI command.</p>
           <div class="table-wrap">

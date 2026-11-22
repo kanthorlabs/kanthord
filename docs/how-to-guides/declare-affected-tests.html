@@ -329,9 +329,17 @@
                   <td>
                     The test id of each test that failed and then passed in the
                     second run of its file. In a version 3 report, an entry can
-                    also hold <code>lines</code>, the first and last line of the
-                    test, and <code>imports</code>, the files that the test file
-                    imports. An entry holds both keys or neither.
+                    also hold <code>lines</code> and <code>imports</code>.
+                    <code>lines</code> is the first and last line of the test.
+                    <code>imports</code> is the files that the test file
+                    imports. An entry holds both keys or neither. The KanthorD
+                    selector looks for the first part of the test name in the
+                    top-level test calls of the file. It writes the plain test
+                    id when that part matches more than one call, or no call. A
+                    report over the size limit drops <code>lines</code> and
+                    <code>imports</code> of each <code>flaky</code> entry. Each
+                    such entry then counts as failed when its file is in the
+                    change set.
                   </td>
                 </tr>
                 <tr>

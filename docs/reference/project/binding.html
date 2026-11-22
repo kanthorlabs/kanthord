@@ -367,7 +367,8 @@
                     <code>merge_push</code>; <code>follows</code> is
                     <code
                       >{ &quot;type&quot;: &quot;assessment_passed&quot; }</code
-                    >; <code>landing</code> is optional. See
+                    >; <code>landing</code> and <code>ignored_checks</code> are
+                    optional. See
                     <a href="#repository-actions">Repository actions</a>.
                   </td>
                 </tr>
@@ -905,6 +906,14 @@
             check runs and the commit statuses of the head commit of the pull
             request.
           </p>
+          <p>
+            KanthorD checks the union of three name sets on the head commit: the
+            required checks of the rulesets, the newest check run of each name
+            and the newest status of each context. A failed check run that no
+            ruleset requires also fails the check. KanthorD removes each name of
+            <code>ignored_checks</code> from the union. A required check with no
+            run and no status is pending.
+          </p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -957,6 +966,17 @@
               </tbody>
             </table>
           </div>
+          <p>
+            <code>strategy.action.ignored_checks</code> is an optional list of
+            at most 32 nonempty check names (<code>IGNORED_CHECKS_MAX</code>).
+            KanthorD removes each listed name before it folds the outcomes, so a
+            listed check is never pending and never failed. The default is an
+            empty list. Only a <code>pull_request</code> action holds
+            <code>ignored_checks</code>. A <code>merge_push</code> action with
+            <code>ignored_checks</code> fails with
+            <code>400 gateway.request.validation_failed</code> at the
+            <code>ignored_checks</code> path.
+          </p>
           <p>
             The check of an open pull request applies the required checks to the
             request, for both landings:

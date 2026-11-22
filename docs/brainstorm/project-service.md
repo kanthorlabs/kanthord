@@ -108,10 +108,12 @@ The human act that adds the repository binding is the consent to build and to pr
 Onboarding is one-time work, so it depends on no worker. It is a server operation of the Project Service. It is no mission node, no claim and no Scheduler job.
 Onboarding resolves the environment, builds its image when a `container` instance runs its nodes, and runs the [proof](project-service.vocabulary.md#proof) on the base-branch head before any node of the binding spends budget.
 A node whose repository binding holds an environment that is not ready waits. It changes no state while it waits, and it continues when the environment is ready.
-A run of the Onboarding component makes three proofs in this order: the free disk of the server, the push scope of the binding credential, and the setup commands and checks of the environment.
-The first failed proof ends the run and fails the environment. An environment is `ready` or `none` only after each proof of its digest passes.
-The push proof pushes the existing base commit to a temporary branch and deletes that branch, so a credential that cannot push fails before the first node runs. A push of a workflow file needs the `workflow` scope of the credential. The proof pushes no file, so it cannot prove that scope. The first push of a node change to a workflow file proves it, and its refusal names the `workflow` scope.
-The free disk proof fails when the free bytes of the state directory of the server are below the [disk free ratio](footprint-service.impl.md#configuration) of its total bytes.
+A run of the Onboarding component makes at most three proofs in this order. The proofs are the free disk of the server, the push scope of the binding credential, and the environment setup.
+The free disk proof runs at the `host` and the `image` targets and skips the `remote` target. The push proof runs at every target.
+The setup proof runs the setup commands and the checks of the environment. It runs only when the run resolves an environment document, and never at the `remote` target. A source `none` resolves no document.
+The first failed proof ends the run and fails the environment. An environment is `ready` or `none` only after each proof that runs for its digest passes.
+The push proof pushes the existing base commit to a temporary branch and deletes that branch. A credential that cannot push thus fails before the first node runs. A push of a workflow file needs the `workflow` scope of the credential. The proof pushes no file, so it cannot prove that scope. The first push of a node change to a workflow file proves it, and its refusal names the `workflow` scope.
+The free disk proof measures the state directory of the server. It fails when the free bytes are below the [disk free ratio](footprint-service.impl.md#configuration) of the total bytes.
 A failed push proof and a failed disk proof start no repair by the agent `pe@1`, because a change of the environment cannot fix them.
 A detected environment applies at every placement. Each checkout and each clone of a `detected` environment runs its setup commands before the agent or a verification uses it.
 A clone that holds less free disk than that ratio stops its execution with `environment_failed` before any setup command runs.

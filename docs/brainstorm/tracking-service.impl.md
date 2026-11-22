@@ -417,7 +417,7 @@ The analytics reads add up the measurements of the stored spans. They derive no 
 - `tracking_flow_histogram` has the primary key `(grain, bucket_start, project_id, worker_name, measure)`. `bins` holds the log bins of one measure.
 - `tracking_usage_rollup` has the primary key `(grain, bucket_start, project_id, worker_name, model)`.
 - `grain` takes `hour` or `day`.
-- The counts of a stage follow a conservation rule. `exitsOf` of `src/tracking/flow-stages.ts` subtracts the `unobserved` executions of a stage from the exit count, so an execution that hands on with no gate span counts in `unobserved` only. The sum of the exit counts of a stage is at most `entered`, and it equals `entered` for the last stage of a kind: `release_gate` for the steps and `outcome` for the evaluation. `entered` plus `unobserved` of a stage is at least `entered` plus `unobserved` of the next stage of the same kind.
+- The counts of a stage follow a conservation rule. `exitsOf` of `src/tracking/flow-stages.ts` subtracts the `unobserved` executions of a stage from the exit count. An execution that hands on with no gate span thus counts in `unobserved` only. The sum of the exit counts of a stage is at most `entered`. It equals `entered` for the last stage of a kind: `release_gate` for the steps and `outcome` for the evaluation. `entered` plus `unobserved` of a stage is at least `entered` plus `unobserved` of the next stage of the same kind.
 - `tracking.analytics.flow` uses `GET /api/tracking/analytics/flow` and has `human` access.
 - The query takes `from`, `to`, `bucket`, `project_id`, `worker_name` and `compare`.
 - `to` defaults to the time of the read. `from` defaults to 7 days before `to`.

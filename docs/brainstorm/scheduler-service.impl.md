@@ -265,7 +265,7 @@ A row with an advancing `provider_failed` stop is neutral. It neither counts nor
 A revocation for a lost instance leaves a row with the stop `instance_lost`. The row is neutral: it neither counts nor ends the count, and it sets no hold. The transaction inserts the job when the node is claimable.
 A row with a host fault stop is neutral too. `isHostFault` of `src/scheduler/settlement.ts` holds when `stop.cause` has the category `infrastructure` and the subcategory `network`. A row with the code `base_failed` is neutral for the same reason.
 `NO_FAILURE_STOPS` holds the reasons `instance_archived`, `instance_lost`, `worker_stopped` and `human_paused`. A row with one of them never counts.
-A release with a stop holds the repeat flag. `repeatsStop(earlier, stop)` holds when the last ended execution of the attempt, read before this release, has the same `reason`, the same `code` and the same `detail` as the stop. It ignores `cause`. It never holds for a stop with a reason of `NO_FAILURE_STOPS` or for `budget_end`. `earlier` is null for the first ended execution of an attempt, so a stop of an earlier attempt never repeats.
+A release with a stop holds the repeat flag. `repeatsStop(earlier, stop)` compares the stop with the last ended execution of the attempt, read before this release. It holds when both have the same `reason`, `code` and `detail`. It ignores `cause`. It never holds for a stop with a reason of `NO_FAILURE_STOPS` or for `budget_end`. `earlier` is null for the first ended execution of an attempt, so a stop of an earlier attempt never repeats.
 With the repeat flag, `recordFailure` hands `{ repeated: true }` to `failure` of the Mission Service. The node moves to `Paused` at once, whatever the count is. The transition holds the rule `repeated_stop` with no count and no limit. A node that is already `Paused` stays there.
 A host fault that does not repeat calls `transitions.stopped`, which moves the node as a neutral stop does. `recordHostFault` then holds the job for `scheduler.stop_backoff` seconds, as a first consecutive failure does. A host fault that repeats takes the repeat path above.
 `pauseFacts` answers `repeated_stop`, true when the last two ended executions of the attempt hold the same stop. The paused read computes the rule `repeated_stop` from it before it tests `failure_limit`. A loss declaration never sets the repeat flag.
@@ -298,7 +298,7 @@ Each write follows the commit of the transaction that changes the execution row.
   - `finished` for a release;
   - `lost` for a loss declaration of the sweep or of an inline settlement;
   - `revoked` for a revocation at a Mission transition.
-- A revocation holds `kanthord.revoke.cause`: `assessment` when the assessment of that execution decides the node, `human` for a human act, and `instance_lost` (`RevokeCause.InstanceLost`) when the Worker Service ends the execution of a lost instance. A forced archive of an instance is a human act.
+- A revocation holds `kanthord.revoke.cause`. The cause is `assessment` when the assessment of that execution decides the node, and `human` for a human act. It is `instance_lost` (`RevokeCause.InstanceLost`) when the Worker Service ends the execution of a lost instance. A forced archive of an instance is a human act.
 - A revocation with the cause `instance_lost` stores the stop `{ reason: "instance_lost", code: null, detail }` on the execution row. `detail` is the canonical JSON `{ instance, loss }`, and `loss` is `heartbeat_lost` or `pool_failed` (`InstanceLoss` of `src/mission/contract.ts`). `revokeForInstanceLoss` of `src/mission/control-hold.ts` hands the cause `infrastructure.execution_lost` to the revocation. The node moves to `Available`, or to `Waiting` for an evaluation claim, and a `Paused` node stays `Paused`. The revocation writes no `scheduler.transition` span.
 - The root span ends with `Ok` for a release with no stop and for a revocation with the cause `assessment`.
 - The root span ends with `Error` for a stop, a loss and a revocation with the cause `human`.
@@ -321,7 +321,7 @@ Each write follows the commit of the transaction that changes the execution row.
   - `further_work_limit` when the count of stalled releases moves the node to `Paused`;
   - `rework_limit` when a `criterion-not-met` assessment of the final round (round limit + 1) moves the node to `Blocked`;
   - `plan_defect` when a current `criterion-not-met` assessment with a cause of the category `plan` moves the node to `Blocked`;
-  - `human_acceptance` when a current passing assessment of an `examine` node, or a `criterion-not-met` assessment with only `person` blockers as action items, moves the node to `Blocked`;
+  - `human_acceptance` when a current passing `examine` assessment, or a `criterion-not-met` assessment with only `person` blockers as action items, moves the node to `Blocked`;
   - `repeated_stop` when a stop that repeats the stop before it moves the node to `Paused`;
   - `none` otherwise.
 - With the rule `failure_limit`, `further_work_limit` or `rework_limit`, the transition span holds `kanthord.transition.count` and `kanthord.transition.limit`. The rules `none`, `plan_defect`, `human_acceptance` and `repeated_stop` hold neither.

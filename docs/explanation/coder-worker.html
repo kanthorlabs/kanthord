@@ -1985,11 +1985,22 @@ flowchart LR
             process group that a command of the agent left behind. Each command
             of the agent carries the variable
             <code>KANTHORD_PROCESS_GROUP_MARKER</code> with a value that is
-            unique for the execution. The worker finds the groups that hold the
-            value, sends <code>SIGTERM</code>, waits 3 s and sends
-            <code>SIGKILL</code> to the groups that still run. A command that
-            starts its own session with <code>setsid</code> is thus ended too. A
-            failure of this cleanup raises a process warning and stops nothing.
+            unique for the execution. On macOS, each command also holds a marker
+            file of the execution open as file descriptor 3. The worker finds
+            the groups that hold the value (<code
+              >/proc/&lt;pid&gt;/environ</code
+            >
+            on Linux, <code>ps -E</code> on macOS). On macOS, it also finds the
+            groups that hold the marker file open (<code>lsof</code>). It sends
+            <code>SIGTERM</code>, waits 3 s and sends <code>SIGKILL</code> to
+            the groups that still run. A command that starts its own session
+            with <code>setsid</code> is thus ended too, if it keeps the variable
+            or the marker file. A process that clears its environment escapes
+            the cleanup on Linux. On macOS, a process escapes when it closes the
+            inherited descriptors and <code>ps -E</code> cannot show its
+            environment. A platform binary such as <code>/bin/sleep</code> is an
+            example. A failure of this cleanup raises a process warning and
+            stops nothing.
           </p>
           <h2 id="edge-cases">Edge cases</h2>
           <div class="table-wrap">
@@ -2852,20 +2863,20 @@ else
               node branch fails the push of the worker with a visible cause.
               KanthorD removes <code>SSH_AUTH_SOCK</code> and
               <code>SSH_AGENT_PID</code> from each command, so a command reaches
-              no SSH agent of the host user. During a network git operation of
-              KanthorD on the same host, a command of the same user can still
-              sign through the SSH agent socket of that operation. KanthorD runs
-              the <code>bash</code> of <code>swe@1</code> in a sandbox that
-              denies the read of <code>~/.ssh</code>, so a
-              <code>git push</code> of the agent finds no key there. The sandbox
-              also denies the write of <code>.git/config</code> and
-              <code>.git/hooks</code> in the workspace. It allows only the
-              network hosts of npm, the GitHub assets and the git and API hosts
-              of GitHub, GitLab and Bitbucket. It denies the read of the host
-              credential paths of the server process and of the other instance
-              directories. The sandbox covers <code>bash</code> only. The
-              verification commands and the local git of the worker run outside
-              it. A <code>container</code> placement does not support the
+              no SSH agent of the host user. A network git operation of KanthorD
+              can run on the same host. During that operation, a command of the
+              same user can still sign through its SSH agent socket. KanthorD
+              runs the <code>bash</code> of <code>swe@1</code> in a sandbox that
+              denies the read of <code>~/.ssh</code>. A <code>git push</code> of
+              the agent thus finds no key there. The sandbox also denies the
+              write of <code>.git/config</code> and <code>.git/hooks</code> in
+              the workspace. It allows only the network hosts of npm, the GitHub
+              assets and the git and API hosts of GitHub, GitLab and Bitbucket.
+              It denies the read of the host credential paths of the server
+              process and of the other instance directories. The sandbox covers
+              <code>bash</code> only. The verification commands and the local
+              git of the worker run outside it. A
+              <code>container</code> placement does not support the
               <code>bash</code> of <code>swe@1</code>. See
               <a href="worker.html#where-a-worker-runs">where a worker runs</a>.
             </li>
