@@ -207,7 +207,7 @@ The instance configuration holds `name`, `endpoint`, `instance_id` and `private_
 - `KANTHORD_ENDPOINT` and `--endpoint` override `endpoint`.
 - A Reset key gives a new instance configuration. The operator replaces the file with `kanthord worker join --force` or replaces the env value.
 - A stateless host sets `KANTHORD_WORKER_CONFIG` at each start and needs no volume for the identity. With no data volume, a restart loses the workspaces, and a resumed execution prepares its workspace again from the node branch.
-- `childEnvironment` of `src/agent/environment.ts` removes `KANTHORD_WORKER_CONFIG`, `KANTHORD_TOKEN` and `KANTHORD_ENDPOINT` from each child process. A tool that reads `/proc` still reads the initial environment of the process, under [Trust boundary](#trust-boundary).
+- `childEnvironment` of `src/agent/environment.ts` removes `KANTHORD_WORKER_CONFIG`, `KANTHORD_TOKEN` and `KANTHORD_ENDPOINT` from each child process. It also removes each variable whose name starts with `EVAL_` (S2, F137), so a worker holds no `EVAL_*` variable in the environment of an agent tool or a verification command. A tool that reads `/proc` still reads the initial environment of the process, under [Trust boundary](#trust-boundary).
 - The template unit `kanthord-worker@.service` is a systemd user unit. It runs `kanthord serve worker --instance %i` with `Restart=on-failure` and `RestartPreventExitStatus=3`, and it sets no `XDG_*_HOME`.
 - [architecture.impl.md](architecture.impl.md#the-command-surface) states the commands `kanthord worker join` and `kanthord worker instance`.
 - Tests cover each source, the conflict, the absence with its paths and an invalid value. They also cover a file name mismatch, another `--instance`, the file modes and the environment of a child process.
@@ -1671,6 +1671,13 @@ The agent catalog `src/agent/catalog.ts` owns `EVIDENCE_UPLOAD_PARAMETERS`, the 
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the four sources.
 No worker agent process outlives its bash call. At the end of the call, the worker kills the process group of the call. A process that calls `setsid` escapes that kill.
+The bash tool of `swe@1` runs in the [bash sandbox](agent.impl.md#the-bash-sandbox) (S2, F121, F128). `sessionTools` of `src/worker/unit/tool-table.ts` awaits `bashSandbox.wrap` with the `SandboxScope` of the unit before it runs the command, so a command never runs outside the sandbox. The sandbox covers the bash tool only. The verification commands and the local git run outside it.
+`allowWrite` holds the workspace of the execution and the `TMPDIR` of the instance. Each command exports that `TMPDIR`. `packageCacheEnvironment` sets `pnpm_config_store_dir`, `pnpm_config_cache_dir` and `npm_config_cache` to directories under it.
+`denyRead` holds the host credential paths of the server process, as `hostDenyRead` of `src/agent/bash-sandbox.ts` lists them, and the pi directory of the instance. `instanceDenyRead` of `src/apps/worker/index.ts` builds the scope of a `worker` instance with `root` set to the data directory of the instance. The `thread` driver passes `slotThreadData` as `deny_read`, and `thread.ts` sets `sandbox_root` to the parent of `XDG_STATE_HOME`.
+With `root`, `denyRead` holds each child of an ancestor of `root` that is not on the path to `root`. The other instance roots of the host therefore stay denied. The list is computed at each call, so an instance root that appears later is denied too.
+The network allowlist names the hosts of the worker: `registry.npmjs.org`, the two GitHub asset hosts and the git and API hosts of GitHub, GitLab and Bitbucket (`BASH_NETWORK`).
+The worker disposes the sandbox runtime when it stops, and the `thread` driver and the slot do the same.
+A `container` placement does not support the coder bash, because the sandbox needs user namespaces and the default seccomp profile of the slot container blocks them (`engine/docs/cli/other.md`). The bash call then fails with an error tool result.
 The Workbench keeps the background processes of a bash call.
 
 The [Repository implementation](repository.impl.md#platform-connector-and-platform-implementations) owns platform methods, result schemas and payload decoders.
@@ -2524,7 +2531,7 @@ The host of every `worker` application sits inside it. That host holds the insta
 At the `worker` placement, one instance is one trust boundary over every project that it serves, under [worker-service.md](worker-service.md#instances-and-hosting).
 The host of a `server` application that runs an instance at the `server` placement sits inside it for the same reason. A worker thread is no containment boundary for the code that the repository supplies.
 Its child processes run with the rights of the server process.
-A tool process at the `server` placement can therefore read the configuration file, its `master_key` and the database files. It can open every credential and sign a JWT of the server. kanthord accepts this reach in v1.
+The bash tool of an agent runs in the [bash sandbox](#tool-table), which denies the read of the configuration file and the database files. A verification command and the local git run outside the sandbox. A process of such a command can therefore read the configuration file, its `master_key` and the database files. It can open every credential and sign a JWT of the server. kanthord accepts this reach in v1.
 An instance at the `container` placement keeps C1 to C6 of [The guarantees of a slot driver](#the-guarantees-of-a-slot-driver).
 The container is the boundary for the files of the server. The memory of the instance stays inside the boundary, as at the `worker` placement.
 
