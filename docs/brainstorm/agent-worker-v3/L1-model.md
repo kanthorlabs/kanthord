@@ -432,6 +432,7 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
 - **H.** An empty directory. It is `HOME` of the process.
 - **P.** An empty directory for the pi directory input of `run agent`. L2 names the input. The default pi directory of today is `kanthord/pi` under `XDG_STATE_HOME` (`directories` in `src/kernel/xdg.ts`; `piDirectory` in `src/agent/pi.ts`).
 - **T.** An empty directory. It is `TMPDIR` of the process.
+- **N.** A network namespace that allows only loopback and logs each connection attempt.
 - **S.** A path in a new `0700` directory. No file exists at S. It is the session file path input of `run agent`.
 - **Faux.** The scripted model of pi (`fauxAssistantMessage`, `fauxToolCall`, exported by `@earendil-works/pi-ai`). A check at the agent contract uses it in place of Stub.
 - **Test consumer.** A test consumer of the agent contract. It gives the inputs of the check and no other tool implementation.
@@ -440,7 +441,7 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
 ### Checks
 
 1. **AC1. No state outside the session file** ([Statelessness](#statelessness), checks 1, 2, 3, 5, 7). Owner: L2.
-   - Fixture: Auth, Stub, W, H, P, T, and the network fixture of AC6. S and S2 are two paths in the same `0700` directory. The parent environment sets `KANTHORD_TOKEN`, `KANTHORD_ENDPOINT`, `KANTHORD_WORKER_CONFIG` and `KANTHORD_MACHINE_CONFIG` to marker values. Input 1 holds the unique marker M1, and input 2 holds the unique marker M2. The scripted turn calls `bash` with `env`.
+   - Fixture: Auth, Stub, W, H, P, T, N. S and S2 are two paths in the same `0700` directory. The parent environment sets `KANTHORD_TOKEN`, `KANTHORD_ENDPOINT`, `KANTHORD_WORKER_CONFIG` and `KANTHORD_MACHINE_CONFIG` to marker values. Input 1 holds the unique marker M1, and input 2 holds the unique marker M2. The scripted turn calls `bash` with `env`.
    - Command: Run with input 1 and S. Then Run with input 2 and S2.
    - Pass:
      - Each run exits 0.
@@ -451,7 +452,7 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
      - Auth is byte-equal, with the same mode.
      - The `bash` tool result holds none of the four `KANTHORD_*` names.
      - No request of run 2 holds M1. The first request of run 2 holds exactly the system prompt and one user message.
-     - Under the network fixture, the only connections of each run are to Stub.
+     - N logs connection attempts only to Stub.
    - Today: `childEnvironment` removes the four names (`src/agent/environment.ts`).
 
 2. **AC2. The session file at the caller path, in a private place** ([Session file](#session-file), "Place"; L1-D19). Owner: L2.
@@ -507,13 +508,13 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
      12. an `openai-codex` OAuth entry whose `expires` is before the wall deadline of the run plus the refresh window (`PI_OAUTH_REFRESH_WINDOW_MS` in `src/llm/refresh-watch.ts`);
      13. no entry of the selected provider;
      14. an entry of the selected provider that fails the entry schema of L2.
-   - For cases 4 to 7, the parent environment sets `NAME` to K. For cases 11 and 12, the model selection of Run is `openai-codex`. The network fixture of these cases allows only loopback, or a proxy stub records each outbound connection.
+   - For cases 4 to 7, the parent environment sets `NAME` to K. For cases 11 and 12, the model selection of Run is `openai-codex`, and Run runs in N.
    - Command: Run, once per variant.
    - Pass:
      - For each variant, `run agent` refuses, and the stderr line states the reason of that case. Case 3 states the ownership reason. Cases 11 and 12 state the `credential_expiring` reason.
      - Stub receives no request. No file exists at S.
      - For case 10, no file exists at `<marker>`.
-     - For cases 11 and 12, no outbound connection occurs.
+     - For cases 11 and 12, N logs no connection attempt to an address outside loopback.
    - Today: `credentialOf` refuses an OAuth credential that expires before the wall deadline plus the refresh window (`src/worker/unit/tasks-credential.ts:98`; `cli.worker.tasks.credential_expiring` in `src/worker/unit/tasks-seed.ts`). `openai-codex` is an OAuth platform (`Platform.OpenAICodex` in `src/llm/platforms.ts`). pi resolves `$NAME`, `${NAME}`, the escapes `$$` and `$!`, and `!command` keys (`parseConfigValueTemplate` and `resolveConfigValue` in `dist/core/resolve-config-value.js`).
 
 7. **AC7. No credential from standard input** ([The `--auth` file](#the---auth-file-of-run-agent); L1-D22). Owner: L2.
@@ -586,21 +587,21 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
     - Today: no root `run` exists (`docs/cli/other.md`, "Closed root names and option scope").
 
 18. **AC18. A worker session holds the allowlist and the exit redaction** ([Tool ownership rule](#tool-ownership-rule), rule 6; [Session file](#session-file), "Exit redaction"; L1-D8). Owner: L5.
-    - Fixture: a local KanthorD server, a registered worker instance, Stub. The custody of the server holds K as the `openai-compatible` credential of `swe@1`, routed to Stub. One claimable `implement` execution of `coder@1`. The worker of the fixture gives one more worker capability, which registers a tool that `swe@1` does not declare. L5 names that test seam. The scripted turn calls that tool. The scripted assistant text then holds K.
-    - Command: `kanthord run worker` with that instance. L5 names the read command for the session entries of the execution.
-    - Pass: The tool result equals the block result of AC11 for that tool name. It is not the pi result `Tool <name> not found` (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:486`, `prepareToolCall`). The tool implementation does not run. Each session entry that the server records for the execution holds K zero times.
+    - Fixture: a local KanthorD server, a registered worker instance, Stub. The custody of the server holds K as the `openai-compatible` credential of `swe@1`, routed to Stub. One claimable `implement` execution of `coder@1`. The worker of the fixture gives one more worker capability, which registers a tool that `swe@1` does not declare. L5 names that test seam. The seam is a code parameter of the worker host that only a test passes. No option, environment variable or file of a shipped command reaches it. The test starts the worker host in process with the `run worker` composition. The scripted turn calls that tool. The scripted assistant text then holds K.
+    - Command: the worker host of the test, with that instance. L5 names the read command for the session entries of the execution.
+    - Pass: the tool result equals the block result of AC11 for that tool name. It is not the pi result `Tool <name> not found` (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:486`, `prepareToolCall`). The tool implementation does not run. Each session entry that the server records for the execution holds K zero times.
     - Today: `agentPort` adds `toolAllowlist` before the capabilities (`guardsOf` in `src/agent/agent-port.ts`). The worker redacts each session entry (`sessionEntryRecord` in `src/worker/unit/session-entries.ts`).
 
 19. **AC19. A Workbench session holds the allowlist and the exit redaction** ([Other consumers](#other-consumers); L1-D8). Owner: L5, with the order of L6. It runs after `feature/workbench-v2` merges into `main`.
     - Fixture: a local KanthorD server with the Workbench. The Workbench credential is K, for `openai-compatible`, routed to Stub. The scripted turn calls a tool that the Workbench registers and that the profile of the session does not declare. L5 names that tool after the merge. The scripted assistant text then holds K.
     - Command: a Workbench session with one message. L5 names the operation and the read command for the session events.
-    - Pass: The tool result equals the block result of AC11 for that tool name. It is not the pi result `Tool <name> not found` (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:486`, `prepareToolCall`). Each text that the Workbench Service gives out holds K zero times.
+    - Pass: the tool result equals the block result of AC11 for that tool name. It is not the pi result `Tool <name> not found` (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:486`, `prepareToolCall`). The tool implementation does not run. Each text that the Workbench Service gives out holds K zero times.
     - Today: a Workbench session holds only `toolApproval`, and the Workbench Service reads the session events with no exit redaction (`src/workbench/service.ts`).
 
 20. **AC20. A Project Service session of `env@1` holds the allowlist and the exit redaction** ([Other consumers](#other-consumers); L1-D8). Owner: L5, with the order of L6.
-    - Fixture: a local KanthorD server, a repository binding, Stub. The server agent credential is K, for `openai-compatible`, routed to Stub. The Project Service of the fixture gives one more tool implementation, with a call counter, that `env@1` does not declare. L5 names that test seam. The scripted turn calls that tool. The scripted assistant text then holds K.
+    - Fixture: a local KanthorD server, a repository binding, Stub. The server agent credential is K, for `openai-compatible`, routed to Stub. The Project Service of the fixture gives one more tool implementation, with a call counter, that `env@1` does not declare. L5 names that test seam. The seam is a code parameter of the Project Service that only a test passes. No option, environment variable or file of a shipped command reaches it. The scripted turn calls that tool. The scripted assistant text then holds K.
     - Command: the environment setup of the binding. L5 names the operation and the read command for its output.
-    - Pass: The tool result equals the block result of AC11 for that tool name. It is not the pi result `Tool <name> not found` (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:486`, `prepareToolCall`). The call counter stays 0. Each text that the Project Service gives out holds K zero times.
+    - Pass: the tool result equals the block result of AC11 for that tool name. It is not the pi result `Tool <name> not found` (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:486`, `prepareToolCall`). The call counter stays 0. Each text that the Project Service gives out holds K zero times.
     - Today: the Project Service registers `probe` and `environment_write` (`src/project/environment-agent-tools.ts`). An `env@1` session holds only `checkoutConfinement` (`src/project/environment-agent.ts`).
 
 21. **AC21. The default `--auth` path is in the home directory of the OS user** ([The `--auth` file](#the---auth-file-of-run-agent), item 1). Owner: L2.
@@ -645,7 +646,7 @@ A refusal in these checks means: a nonzero exit code, and a first stderr line th
     - Today: `checkoutConfinement` resolves each path with `resolveNearest`, so a symbolic link resolves to its target, and blocks a path outside the roots (`src/agent/hooks/checkout-confinement.ts`). `re@1` declares `read`, `grep`, `find` and `ls` (`src/agent/catalog.ts`).
 
 27. **AC27. `run agent` loads no extension and no context file from a path** ([Extension rule](#extension-rule), rule 3; [Statelessness](#statelessness), check 3; [E1](#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule), fit rule 5). Owner: L2.
-    - Fixture: Auth, Stub, H, P, S. W holds `.pi/extensions/x.ts`, an extension that writes the marker file M7 at load, and an `AGENTS.md` that holds the unique marker text M8. P holds an `extensions/` module that writes the marker file M9 at load.
+    - Fixture: Auth, Stub, H, P, S. The one commit of W holds `.pi/extensions/x.ts`, an extension that writes the marker file M7 at load, and an `AGENTS.md` that holds the unique marker text M8. P holds an `extensions/` module that writes the marker file M9 at load.
     - Command: Run.
     - Pass: the exit code is 0. No file exists at M7 or M9. No request to Stub holds M8.
     - Today: `sessionParts` gives pi `noExtensions: true` and `noContextFiles: true` (`src/agent/agent-session.ts`). E1 fit rule 5 rules that this round loads no `AGENTS.md`.
