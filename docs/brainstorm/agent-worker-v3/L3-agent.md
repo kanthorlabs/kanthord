@@ -34,7 +34,7 @@ Change: the runtime and the server part of `src/agent/` separate by file. A file
 | `start-preconditions.ts` (new)                         | Runtime                                  | The precondition checks of [Start preconditions](#start-preconditions)                                                                                                                                                                                                                 |
 | `run-budget.ts` (new)                                  | Runtime                                  | The wall, list-price and turn limits of [Budget](#budget)                                                                                                                                                                                                                              |
 | `run-outcome.ts` (new)                                 | Runtime                                  | The end, the class, the failure kind, the totals and the complete reply of [End and class](#end-and-class)                                                                                                                                                                             |
-| `redaction.ts` (new)                                   | Runtime                                  | The redaction state of one session: the marker table, the matchers, the counts, `text`, `exitText` and `exitValue`. It comes from `sensitiveTextRedaction` less its two factories                                                                                                      |
+| `redaction.ts` (new)                                   | Runtime                                  | The redaction state of one session: the marker table, the matchers, the counts, `text` and `exitText`. [L5](L5-worker.md) adds `exitValue` with the events ([Events](#events)). It comes from `sensitiveTextRedaction` less its two factories                                                                                                      |
 | `sensitive-text.ts`                                    | Runtime                                  | The rule set, `knownMatcher` and `redactValue`. Unchanged                                                                                                                                                                                                                              |
 | `tool-table.ts`                                        | Runtime                                  | The wrapped `bash` and `ToolProcesses`. Change: [Child processes](#child-processes)                                                                                                                                                                                                    |
 | `bash-process.ts`                                      | Runtime                                  | The process operations of `bash`. Unchanged                                                                                                                                                                                                                                            |
@@ -102,7 +102,6 @@ export interface AgentInput {
   consumerTools: readonly ToolDefinition[];
   extensions: readonly InlineExtension[];
   signal: AbortSignal;
-  observe?: (event: AgentEvent) => void;
 }
 
 export interface ModelSelection {
@@ -165,7 +164,6 @@ Each field and its reader:
 | `consumerTools`    | The pi tool definitions of declared consumer tools. A name outside the declared consumer tools of the profile makes the open throw `agent.tool_undeclared` ([L3-D6](#decisions))                                                                                                                                                                                                | Project Service; Workbench Service after the merge   |
 | `extensions`       | The consumer extensions: worker capabilities and consumer hooks, in consumer order                                                                                                                                                                                                                                                                                              | Worker, Workbench Service                            |
 | `signal`           | The stop signal. An abort starts the graceful stop ([Stop and forced stop](#stop-and-forced-stop))                                                                                                                                                                                                                                                                              | Each consumer                                        |
-| `observe`          | The event sink, optional ([Events](#events)). With no sink, the contract emits no event                                                                                                                                                                                                                                                                                         | Worker, Workbench Service                            |
 
 - The input names no execution, no claim, no node and no server address ([L1 boundary rule 1](L1-model.md#agentworker-boundary)). Change: today `SessionOpenRequest` carries `claim.execution_id` and `setup.agents` (`src/agent/agent-port.ts`).
 - The [Workbench change](#workbench-service) adds three inputs, each with its reader: `workspace.confine`, the session kind `resume` and `bashSandbox`. They do not exist before that change.
@@ -234,7 +232,6 @@ export interface AgentRun {
   readonly systemPromptDigest: string;
   send(text: string, options: SendOptions): Promise<TurnEnd>;
   endAfterTurn(): void;
-  appendCustom(customType: string, data: unknown): Promise<void>;
   forceStop(): TurnEnd;
   redactionSummary(): RedactionSummary;
   close(): Promise<void>;
@@ -244,7 +241,6 @@ export interface AgentRun {
 - `send` passes `text` and `work` through the input redaction. It then sets the work pin of the pinned layers to the redacted `work` ([Pinned layers](#pinned-layers)). It calls `session.prompt(text, { expandPromptTemplates: false })` and waits for the end of the agent loop. One `send` runs at a time; a second call during a `send` throws.
 - `work` is the work pin: the task text that stays in each model request after a compaction. A text replaces the pin, and `null` clears it. Example: the worker sends the work prompt "Implement node N, criterion C" with `work` equal to that prompt. A later `send` of "The verification failed: ..." keeps `work` equal to the work prompt. `run agent` passes its message as `work`.
 - `endAfterTurn` ends the agent loop at the end of the current turn, after each tool result of the batch ([Project Service](#project-service)). The contract reads the flag in its `finishTurn` ([Budget](#budget)). The end is `completed`.
-- `appendCustom` redacts each string of `data` with `text`, which is asynchronous, and then writes one pi custom entry (`appendCustomEntry`). The worker writes `kanthord.pinned_context` (`src/worker/unit/native-agent.ts`). The Workbench writes its records on the branch (`appendRecord`).
 - `forceStop` returns at once ([Stop and forced stop](#stop-and-forced-stop)).
 - `redactionSummary` gives the counts of [Redaction counts](#redaction-counts).
 - `close` aborts the session, disposes the runtime through `closeRuntime`, and kills each child process that is still alive. `closeRuntime` waits at most `RUNTIME_SETUP_DEADLINE_MS` (30 s) for the abort and the dispose. After that limit, it disposes the session with no wait (`src/agent/agent-session.ts`). A second `close`, or a `close` after `forceStop`, does nothing.
@@ -311,18 +307,23 @@ export interface SecretWarning {
 
 ### Events
 
-```ts
-export type AgentEvent =
-  | { type: "session"; event: AgentSessionEvent }
-  | { type: "entry"; entry: SessionEntry };
-```
-
-- `session`: each pi session event, after `exitValue` on a deep copy. The worker telemetry and the Workbench views read it.
-- `message_update`: the contract gives only `type` and the redacted `message`, and drops `assistantMessageEvent`. Reason: a delta holds a part of the text, so a known secret split across two deltas passes a redaction of each delta. A prefix of a known secret can appear in one update before the rest of the value arrives.
-- `entry`: each new pi session entry, in append order, after `exitValue` on a deep copy. The worker sends them to the server ([L5](L5-worker.md)).
-- **Entry reads.** The contract reads the new entries of the session manager at each pi session event, before it emits that `session` event. It also reads them at the end of each `send`, after each `appendCustom` and at `close`.
-- **Order.** pi persists a message at its `message_end` (`_handleAgentEvent`). So the `entry` event of an assistant message comes before the `tool_execution_start` event of each of its tool calls. The worker span attribute `kanthord.session.entry_id` needs this order.
+- The L3 contract emits no event and has no `observe` input. Reason: no L3 consumer reads an event. `run agent` reads only `TurnEnd`. The first readers are the worker ([L5](L5-worker.md)) and the Workbench branch at its rebase ([Constraints on the Workbench branch at rebase](#constraints-on-the-workbench-branch-at-rebase)).
 - No consumer gets the `AgentSession`, the session manager or a raw message. Change: today `PortSession` gives `session` to the worker (`src/agent/agent-port.ts`), and the Workbench and the Project Service hold the `AgentSession`.
+- **Constraints on the reader that adds events.**
+  - Each event passes `exitValue` on a deep copy: `redactValue` with the known matcher of the session.
+  - The contract forwards no `message_update` event until a reader needs it. Its partial `message` can end in a prefix of a known secret that `exitValue` does not match. The known matcher finds a part of a secret only at a line start or before a truncation marker (`src/agent/sensitive-text.ts:1299-1330`).
+  - A reader that needs `message_update` adds a hold-back: the contract keeps back the end of each text, thinking and tool-argument block while that end is a prefix of a known secret.
+  - The `entry` event of an assistant message comes before the `tool_execution_start` event of each of its tool calls. pi persists a message at its `message_end` (`_handleAgentEvent`), and the worker span attribute `kanthord.session.entry_id` needs this order.
+
+**Example.** The model streams `The key is sk-abc123XYZ789qwe`, and K = `sk-abc123XYZ789qwe` is a known secret.
+
+| Piece | `delta`       | Partial `message` text          | Text after `exitValue`                 |
+| ----- | ------------- | ------------------------------- | -------------------------------------- |
+| 1     | `The key is ` | `The key is `                   | `The key is `                          |
+| 2     | `sk-abc123`   | `The key is sk-abc123`          | `The key is sk-abc123`                 |
+| 3     | `XYZ789qwe`   | `The key is sk-abc123XYZ789qwe` | `The key is <redacted:llm_credential>` |
+
+Piece 2 shows the first 9 characters of K. With the deltas, a reader joins pieces 2 and 3 and gets all of K. The hold-back keeps back `sk-abc123` until piece 3 arrives.
 
 ### Requirement map
 
@@ -336,7 +337,7 @@ Each requirement of [L2](L2-agent-cli.md#requirements-on-l3) and the contract pa
 | 4. Start refusal                   | `AgentOpen` `refused` with `StartRefusal`, at step 2 of the [open order](#open-order)                                                                                                                      | L2-AC12, L3-AC5, L3-U4 |
 | 5. Session file                    | `SessionRecord` `new_file`; the header `cwd` is `workspace.cwd`                                                                                                                                            | L2-AC1, L2-AC3         |
 | 6. Output                          | `TurnEnd`, `systemPromptDigest`                                                                                                                                                                            | L2-AC1, L2-AC10, L3-U5 |
-| 7. Exit redaction                  | `exitText` on `text`, `failure.reason` and the `AgentOpenError` message; `exitValue` on each event                                                                                                         | L2-AC4, L1 U3          |
+| 7. Exit redaction                  | `exitText` on `text`, `failure.reason` and the `AgentOpenError` message. The contract emits no event ([Events](#events))                                                                                   | L2-AC4, L1 U3          |
 | 8. Silence                         | No runtime module writes to `process.stdout` or `process.stderr`. The extension errors go to the error listener                                                                                            | L3-U7                  |
 | 9. No proxy from the environment   | The [import rule](#import-rule) refuses `setGlobalDispatcher` and `EnvHttpProxyAgent`                                                                                                                      | L2-AC2, L1 U15         |
 | 10. pi directory and resources     | `sessionParts`: `noExtensions`, `noSkills`, `noPromptTemplates`, `noThemes`, `noContextFiles`, `SettingsManager.inMemory`, the model runtime as service                                                    | L2-AC2, L2-AC7         |
@@ -562,7 +563,7 @@ export const StartPrecondition = {
 
 1. `homeRelativeCwd(hostHome)`: the `<cwd>` section.
 2. `toolAllowlist(declaredNames)`: blocks a nested call of a name outside the declared names of the session ([Reach of the allowlist guard](#a-declared-consumer-tool-with-no-implementation)).
-3. `markerRestore(state)`: restores a marker of this session into `write` and `edit`, blocks the other markers, and blocks a known secret in each tool input ([Known secret in a tool input](#known-secret-in-a-tool-input)).
+3. `markerRestore(state)`: restores a marker of this session into `write` and `edit`. It blocks a known-secret marker in every tool, each marker in `bash`, and a marker of an earlier run or an unkept marker in `write` and `edit`. It passes other markers as text. It blocks a known secret as raw text in each tool input ([Known secret in a tool input](#known-secret-in-a-tool-input)). `state` is the redaction state of `redaction.ts`: `inputRedaction` writes the marker table, and `markerRestore` reads it.
 4. `checkoutConfinement({ cwd, roots })`, when the profile is confined. It checks the input after the restore and freezes it.
 5. `pinnedLayersHook`: the work pin ([Pinned layers](#pinned-layers)).
 6. The consumer extensions, in input order: worker capabilities and consumer hooks, for example `toolApproval`.
@@ -632,7 +633,7 @@ This is the build change of [L1 Session file](L1-model.md#session-file) on the c
   - the redaction of the compaction summary at `context` and at `session_compact`, and the count `compaction_residual`.
 - **Kept.** The input redaction of each `system`, `user`, `toolResult` and `custom` message at `message_end`, and of each `custom` message at `context`. The redaction of the system prompt before pi gets it (`text`, `src/agent/agent-session.ts`). The restore of `write` and `edit` arguments. `modelOutput`, now `exitText`.
 - **Error text.** `inputRedaction` redacts the `errorMessage` field of an `assistant` message at `message_end`, and no other field of that message. pi replaces the message in place, so the agent state, the events and the session file get the redacted copy (`_replaceMessageInPlace`, `dist/core/agent-session.js:864-877`).
-- **Custom entries.** `appendCustom` redacts each string of `data` with `text` before pi writes the entry. So each entry kind that a consumer writes is input-redacted.
+- **Custom entries.** No contract consumer writes a custom entry before [L5](L5-worker.md). L5 adds `appendCustom(customType, data)`, which redacts each string of `data` with `text` before pi writes the entry.
 - The open paths of today keep the redaction of LLM output until their consumers move ([Interim redaction](#interim-redaction)).
 
 ### Known secret in a tool input
@@ -646,6 +647,15 @@ This is the build change of [L1 Session file](L1-model.md#session-file) on the c
   ```
 
 - The block changes no recorded response: the assistant entry keeps the arguments. It counts as `restore_blocked`. The finding of the same value counts once, in [Rotate warning](#rotate-warning).
+
+**Example of the restore and the block.**
+
+1. `.env` holds `STRIPE_SECRET_KEY=sk_live_51HxQ...` and `DEBUG=false`.
+2. The model reads `.env` and sees `STRIPE_SECRET_KEY=<redacted:saas_token:1:9f3a12bc4d5e6f70>`.
+3. The model calls `edit` with `oldText` `STRIPE_SECRET_KEY=<redacted:saas_token:1:9f3a12bc4d5e6f70>` plus `DEBUG=false`, and `newText` with `DEBUG=true`.
+4. `markerRestore` replaces the marker in both strings with `sk_live_51HxQ...`. The edit matches the file, and the key stays. The assistant entry keeps the marker.
+
+With no restore, the edit fails, because `oldText` is not in the file. A `write` gives `.env` the marker text, and the Stripe key is lost. The restore never gives back a known secret (`markerRefusal`, `src/agent/hooks/sensitive-text-redaction.ts:199-213`). When the model calls `bash` with `curl -H "x-api-key: <raw LLM key>"`, the call blocks with `The input holds a value of a known credential. No tool receives this value.`
 
 ### Rotate warning
 
@@ -661,7 +671,7 @@ The contract applies the exit redaction at its output, so no consumer can omit i
 | Output                                                            | Function    | Form                                                                                                                                                                  |
 | ----------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TurnEnd.text`, `RunFailure.reason`, the `AgentOpenError` message | `exitText`  | The session marker `<redacted:RULE:N:TAG>` of the pattern rules and the known secrets. Today `modelOutput` (`src/agent/hooks/sensitive-text-redaction.ts`)            |
-| Each `session` and `entry` event                                  | `exitValue` | `redactValue` of a deep copy with the known matcher of the session. Today `sessionEntryRecord` does this in the worker (`src/worker/unit/session-entries.ts:122-137`) |
+| Each event that L5 adds                                           | `exitValue` | `redactValue` of a deep copy with the known matcher of the session ([Events](#events)). Today `sessionEntryRecord` does this in the worker (`src/worker/unit/session-entries.ts:122-137`) |
 
 - Change: the Workbench Service and the Project Service get the exit redaction when they move to the contract. Today they read the session events and `session.state.errorMessage` with no exit redaction (`src/workbench/service.ts`, `agent.subscribe`; `src/project/environment-agent.ts:331`).
 - **Full-entry read of a session file.** The server can ask a worker for one entry of a session file (`SessionRead`). The worker reads it with no redaction (`readSessionFileEntry` in `src/worker/unit/session-store.ts:236-275`). Today the file holds LLM output after the `assistant` redaction, so the read gives no known secret of the LLM output. At the end of an execution, the worker discards the credential views and zeroes the handover keys (`discard` in `src/apps/worker/handover.ts:295-302`). A later read thus has no known secret to match. [L5](L5-worker.md) rules this path before the worker path drops the interim redaction.
@@ -820,7 +830,7 @@ The catalog split changes the field reads of each consumer of `getAgentDeclarati
 
 ### Worker
 
-The worker side belongs to [L5](L5-worker.md). Until then the worker uses `openSessionRuntime` ([Open paths until L5 and the Workbench change](#open-paths-until-l5-and-the-workbench-change)). On the contract, the worker gives the composed text of the server in `systemPrompt`, `session.kind` `directory`, `extensions` with the worker capabilities and `budget.turns`. It reads the `entry` and `session` events, `TurnEnd.complete`, `TurnEnd.failure` and `redactionSummary`. [Handoffs](#handoffs-to-later-layers) lists the items.
+The worker side belongs to [L5](L5-worker.md). Until then the worker uses `openSessionRuntime` ([Open paths until L5 and the Workbench change](#open-paths-until-l5-and-the-workbench-change)). On the contract, the worker gives the composed text of the server in `systemPrompt`, `session.kind` `directory`, `extensions` with the worker capabilities and `budget.turns`. It reads `TurnEnd.complete`, `TurnEnd.failure` and `redactionSummary`, and the events that L5 adds ([Events](#events)). [Handoffs](#handoffs-to-later-layers) lists the items.
 
 ### Project Service
 
@@ -962,7 +972,7 @@ Each check is an end-to-end test ([index](index.md#layer-files)). It runs the bu
 Each rule holds in one module, with no process and no LLM stub ([index](index.md#layer-files)). A test with a model uses Faux and the test consumer of the [L1 shared fixtures](L1-model.md#shared-fixtures). Each test file lies next to its module.
 
 1. **L1 U2.** `inputRedaction` redacts a `custom` message and a steering message before pi persists them, and a `custom` message that a `context` handler adds. Test file: `src/agent/hooks/input-redaction.test.ts`.
-2. **L1 U3.** Each text that the contract gives out holds K zero times: `TurnEnd.text`, `RunFailure.reason`, the `AgentOpenError` message, each `session` event and each `entry` event. K is in the model text, in a tool result and in a provider error. In one case Faux streams K in two deltas, and no `message_update` event holds K. Test file: `src/agent/agent-contract.test.ts`.
+2. **L1 U3.** Each text that the contract gives out holds K zero times: `TurnEnd.text`, `RunFailure.reason`, and the `AgentOpenError` message. K is in the model text, in a tool result and in a provider error. When L5 adds the events, the rule covers each event: Faux streams K in two deltas, and no event holds K or a prefix of K of 12 or more characters. Test file: `src/agent/agent-contract.test.ts`.
 3. **L1 U6.** The `toolAllowlist` handler blocks an undeclared name with the text `The tool <name> is not declared for this agent.`, and the implementation does not run. A declared name passes. Test file: `src/agent/hooks/tool-allowlist.test.ts`.
 4. **L1 U10.** `outputFinding` gives one warning with the rule `llm_credential` and the count of findings for one `assistant` message, and none for a message with no finding. The `assistant` entry stays byte for byte. A known secret in `errorMessage` gives no finding. Test file: `src/agent/hooks/output-finding.test.ts`.
 5. **L3-U1. Composition function.** The golden case holds an instruction file, a Repository prompt, a Binding prompt and the framing. For it, the output of `finalPrompt` is byte-equal to its output of today. The output for the Workbench parts is byte-equal to `systemPrompt` of today. `finalPrompt` gives `null` for an unresolved part. A heading renders as heading, blank line, text. The digest is the digest of the text before the redaction. Test file: `src/agent/prompt-chain.test.ts`.
@@ -985,11 +995,10 @@ Each rule holds in one module, with no process and no LLM stub ([index](index.md
     - `send` redacts `work` before it sets the work pin. `work: null` clears the pin.
     - An abort gives `stopped` after pi persists the aborted entry. `forceStop` returns at once with the totals so far and kills each live child process. `close` after `forceStop` does nothing.
     - No runtime module writes to `process.stdout` or `process.stderr`. A handler error of an extension ends the run with the failure `internal`.
-    - `appendCustom` redacts its data. With no `observe`, the run emits no event.
     - Test file: `src/agent/agent-contract.test.ts`.
 12. **L3-U8. Marker restore.** The restore cases of today ([agent.impl.md](../agent.impl.md#the-restore-by-tool)). The block of a known secret as raw text, with the new block text, in the input of `bash`, `write`, `read` and a consumer tool. Test file: `src/agent/hooks/marker-restore.test.ts`.
 13. **L3-U9. Hooks of today with no test.** `homeRelativeCwd` writes the `<cwd>` section relative to the host home. `pinnedLayersHook` adds the work pin once, only when no user message equals it, and keeps the system messages first. After `session.compact()`, each request holds the work pin. `toolApproval` blocks with the reason of the decision and passes an allowed call. Test files: `home-relative-cwd.test.ts`, `pinned-layers.test.ts`, `tool-approval.test.ts` in `src/agent/hooks/`.
-14. **L3-U10. Redaction state.** With no `assistantRedaction`, `thinking_kept` and `compaction_residual` stay `0`. `output_found` counts the findings of `outputFinding`. `exitText` gives the session marker, and `modelOutput` gives the same text. `exitValue` gives `redactValue`. `text` refreshes the known secrets. Test file: `src/agent/redaction.test.ts`.
+14. **L3-U10. Redaction state.** With no `assistantRedaction`, `thinking_kept` and `compaction_residual` stay `0`. `output_found` counts the findings of `outputFinding`. `exitText` gives the session marker, and `modelOutput` gives the same text. `text` refreshes the known secrets. Test file: `src/agent/redaction.test.ts`.
 15. **L3-U11. Child processes, a regression rule.** A child process gets only the names of `childEnvironment`, less the removed names, plus the pi `PATH`. A name of `process.env` that the input does not hold is absent. `killAll` kills each live process tree. Test file: `src/agent/tool-table.test.ts`.
 16. **L3-U12. Interim redaction.** `assistantRedaction` keeps the three redactions of LLM output of today and their counts. Test file: `src/agent/hooks/assistant-redaction.test.ts`. The rule leaves with the module.
 17. **L3-U13. Open paths of today.** `openSession` and `openSessionRuntime` hold `homeRelativeCwd`, `markerRestore`, the caller `hooks`, `inputRedaction` and `assistantRedaction`, in this order. They hold no `outputFinding` and no guard of their own that a caller also adds. `{ redaction }` reuses the given state. Test file: `src/agent/agent-session.test.ts`.
@@ -1032,7 +1041,8 @@ These are order hints. [L6](L6-migration.md) fixes the order.
    - `knownSecrets` from `mergedSecrets` of the handover stores;
    - `childEnvironment`, `hostHome`, and the worker capabilities in `extensions`.
 2. The roots of each chain pass the coding preconditions: the checkouts of an `implement` node; the trees of `workspace.review` for `examine` with `swe@1`. Each root is the top level of a git worktree with no uncommitted change. L5 confirms it, or states the change.
-3. The worker reads `TurnEnd` in place of `completeReply`, `lastText` and `providerFailure`, and the `entry` and `session` events in place of the `AgentSession` (`src/worker/unit/native-agent.ts`, `agent-telemetry.ts`, `session-entries.ts`). `sessionEntryRecord` keeps its size bound; the contract already applies `exitValue`. `countTurns` and the alias `modelOutput` then leave.
+3. L5 adds the `observe` input and the events `session` and `entry`, with `exitValue`, under the constraints of [Events](#events). The worker reads `TurnEnd` in place of `completeReply`, `lastText` and `providerFailure`, and the events in place of the `AgentSession` (`src/worker/unit/native-agent.ts`, `agent-telemetry.ts`, `session-entries.ts`). `sessionEntryRecord` keeps its size bound. `countTurns` and the alias `modelOutput` then leave.
+3a. L5 adds `appendCustom(customType, data)` to `AgentRun`. It redacts each string of `data` with `text`, then calls pi `appendCustomEntry`. pi never sends a `custom` entry to the model. The worker writes `kanthord.pinned_context`, and the trace view of `apps` reads it (`apps/src/lib/agent-prompt-parts.ts:174`). Example line: `{"type":"custom","customType":"kanthord.pinned_context","data":{"part":"system_prompt"},"id":"a1b2c3d4","parentId":"9f8e7d6c","timestamp":"2026-11-22T09:15:02.123Z"}`.
 4. The bash process facts of the telemetry: `ToolProcesses.take` and `takeTimeout` (`src/worker/unit/agent-telemetry.ts:351-352`). L5 adds them to a contract event, or deletes those span attributes.
 5. The worker records each `SecretWarning` as a telemetry finding. It renames the span attributes of [Redaction counts](#redaction-counts).
 6. The worker gives the turn limit of `NATIVE_RESOURCE_BUDGET` in `budget.turns` and stops the patch of `finishTurn`.
@@ -1058,7 +1068,7 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 
 1. **L3-D1.** The runtime and the server part of `src/agent/` separate by file as [File assignment](#file-assignment) states. Constraint: the import closure of each runtime module stays in the allowed set of [Import rule](#import-rule), and the closure stops at a kernel module. `agent-port.ts`, `session-directory.ts`, `review-roots.ts` and `capabilities/` move unchanged to `src/worker/unit/`.
 2. **L3-D2.** `SpanStatus` leaves the runtime with the trace. `credentialSecrets` and `mergedSecrets` move to `src/llm/known-secrets.ts`. `ProviderFailure` moves to `src/llm/provider-failure.ts`, because `run-outcome.ts` adds that import. The code constant of the pi tool install moves to `pi-tools.ts` with its value `worker.start.tool_missing`. Reason: each import serves a consumer concern, and a new code value changes a documented code for no gain.
-3. **L3-D3.** The agent contract is `openAgent(input)` with the input, the run handle, the output and the events of [Input and output contract](#input-and-output-contract). Constraint: each new consumer opens sessions only through it, and no consumer of it gets the `AgentSession`.
+3. **L3-D3.** The agent contract is `openAgent(input)` with the input, the run handle and the output of [Input and output contract](#input-and-output-contract). Constraint: each new consumer opens sessions only through it, and no consumer of it gets the `AgentSession`.
 4. **L3-D4.** The runtime catalog in `catalog.ts` lists every profile that opens a session. `declarations.ts` of the server part lists only the configuration owners. Constraint: `AGENT_NAMES` holds no role profile. `guard@1` stays a server declaration, because it opens no session.
 5. **L3-D5.** `AgentTools` of the branch is the field shape. `main` holds `builtin`, `host` and `environment`; the merge adds `operation` and `workbench`. Constraint: a field exists only with its reader. `offer_action` and `request_owner_act` join `workbench`. The role profiles declare no consumer tool.
 6. **L3-D6.** The pi option `tools` holds the declared names of the session. An undeclared name in `consumerTools` makes the open throw `agent.tool_undeclared`. An undeclared extension tool gets `Tool <name> not found`. Reason: pi drops an undeclared tool with no signal. Constraint: the allowlist guard blocks only a nested `ctx.executeTool` call, and its block text stays `The tool <name> is not declared for this agent.`.
@@ -1069,7 +1079,7 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 11. **L3-D11.** `markerRestore` blocks a tool call whose input holds a known secret as raw text, in every tool, with the matcher `secretMatcher` of the session. Reason: it keeps AH-Q3 after R2-H. Constraint: the block changes no recorded response.
 12. **L3-D12.** On the contract path, the build change of R2-H removes the three redactions of LLM output and keeps the input redaction, the restore and `exitText`. The rotate warning has the rule `llm_credential` and one count per `assistant` message. Constraint: `output_found` is new; only `outputFinding` writes it.
 13. **L3-D13.** `assistantRedaction` keeps the redaction of LLM output on both open paths of today, `openSessionRuntime` and `openSession`, until L5 and the Workbench change. Reason: the worker records, the full-entry read and the Workbench views have no exit redaction until then. Constraint: `thinking_kept` and `compaction_residual` stay in `RedactionCounts` until the module leaves. `assistantRedaction` and `outputFinding` are never in one session.
-14. **L3-D14.** The contract applies `exitText` to `TurnEnd.text`, `RunFailure.reason` and the `AgentOpenError` message, and `exitValue` to each event. A `message_update` event holds only the redacted `message`. Constraint: no consumer of the contract reads a text of the session outside the contract output.
+14. **L3-D14.** The contract applies `exitText` to `TurnEnd.text`, `RunFailure.reason` and the `AgentOpenError` message. The L3 contract emits no event. Constraint: no consumer of the contract reads a text of the session outside the contract output. The reader that adds events applies `exitValue` to each event, and forwards `message_update` only with the hold-back of [Events](#events).
 15. **L3-D15.** `RunBudget` holds `deadline`, `usd` and `turns`. The first limit that the run reaches decides `budgetReached`. Constraint: the wall and list-price limits abort. The contract counts each response in its `finishTurn`, an error included, and returns `{ action: "end" }` at the limit. At an error or aborted response at the limit, it aborts the session. The `bash` command limit is `min(remaining wall time, COMMAND_LIMIT_MS)`. `turns` gets its first reader in L5.
 16. **L3-D16.** An abort of the stop signal is the graceful stop. `forceStop` returns at once and kills each live child process. Constraint: `ToolProcesses` tracks live processes and gains `killAll`. `close` kills each child process that is still alive, waits at most `RUNTIME_SETUP_DEADLINE_MS`, and does nothing after `forceStop`.
 17. **L3-D17.** The class of a provider error is `retryable` only when `isContextOverflow` rejects it and `isRetryableAssistantError` accepts it. The failure kind is `providerFailureOf` of the redacted error text. Constraint: the contract retries nothing; the retries of pi stay.
@@ -1082,7 +1092,7 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 24. **L3-D24.** The contract never clamps the reasoning effort. An unsupported level throws `agent.level_unsupported` at the open. Constraint: the consumer checks the level first, as `run agent` does ([L2 Model selection](L2-agent-cli.md#model-selection), rule 6).
 25. **L3-D25.** Each failure of the open that is no refusal throws `AgentOpenError` with one of the codes `agent.tool_undeclared`, `agent.level_unsupported` and `agent.open_failed`. An abort during the open gives `agent.open_failed` with the message `aborted`. Constraint: the message passes `exitText`; a failed open leaves no session file.
 26. **L3-D26.** Until L5 and the Workbench change, `openSessionRuntime` and `openSession` keep `OpenSessionInput` and `SessionRedactionInput` of today, with the state of `redaction.ts`. Constraint: `sessionParts` adds `homeRelativeCwd`, `markerRestore`, the caller hooks, `inputRedaction` and `assistantRedaction`, and no guard that a caller adds. `countTurns`, `modelOutput`, `take` and `takeTimeout` stay until L5.
-27. **L3-D27.** The contract reads and emits the new session entries at each pi session event, before that `session` event. It also reads them at the end of each `send`, after each `appendCustom` and at `close`. Constraint: each `entry` event passes `exitValue` on a deep copy. The `entry` event of an assistant message comes before the `tool_execution_start` event of its tool calls.
+27. **L3-D27.** The L3 contract has no `observe` input, no event and no `appendCustom`. Reason: no L3 consumer reads them. Constraint: [L5](L5-worker.md) adds them with the worker as first reader. `appendCustom` redacts each string of `data` with `text` before pi writes the entry.
 28. **L3-D28. Applied to L1.** AC18, AC19, U6, U13 and the entry "Boundary rule 8" now state the pi behavior. An undeclared `consumerTools` name makes the open throw `agent.tool_undeclared`. An undeclared extension tool, or a model call of an undeclared name, gets `Tool <name> not found`. U6 is a unit test of the handler.
 29. **L3-D29. Applied to L1.** The mapping row of `env@1` and E6 note that the merge of `feature/workbench-v2` renames `env@1` to `pe@1`. The rename lands with the merge.
 30. **L3-D30. Applied to L1.** [Session file](L1-model.md#session-file) holds the block of a known secret in a tool input, in every tool, with the matcher `secretMatcher`. The rules table records that AH-Q3 keeps its strength.
