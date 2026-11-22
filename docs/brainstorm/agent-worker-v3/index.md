@@ -80,10 +80,12 @@ One meaning per term. A term of today keeps its meaning unless its entry marks `
 
 - **eval model.** The model that runs the agents under test in the agent evaluation. Calibration fixes its level. Change: a new term ([L7](L7-agent-evaluation.md#eval-model)).
 - **production model.** The model of the confirming check, `anthropic/claude-sonnet-5-5:high`. Change: a new term ([L7](L7-agent-evaluation.md#confirming-check)).
-- **case.** One work item of the evaluation set: a repository snapshot, a task text and hidden checks. Change: a new term ([L7](L7-agent-evaluation.md#case-folder)).
+- **case.** One work item of the evaluation set: a repository snapshot, a case text and hidden checks. Change: a new term ([L7](L7-agent-evaluation.md#case-folder)).
 - **group.** The kind of work of a case: `backend`, `frontend` or `test`. The group gives the role profile of the case. Change: a new term ([L7](L7-agent-evaluation.md#groups)).
 - **calibration.** The runs of `swe@1` that fix the level of the eval model before the comparison. Change: a new term ([L7](L7-agent-evaluation.md#calibration)).
 - **confirming check.** The runs on the production model that confirm a role profile that wins on the eval model. Change: a new term ([L7](L7-agent-evaluation.md#confirming-check)).
+- **base model.** The model whose catalog price measures the spend of an evaluation, `base_model` of `config.json`. Change: a new term ([L7](L7-agent-evaluation.md#configuration)).
+- **base cost.** The spend of a run in base dollars: its list price divided by the price ratio of its model. Change: a new term ([L7](L7-agent-evaluation.md#price-ratio)).
 
 - **agent.** One LLM working unit that runs one agent profile on pi-coding-agent. It is stateless and runs without KanthorD ([L1](L1-model.md#statelessness)). Change: today an agent is "an automated participant responsible for carrying out steps as the WHO" ([overview.vocabulary.md](../overview.vocabulary.md#agent)). The role in the WHO stays. The new meaning adds the unit and its boundary.
 - **agent runtime.** The part of the Agent component that is the agent of the model: the session open, the profiles, the guards, the tools and the prompt join. Change: a new term ([L1](L1-model.md#agent-runtime-and-server-part-of-the-agent-component)).
