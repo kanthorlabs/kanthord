@@ -483,39 +483,7 @@ A Commander syntax error, for example an unknown option, writes the Commander me
 
 ### One evaluation run
 
-L1-D20 compares each role profile with `swe@1` on prepared workspaces with fixed inputs. One evaluation case holds one repository, one commit C and one task.
-
-1. **Instructions.** Export the stored Repository prompt and the Binding prompt of `swe@1` once, one file per part. This is the only step that reads the server; each run reads no server. Each file holds the heading, one blank line and the text of the part, as the server renders a part (`docs/cli/agent.md`, section "`get <agent-name>`"). With no server, write `repository.md` and `binding.md` by hand in the same form. E1 fit rule 5 adds no instruction file and no `AGENTS.md`.
-
-   ```sh
-   kanthord agent get swe@1 --project "$PROJECT" --binding-id "$BINDING" > "$CASE/agent.json"
-   for part in repository binding; do
-     jq -j --arg part "$part" '.prompt.parts[]
-       | select(.part == $part and .state == "resolved" and (.text | test("\\S")))
-       | "\(.heading)\n\n\(.text)"' "$CASE/agent.json" > "$CASE/$part.md"
-   done
-   ```
-
-2. **Task.** Write the task text in `$CASE/task.md`. It lies outside each workspace, so each run gives it as one absolute path.
-3. **Workspace.** Prepare one new worktree of C for each run, with no uncommitted change, in a new `0700` directory. A run changes its workspace, so no two runs share one.
-
-   ```sh
-   mkdir -m 700 -p "$CASE/$AGENT-$N"
-   git -C "$REPO" worktree add --detach "$CASE/$AGENT-$N/w" "$C"
-   ```
-
-4. **Run.** Give the same task, context, model selection and budget to each profile. `$BUDGET` is the wall budget of the case, sized to the task, for example `30m`. Only the profile, the workspace and the session file change. Each run appends its result to the one file `$CASE/results.jsonl`. Use an `api_key` entry for an evaluation. An `oauth` entry needs the refresh step of the [Gate procedure](#gate-procedure-the-real-credential-run) before each run.
-
-   The run counts only when `stderr.txt` holds no line with `cli.run.agent.prompt_text_path`.
-
-   ```sh
-   kanthord run agent "$AGENT" --model "$PROVIDER/$MODEL:$LEVEL" --budget "$BUDGET" \
-     --auth "$AUTH" --system-prompt "$CASE/repository.md" --system-prompt "$CASE/binding.md" \
-     --workspace "$CASE/$AGENT-$N/w" --session "$CASE/$AGENT-$N/session.jsonl" \
-     --output "$CASE/results.jsonl" --prompt "$CASE/task.md" 2> "$CASE/$AGENT-$N/stderr.txt"
-   ```
-
-5. **Record.** The pi session file is the record of the work: the model change, the thinking level, each message with its usage, and each tool call and tool result. The line of the run in `results.jsonl` holds the identity, the end, the class and the totals of the run. The workspace holds the changes: `git -C w add -A && git -C w diff --cached "$C"`.
+[L7 One evaluation run](L7-agent-evaluation.md#one-evaluation-run) holds the procedure of one run of the evaluation of L1-D20: the case, the workspace, the context parts, the command line and the record. This page keeps the comparison rule, the result fields and the gate procedure.
 
 ### Comparison rule
 
@@ -526,7 +494,7 @@ L1-D20 compares each role profile with `swe@1` on prepared workspaces with fixed
 - Equal `input_digest` means the same prompt parts and context parts in the same order. Equal `system_prompt_digest` means the same composed system prompt of the profile. Equal `engine_version` means the same engine release, with its tools and its pi version. The other common keys give the same model selection and budget.
 - The comparison groups the runs by `agent`. It reads `end`, `class`, `failure`, `budget_reached` and `text` for the verdict. It reads the session file at `session` and the change of the worktree at `workspace` for the verdict. It reads `usage`, `list_price_usd`, `model_calls`, `tool_calls` and `duration_ms` as the cost of each run.
 - A run with the class `retryable` runs again with a new session path and a new worktree of C. Its line stays in the file.
-- The model output is not deterministic. This section owns the evaluation plan. Before round step 4.3, the plan gains the count of runs per profile and the verdict method. The verdict is a judgement with no fixed pass value ([L1](L1-model.md#rules-with-no-check-and-the-reason), L1-D16).
+- The model output is not deterministic. [L7](L7-agent-evaluation.md) owns the evaluation plan: the cases, the count of runs per profile, the pass rule and the exit rule, which is fixed before the first run.
 
 ### Gate procedure: the real-credential run
 
