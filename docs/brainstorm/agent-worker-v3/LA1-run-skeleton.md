@@ -207,7 +207,7 @@ Proof: each row of "Stricter" or "Same" has a unit rule of [Unit-level rules](#u
 ### To LA3
 
 - The [Entry state of LA3](LA3-run-ends.md#entry-state) is the exit state of LA1.
-- The start preconditions (`src/agent/start-preconditions.ts`, `run-agent-start.ts`, L3-U4); the class `retryable` and exit `75`; the cost budget; SIGTERM and [Shutdown](L2-agent-cli.md#shutdown) rules 1 to 5.
+- The start preconditions (`src/agent/start-preconditions.ts`, called from `run-agent.ts` at run-order step 9, L3-U4); the class `retryable` and exit `75`; the cost budget; SIGTERM and [Shutdown](L2-agent-cli.md#shutdown) rules 1 to 5.
 - The checks L2-AC10, AC11, AC12 and L3-AC5, with the stub of `src/apps/cli/e2e-llm-stub-test-support.ts`.
 
 ### Items that the split puts in the wrong sub-layer
