@@ -708,7 +708,7 @@ These rules hold with no process, no file system flow and no LLM stub, so their 
 7. **The pi directory checks.** [The pi directory](#the-pi-directory) rules 2 and 5: no directory, a symbolic link, another owner, a failed install with its rows.
 8. **The start checks.** [Proxy settings](#proxy-settings): `NODE_USE_ENV_PROXY`, `NODE_OPTIONS` and `process.execArgv`.
 9. **The budget.** [Budget](#budget) rules 4 to 8: the first limit, the list price sum, the refusal of a cost budget for a model with no price, the defaults and the absence of a count limit. The test of the cost limit uses a model with a catalog price.
-10. **The class mapping.** [Classes](#classes) rules 3 and 4: the class from `isContextOverflow` and `isRetryableAssistantError`, the failure kind from `providerFailureOf`, and each end to its exit code.
+10. **The class mapping.** [Classes](#classes) rules 3 and 4: the class from `isContextOverflow` and `isRetryableAssistantError`, the failure kind from `providerFailureOf`, and each end to its exit code. An `AgentOpenError` at step 9 gives `cli.run.agent.open_failed`, exit `1`, the `reason` row after the exit redaction, no result and the removal of R. A signal during the open gives exit `2` and no `open_failed` line.
 11. **The signal handler.** [Shutdown](#shutdown) rules 2 to 5: the time limit with the forced stop, the second signal, a signal during step 11 and a signal before step 10.
 12. **The input digest.** [Input digest](#input-digest): the object and the absence of each path.
 
