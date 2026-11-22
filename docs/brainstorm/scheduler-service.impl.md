@@ -63,7 +63,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   `false` states that the execution of the attempt requires no further work.
   `stop.reason` is `operation_failed | judgement_invalid | report_absent | action_unsettled | assessment_absent | budget_end | provider_failed | no_progress | environment_failed`.
   For a failure, `stop.code` is the error code of the failed operation or `null`. For `budget_end`, it is `turns | wall_time`.
-  For `provider_failed`, it is `rate_limited | quota_exhausted | unauthorized | bad_request | unavailable`. For `no_progress`, it is `null`. For `environment_failed`, it is `setup_failed | command_absent | affected_invalid | affected_timeout`.
+  For `provider_failed`, it is `rate_limited | quota_exhausted | unauthorized | bad_request | unavailable`. For `no_progress`, it is `null`. For `environment_failed`, it is `setup_failed | command_absent | affected_invalid | affected_timeout | verification_timeout | disk_low | base_failed`.
   A `provider_failed` stop with `rate_limited`, `quota_exhausted` or `unavailable` advances the [fallback chain](agent.md#advance).
   A `stop` requires `further_work: true`, and a `stop` with `further_work: false` answers 400 `gateway.request.validation_failed`.
   The Mission Service reads both fields for routing in the release transaction. The execution row stores `stop`, and nothing stores `further_work`.

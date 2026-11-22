@@ -1957,26 +1957,27 @@ The judgement instruction is `static/prompt/template/evaluation.md`, and the `ex
 - The complete violation list: when a rule is violated, the reviewer checks every changed file against that rule and lists each violation as its own finding, with its file and its place. The `examine` instruction holds the same rule. A finding that reports one example and leaves the other violations out breaks it.
 - The repository code rule: the reviewer checks each code rule of a repository prompt against each changed file. A repository prompt that states "a component body holds no business logic" makes a component body with a derivation, a sequence of calls or an error mapping a violation.
 - The round limit: in a later review round, the round rule limits these checks to the lines that the patch of the round adds or changes (`patch_paths`). A prior finding that the reviewer does not list as fixed stays open.
-  `runEvaluation` checks the node state of the submit answer before the result. An answer with no outcome and a node state other than `Evaluating` ends the execution as `revoked`. A `success` answer with the node still `Evaluating` goes to `requestAndRelease`.
-  Tests require a reviewer to judge the assets that the evidence still holds.
-  Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
-  Budget-end tests release with further work at every budget end, a budget end during a verification and during the release gate included.
-  Steps tests skip each unit whose done record matches, also on a fresh clone, and run a work turn for every other unit, also when its verifications pass on the base.
-  Steps tests run an `implement` node with no task as one work unit under the node identity as the done-record id. The live checkout runs no node verification, and the release gate runs each node verification once.
-  Steps tests skip each node command in the live checkout of a task unit, and run each own command of that task.
-  Tests copy the result of a repeated command at the release gate and at the evaluation, and assert one real run in the spans.
-  Tests reuse a memo pass on an unchanged tree, and run again after a timeout, a cancellation or a live failure.
-  Steps tests count zero answer turns in an `implement` execution.
-  Steps tests with two repository bindings commit only the checkouts with a change.
-  They merge every checkout before a release in the release gate, and route a failure of the release gate to the owner of the first failed command.
-  They push every node branch before the evidence, and they submit one evidence with one asset per binding.
-  Steps tests on an `examine` node check out each base-branch head, create no node branch, make no commit and push nothing.
-  Restart tests check out `origin/<base branch>` for an attempt whose claim names `kanthord/<node id>-a<k>`, push that branch and leave the head of the earlier node branch unchanged.
-  Tests check out `origin/kanthord/<node id>-a<k>` for a later attempt that continues it, and merge the moved base.
-  Missing-branch tests delete a pushed node branch at the remote and assert `repository.node_branch.missing`, an unchanged checkout and a second refusal. They assert the same refusal for a fresh workspace with repository evidence of the attempt. They assert a start from the base branch for a first execution and for an attempt with the start point `base_branch`. One test for each rule of the push record asserts the start and the written record. A test asserts that a failed push writes `pending` and that the next execution starts from the unpushed head.
-  Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
-  Rework tests assert that a verdict with no task id still runs a verdict turn. They assert that an unchanged verdict with passing own commands goes to the release gate. They assert that a failure of those own commands ends with `no_progress`. They assert that a base move gives no new work under the verdict rule.
-  Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
+
+`runEvaluation` checks the node state of the submit answer before the result. An answer with no outcome and a node state other than `Evaluating` ends the execution as `revoked`. A `success` answer with the node still `Evaluating` goes to `requestAndRelease`.
+Tests require a reviewer to judge the assets that the evidence still holds.
+Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
+Budget-end tests release with further work at every budget end, a budget end during a verification and during the release gate included.
+Steps tests skip each unit whose done record matches, also on a fresh clone, and run a work turn for every other unit, also when its verifications pass on the base.
+Steps tests run an `implement` node with no task as one work unit under the node identity as the done-record id. The live checkout runs no node verification, and the release gate runs each node verification once.
+Steps tests skip each node command in the live checkout of a task unit, and run each own command of that task.
+Tests copy the result of a repeated command at the release gate and at the evaluation, and assert one real run in the spans.
+Tests reuse a memo pass on an unchanged tree, and run again after a timeout, a cancellation or a live failure.
+Steps tests count zero answer turns in an `implement` execution.
+Steps tests with two repository bindings commit only the checkouts with a change.
+They merge every checkout before a release in the release gate, and route a failure of the release gate to the owner of the first failed command.
+They push every node branch before the evidence, and they submit one evidence with one asset per binding.
+Steps tests on an `examine` node check out each base-branch head, create no node branch, make no commit and push nothing.
+Restart tests check out `origin/<base branch>` for an attempt whose claim names `kanthord/<node id>-a<k>`, push that branch and leave the head of the earlier node branch unchanged.
+Tests check out `origin/kanthord/<node id>-a<k>` for a later attempt that continues it, and merge the moved base.
+Missing-branch tests delete a pushed node branch at the remote and assert `repository.node_branch.missing`, an unchanged checkout and a second refusal. They assert the same refusal for a fresh workspace with repository evidence of the attempt. They assert a start from the base branch for a first execution and for an attempt with the start point `base_branch`. One test for each rule of the push record asserts the start and the written record. A test asserts that a failed push writes `pending` and that the next execution starts from the unpushed head.
+Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
+Rework tests assert that a verdict with no task id still runs a verdict turn. They assert that an unchanged verdict with passing own commands goes to the release gate. They assert that a failure of those own commands ends with `no_progress`. They assert that a base move gives no new work under the verdict rule.
+Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
 
 ### The result copy
 
@@ -2097,7 +2098,7 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - `failed` and `flaky` list test ids. A test id is `{ file, name }`. `name` is the full name of the test: the names of its suites and its own name, joined with a space, `>` and a space. A file that fails to load gives one id with the file path as its name.
 - Each `file` of `failed` and `flaky` is in `tests`. `failed` and `flaky` hold no common id.
 - The selector retries a failed test file once. A test that fails and then passes is flaky.
-- An entry of `flaky` is `{ file, name }` and in a version 3 report may also hold `lines` and `imports`. `lines` is `{ start, end }`, the first and the last line of the top-level test call that holds the first part of `name`, and `end` is not below `start`. `imports` lists the paths of the import closure of `file`, without `file`. An entry holds both keys or neither. A report of another version with `lines` is invalid. `flakyEntry` of `scripts/affected-tests.mjs` writes both keys only when exactly one top-level call of the file holds that first part of `name`, and writes the plain id otherwise.
+- An entry of `flaky` is `{ file, name }`. In a version 3 report, an entry of `flaky` also holds `lines` and `imports`. `lines` is `{ start, end }`, the first and the last line of the top-level test call that holds the first part of `name`, and `end` is not below `start`. `imports` lists the paths of the import closure of `file`, without `file`. An entry holds both keys or neither. A report of another version with `lines` is invalid. `flakyEntry` of `scripts/affected-tests.mjs` writes both keys only when exactly one top-level call of the file holds that first part of `name`, and writes the plain id otherwise.
 - When the report is above its size bound, `fitReport` first drops `lines` and `imports` from every `flaky` entry. It cuts the longest list only after that.
 - The KanthorD selectors rerun the failed test files only when 8 or fewer files hold a failed id, the limit `RERUN_FILE_LIMIT`. With more files, the report lists every failed id in `failed` and an empty `flaky`.
 - `excluded_e2e` lists each e2e test file that the selection reached and left out.
