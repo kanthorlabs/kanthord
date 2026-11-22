@@ -100,7 +100,7 @@ A mechanism here never overrides a rule there.
 
 ### Merged cursor
 
-- `workbench.session.get` and `workbench.session.events` answer one merged transcript. Each entry carries `session_id` and `agent_name` of its member. `members` lists `{ session_id, agent_name, display_name }`, with the variant name as `display_name` of a variant member, the host first, then the participants by `created`.
+- `workbench.session.get` and `workbench.session.events` answer one merged transcript. Each entry carries `session_id` and `agent_name` of its member. `members` lists `ConversationMember` (`conversationMemberSchema` of `engine/src/workbench/contract.ts`): `{ session_id, agent_name, display_name, configuration }`, with the variant name as `display_name` of a variant member, the host first, then the participants by `created`. `configuration` is `{ agent_provider, model_identifier, reasoning_effort }` (`workbenchConfigurationSchema`), the current configuration of the member session. A `workbench.session.configure` call on a participant shows at the next read (`conversationMembers` of `engine/src/workbench/service.ts`).
 - `after` holds one `<session_id>:<entry_id>` pair for each member, separated by commas. A member with no pair starts at its first entry.
 - A plain id names the host pair. The participant entries then start at their first entries.
 - The answer holds no cursor field. The client builds `after` from the `session_id` and the `id` of the entries that it holds.
@@ -327,7 +327,7 @@ The constants are in `engine/src/workbench/contract.ts`:
 - `node_ids` of a `watch` record holds at least one node id.
 - `projects` of a `notice` record is `[{ project_id, name, nodes: [{ node_id, name, state, ended_at }] }]`. `state` is `Completed` or `Discarded`. It holds one block per project of the watched nodes.
 - `seen` of a node target is `{ name, state, attempt }`. `seen` of a project target is `{ name, paused }`.
-- `seen` of a credential target is `{ revision }`, the newest live revision. `seen` of an agent target is `{ revision }`, the enablement revision. `seen` of a binding set target is `{ version }`, the binding set version.
+- `seen` of a credential target is `{ name, revision }`: the credential name and its newest live revision (`seenOf` of `engine/src/workbench/actions.ts`, `actionSeenSchema` of `engine/src/workbench/contract.ts`). An offer that an older server wrote holds `{ revision }`, and the schema accepts both. `seen` of an agent target is `{ revision }`, the enablement revision. `seen` of a binding set target is `{ version }`, the binding set version.
 
 ### Completion notice
 
@@ -541,7 +541,7 @@ The guest header of `guest-chat.tsx` shows these lines:
 - A guest never reads evidence content. The view has no evidence row and no tool result.
 - The view reads the merged entries of every member, with no `after`. It includes the entries of the active run.
 - `projectStreaming` keeps only the blocks of the streaming message in the form of an `assistant` entry.
-- `workbench.guest.get` answers `title`, the name of the session or `null`, and `members`, as the owner view does.
+- `workbench.guest.get` answers `title`, the name of the session or `null`, and `members`. A guest member is `GuestMember` (`guestMemberSchema`): `{ session_id, agent_name, display_name }` with no `configuration` (`guestMembers` of `engine/src/workbench/service.ts`).
 
 ### Guest stream
 
@@ -601,7 +601,7 @@ The guest header of `guest-chat.tsx` shows these lines:
   - The scope check: when `scopeOf()` is not `null`, `ProjectScope.check` must answer `allowed` for the full input.
   - The read-only assertion: in a scoped run, a non-mutation that holds an identity that is not read-only fails. `isReadOnlyIdentity` decides.
 - The gateway adds a third check. `refuseReadOnlyMutation` answers 401 to a mutation under a read-only identity.
-- A refusal reaches the agent as a tool error that holds the code of the owning service.
+- A refusal reaches the agent as a tool error that holds the code of the owning service. `failureText` of `engine/src/workbench/tools.ts` writes `<code>: <message>`, and it appends the canonical JSON of `error.details` when the details are not null, so the agent reads `binding_id` of a `mission.node.bindings_invalid` refusal.
 - The `tool_call` hook decides each operation tool call with `guardDecision(operation, input, run)` of `engine/src/workbench/guard.ts`, after the `evidence_read` branch. It starts with `floorOf(operation, input)`.
 - `floorOf` answers `run`, `block` with a reason, `confirm` with its cause, or no answer. No answer leaves the call to rules 5 to 11.
 - `guardDecision` answers `run`, `block`, `confirm` with a `GuardInfo`, or `auto` with a reason.

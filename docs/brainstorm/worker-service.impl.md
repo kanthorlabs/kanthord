@@ -401,6 +401,14 @@ The Docker form of `Container on this host`:
    rm <name>.env
    ```
 
+### Start at boot
+
+- KanthorD supplies no service unit. After a host reboot, no `serve worker` process runs until the host service manager starts it. The operator runs one service for each instance, with `kanthord serve worker --instance <name>` and the absolute path of the binary. A service needs no new option and holds no secret.
+- The instance file stays in `<XDG configuration directory>/kanthord/workers/<name>.yaml` with mode `0600`. The service sets `XDG_CONFIG_HOME` only for an instance file outside the default directory.
+- A stop with `SIGTERM` exits 0 after a successful deregistration, so neither service manager restarts it. A process that another process supersedes exits 3 with `worker.instance.superseded`.
+- On Linux, `Restart=on-failure` with `RestartPreventExitStatus=3` restarts a failed process and keeps a superseded process stopped. `loginctl enable-linger <user>` starts the user manager at boot with no login.
+- On macOS, a launchd agent `com.kanthorlabs.kanthord.worker.<name>` runs the instance with `RunAtLoad` and `KeepAlive` with `SuccessfulExit` set to false. Launchd restarts the process after exit 3 too, and the restarted process takes the connection back from the second process. The operator stops the second process first, or stops the agent with `launchctl bootout`. A launchd agent starts at the login of its user, so the host needs an automatic login for a start after a reboot.
+
 ### The machine copy block
 
 The machine copy block writes the machine configuration once for each machine, before the first instance of the machine starts. `<machine>` is the machine name.
@@ -448,6 +456,7 @@ A container host kind sets `KANTHORD_MACHINE_CONFIG` in place of the machine fil
 - The `server` wrapper passes `state/kanthord/` of the slot root of the instance for both. The `worker` wrapper passes the data directory and the log directory of [The worker application](#the-worker-application).
 - The worker unit registers each entry. Every request of a registration renews its heartbeat, and an idle registration sends a heartbeat inside the heartbeat window.
 - While idle, the worker unit keeps one outstanding work pull on each registration. When one pull answers a claim, it aborts the other pulls and starts no pull until the execution ends.
+- A registration that the server refuses with `worker.registration.slot_unavailable` (`WorkerErrorCode.SlotUnavailable`), or that ends with `worker.start.registration_indeterminate` (`REGISTRATION_INDETERMINATE` of `src/apps/worker/registration.ts`), starts a retry in `WorkerUnit` (`armRetry`, `retryEntry`). The retry runs every `HEARTBEAT_INTERVAL_MS`, 60 s, at the `worker` and the `server` placement, until the slot frees or the binding drops the instance. `quiesce` and `remove` clear the timer. Another error code ends the retries, and the unit logs the warning `Worker registration retry failed` with the code.
 - A no-work answer that the server held for the backoff delay or longer resets the backoff, and the pull loop pulls again at once. A shorter no-work answer waits for the rest of the delay. A refused pull therefore keeps its place in the [queue order](scheduler-service.impl.md#the-claim-selection) of its instance.
 - Both wrappers add and remove entries when the binding entries change: the `worker` wrapper at a new connection answer, the `server` wrapper at a `bindings` message of the slot channel. An entry in the state `draining` ends its live execution first, then deregisters and leaves the list.
 - `log` is a log destination, or a line sink for a test.
@@ -1084,6 +1093,7 @@ Tests of the slot driver:
   8. `runtime_failed` when rootless Podman answers a `version.Version` below `PODMAN_AUTO_UIDMAPPING_MIN_VERSION`, the first version that accepts `auto:uidmapping=` for a rootless user. `detail` is "podman `<version>` refuses --userns=auto:uidmapping=. Upgrade Podman to `<minimum>` or later."
   9. `runtime_rootful` when the host is Linux, the runtime is rootful and the server uid is not 0. Podman is rootful when `host.security.rootless` is false. Docker is rootful when `SecurityOptions` holds no `name=rootless`. Docker Desktop, whose `OperatingSystem` is `Docker Desktop`, is exempt.
 - The driver keeps the newest answer for 10 s and reuses it. A launch with no answer yet waits for one.
+- The environment image build calls `check()` first (`composeServices` of `src/apps/server/index.ts`). With an unavailable status, the build starts nothing and answers `ImageBuildOutcome.Failed` with the class `EnvironmentFailureClass.BuildFailed`. The `tail` is the `detail` of the status, else its `reason`, else "the container runtime is unavailable".
 - The driver uses the runtime of the newest available answer.
 - The runtime CLI runs with the full server `env`, because Podman reads `HOME`, `XDG_RUNTIME_DIR`, `XDG_DATA_HOME` and `CONTAINER_HOST`, and Docker reads `DOCKER_HOST` and `DOCKER_CONTEXT`. Only the named `--env` variables reach the container.
 - A server with a custom `XDG_CONFIG_HOME` or `XDG_DATA_HOME` loses the Podman machine connection, because Podman keeps the connection list under those directories. The check then answers `runtime_failed`.
@@ -1674,7 +1684,10 @@ The agent catalog `src/agent/catalog.ts` owns `EVIDENCE_UPLOAD_PARAMETERS`, the 
 `agent.get` lists a host tool with the source `host`.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the four sources.
-No worker agent process outlives its bash call. At the end of the call, the worker kills the process group of the call. A process that calls `setsid` escapes that kill.
+No worker agent process outlives its execution (E6, F79, F3). At the end of a bash call, the worker kills the process group of the call. A process that calls `setsid` escapes that kill, and the end of the execution ends it, as follows.
+`ToolProcesses` of `src/worker/unit/tool-table.ts` holds one `marker`, a random UUID for each execution. `processBashOperations` sets the variable `KANTHORD_PROCESS_GROUP_MARKER` (`GROUP_MARKER_VARIABLE` of `src/kernel/process-group.ts`) to the marker in the environment of each bash command. On macOS it also passes a descriptor of the marker file `<tmpdir>/kanthord-group-<marker>`, with mode `0600`, as the fourth file descriptor of the command.
+`markedGroups(marker)` lists the process groups that hold the variable in their environment (`/proc/<pid>/environ` on Linux, `ps -E` on macOS) or hold the marker file open (`lsof`, macOS only). It skips the groups of the worker and a group at or below 1.
+`NativeAgent.dispose` of `src/worker/unit/native-agent.ts` calls `ToolProcesses.endGroups`. `endMarkedGroups` runs `endProcessGroups`: it sends `SIGTERM` to each live group, waits `GROUP_GRACE_MS`, 3000 ms, and sends `SIGKILL` to each group that still lives. A zombie is no live process. `endMarkedGroups` then removes the marker file. A failure of either step raises the process warning `AgentProcessGroupEndWarning` and throws nothing.
 The bash tool of `swe@1` runs in the [bash sandbox](agent.impl.md#the-bash-sandbox) (S2, F121, F128). `sessionTools` of `src/worker/unit/tool-table.ts` awaits `bashSandbox.wrap` with the `SandboxScope` of the unit before it runs the command, so a command never runs outside the sandbox. The sandbox covers the bash tool only. The verification commands and the local git run outside it.
 `allowWrite` holds the workspace of the execution and the `TMPDIR` of the instance. Each command exports that `TMPDIR`. `packageCacheEnvironment` sets `pnpm_config_store_dir`, `pnpm_config_cache_dir` and `npm_config_cache` to directories under it.
 `denyRead` holds the host credential paths of the server process, as `hostDenyRead` of `src/agent/bash-sandbox.ts` lists them, and the pi directory of the instance. `instanceDenyRead` of `src/apps/worker/index.ts` builds the scope of a `worker` instance with `root` set to the data directory of the instance. The `thread` driver passes `slotThreadData` as `deny_read`, and `thread.ts` sets `sandbox_root` to the parent of `XDG_STATE_HOME`.

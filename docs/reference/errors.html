@@ -123,12 +123,27 @@
                   </td>
                   <td>
                     The schema of a recorded service differs from its migration
-                    text. Stop the server, delete <code>kanthord.db</code>,
-                    <code>tracking.db</code> and their <code>-wal</code> and
-                    <code>-shm</code> files, then start the server. See the
+                    text. Stop the server and run
+                    <code>kanthord upgrade --reset-changed</code>. The command
+                    rebuilds only the changed services and keeps the credentials
+                    and the unchanged services. See the
                     <a href="upgrade.html#reset-a-pre-release-database"
                       >reset procedure</a
                     >.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.database.reset.custody_refused</code></td>
+                  <td>
+                    The migration text of the <code>custody</code> service
+                    changed. The reset never drops a custody table.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.database.reset.foreign_key</code></td>
+                  <td>
+                    A table of another service references a table that the reset
+                    drops. The diagnostic names each dependent table.
                   </td>
                 </tr>
                 <tr>
@@ -816,6 +831,17 @@ details:         {"id":"credential_01K6ZB3Q8X2M4N5P6R7S8T9V0W"}</code></pre>
                     <code>object</code>. <code>object</code> is the name of the
                     first differing schema object, in the order of the type and
                     then the name.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>system.database.reset.custody_refused</code></td>
+                  <td>The rows are <code>path</code> and <code>service</code>.</td>
+                </tr>
+                <tr>
+                  <td><code>system.database.reset.foreign_key</code></td>
+                  <td>
+                    The rows are <code>path</code>, <code>service</code> and one
+                    row <code>table</code> for each dependent table.
                   </td>
                 </tr>
                 <tr>

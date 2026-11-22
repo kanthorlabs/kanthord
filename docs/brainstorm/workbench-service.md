@@ -236,6 +236,8 @@ It describes no mechanism of another service.
 - A rejected card decides that one call only.
 - Auto mode is a setting of the conversation. It is on for a new conversation. Only the [auto mode switch](workbench-service.vocabulary.md#auto-mode-switch) changes it, and it stays across a restart.
 - A rejected call reaches the agent as a blocked call.
+- The owner view of a conversation lists each member with its current configuration. A guest view lists the members with no configuration.
+- An `action_offer` for a credential records the credential name and its newest live revision.
 - A pending approval waits at most the [approval wait](workbench-service.vocabulary.md#approval-wait). Then the call returns blocked as expired, and the run ends.
 - A kanthord restart ends the active run and every pending approval.
 - An agent that cannot do an act offers one [action card](workbench-service.vocabulary.md#action-card) through the tool `offer_action`. The owner clicks the card, and the act runs as the owner's own act through the dashboard route.

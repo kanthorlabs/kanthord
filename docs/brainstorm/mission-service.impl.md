@@ -83,7 +83,7 @@ A node update that names the identity of a task of another node answers `mission
 An absent or empty `verifications` list answers `mission.node.verifications_missing`.
 A nonlist `verifications` value or a blank or nontext item answers `mission.node.content_invalid`.
 A node with no verification need holds an always-successful command such as `true`.
-An absent or nonlist `bindings` value, an unresolved name or a rule-table violation answers `mission.node.bindings_invalid`.
+An absent or nonlist `bindings` value, an unresolved name or a rule-table violation answers `mission.node.bindings_invalid`. In a node write that takes binding identities (`node create`, `node update` and `node unblock`), a value that is a binding name answers `details: { binding, binding_id }` with the identity of that binding (`bindingIdResolver` of `src/mission/node-create.ts`). Any other unresolved value answers `details: { binding }`.
 The identity, node revision, state, attempt, priority and edges stay outside the content.
 A task's content belongs to the node revision of its node.
 Test-kind guidance changes no validation rule.
@@ -179,6 +179,7 @@ The service also derives one `FrozenAction` for each pair of a `reply` action an
 - An import sets `filename` from the file name, and `node create` requires it.
 - Node reads return `filename`, and every export writes it unchanged.
 - A node update that changes `filename` changes content and creates a node revision.
+- `kanthord mission node update --plan-file` sends the `filename` that `node get` answers (`nodeUpdateBody` of `src/apps/cli/plan-file.ts`). The local node file name never renames a node, and a rename uses `--file`.
 - A task change creates a node revision of its node.
 - A task holds `filename` in the content of its node. A task plan file name is unique among the node and task plan file names of the current nodes of its mission that are not retired.
 - A node write that takes a used node or task plan file name answers 409 `mission.node.filename_conflict`. A proposal decision follows the same rule.
@@ -222,6 +223,7 @@ The service also derives one `FrozenAction` for each pair of a `reply` action an
 - An import covers the whole mission and carries no scope.
 - Every `node` and `depends_on` resolves inside the import set; no boundary reference exists.
 - The preview lists every current node that the import set omits as a retirement.
+- An entry with no `id` matches the current node of the same `filename`, or for a task file the current task of the same `filename` (`matchByFilename` of `src/mission/import.ts`). With no match, the entry creates. An entry with an `id` resolves by that `id` alone. An `id` that another entry of the import set holds never matches by file name (`unclaimedOf`). `classifyEntry` lists an entry in `creates` only when it matches no current node and no current task.
 - The import compares the bindings of a nonterminal node by binding name, so a new binding revision changes no node. The node keeps its pinned binding revision, and [the rebind](#the-rebind) moves it. A name that now names a binding with another `resource_identity` is a change. A pin from before a removal of its binding resolves to the latest revision, so the node changes.
 - An import compares no content of a terminal node. A terminal node with an unchanged `filename` is a no-op.
 - The import resolves no binding name and no `depends_on` name of a terminal node, and it writes no revision for it. The node keeps its pinned bindings and its dependencies. The import compares a task of a terminal node by its `filename` and its node alone.
@@ -387,6 +389,8 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - In one transaction, the decision creates one `implement` node for each approved proposal, in the order of `approved_proposal_ids`. Each node holds the one task of its proposal and copies `bindings` and `tags` from the node of `dependency_id`.
 - The same transaction adds the dependency of the proposer `examine` node on each new node and reads the unmatched pairs of the Scheduler Service.
 - It sets `created_node_id` and `approved_at` of each approved proposal and `rejected_at` of every other open proposal of the assessment.
+- The body also takes `edits`, an optional list of `ProposalEdit` (`proposalEditSchema` of `src/mission/contract.ts`) with at most 10 items: `{ proposal_id, name?, requirement?, criterion?, task? }`. An item holds at least one editable field, and `task` replaces the whole proposed task with `name`, `requirement`, `criterion` and `verifications`. Each `proposal_id` is in `approved_proposal_ids` and appears once. Another list, or an item with no editable field, answers 400 `gateway.request.validation_failed` with an issue at `edits`. `dependency_id`, `finding_labels`, the bindings, the tags and the file names stay fixed. `editedContent` of `src/mission/proposal-decide.ts` applies the edit before `createNode`. The stored proposal keeps its proposed content, and the created revision holds the edited content.
+- A decision with an empty `approved_proposal_ids` answers 400. To reject every proposal, a human runs `node unblock` on the examine node, and `kanthord mission proposal decide --help` states it (`PROPOSAL_DECIDE_HELP` of `src/apps/cli/mission-help.ts`).
 - It then unblocks the proposer once into a new attempt with the default start point `node_branch`.
 - The decision answers `{ created: NodeChange[]; rejected_proposal_ids: string[]; proposer: ControlResult }`. `created` holds one `NodeChange` for each approved proposal, in the order of `approved_proposal_ids`.
 - The proposer routes to `Pending` and stays unclaimable until every new node reaches `Completed`, under the dependency rule.
@@ -963,6 +967,9 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - A node read holds `depends_on`: the node identities that the dependency edges of the node name, as a duplicate-free list in ascending order.
 - `depends_on` of a node read holds node identities. `depends_on` of a plan file holds plan file names.
+- `mission.node.get` answers `NodeGet` (`getNode` of `src/mission/node-read.ts`): `Node` plus `live_execution` and `last_stop`. `node list` and the control answers hold neither field.
+- `live_execution` is `LiveExecution | null`: `{ execution_id, attempt, pinned_revision, runtime_identity, instance_name, worker_name, trace_id, started_at }`. It is null with no live execution. `instance_name` is null when the registration holds no name. `trace_id` and `started_at` come from `ExecutionAttribution` of `src/scheduler/contract.ts`, from the execution row.
+- `last_stop` is the stop of the last ended execution of the current attempt, for every node state: `{ execution_id, reason, code, detail, trace_id }`. It is null when the attempt is 0, when no execution ended, or when the last execution ended with no stop. It comes from `pauseFacts`.
 - A node read of a blocked node answers `blocked_context` (`blockedContextSchema`): `{ outcome, requests, rule }`. `rule` is `human_acceptance` or null. `humanAcceptanceRuleOf` of `src/mission/record-read.ts` gives `human_acceptance` when the current outcome names an execution assessment and either its result is `success`, or `personOnlyRound` holds. `personOnlyRound` holds when the assessment has the result `criterion-not-met`, a reported `person` blocker and no reported `yes` finding, and no earlier open reviewer finding of the attempt with `action: yes` and a route other than `record` remains. A human block, a human discard and every other block give null.
 - A node read and `node list` answer `intent` and `tags` at the revision that the open attempt pins, else at the current revision. `node list` filters by `intent`.
 - A node read answers `tasks: TaskContent[]` of that revision. The `Tasks (<count>)` section of the node card reads it.

@@ -1980,6 +1980,18 @@ flowchart LR
             The claim keeps a reserve of 10 minutes after the budget for this
             cleanup.
           </p>
+          <p>
+            When the agent of an execution ends, the worker also ends every
+            process group that a command of the agent left behind. Each command
+            of the agent carries the variable
+            <code>KANTHORD_PROCESS_GROUP_MARKER</code> with a value that is
+            unique for the execution. The worker finds the groups that hold the
+            value, sends <code>SIGTERM</code>, waits 3 s and sends
+            <code>SIGKILL</code> to the groups that still run. A command that
+            starts its own session with <code>setsid</code> is thus ended too. A
+            failure of this cleanup raises a process warning and stops
+            nothing.
+          </p>
           <h2 id="edge-cases">Edge cases</h2>
           <div class="table-wrap">
             <table>
