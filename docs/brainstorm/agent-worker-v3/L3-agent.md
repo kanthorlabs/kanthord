@@ -5,7 +5,7 @@ Back to the [index](index.md). The terms follow the [glossary](index.md#glossary
 ## Goals
 
 1. **G1.** Each file of `src/agent/` has one owner: the agent runtime, the server part, or a consumer that the file moves to. The runtime imports no worker, project, mission or scheduler module ([L1-D5](L1-model.md#decisions)).
-2. **G2.** One agent contract takes the exact input and gives the exact output of a run. Each requirement of [L2](L2-agent-cli.md#requirements-on-l3) maps to one contract part and one check.
+2. **G2.** One agent contract fixes the input type and the output type of a run. It fixes the shape and the invariants of the output, not the model text ([Output](#output)). Each requirement of [L2](L2-agent-cli.md#requirements-on-l3) maps to one contract part and one check.
 3. **G3.** The runtime catalog declares the full tool set of each profile by name, consumer tools included. A declared consumer tool with no implementation leaves the model request.
 4. **G4.** The profile prompt is the Standard, the shared coding text and the Role. One pure composition function joins the system prompt, and its output is the input of `system_prompt_digest`.
 5. **G5.** Each profile declares its start preconditions. A failed precondition refuses the start with a stable id and a reason, before any request, file write or workspace change.
@@ -92,7 +92,7 @@ The check also refuses each reference to `setGlobalDispatcher` and `EnvHttpProxy
 export interface AgentInput {
   profile: ProfileName;
   model: ModelSelection;
-  systemPrompt: SystemPromptInput;
+  systemPrompt: string;
   workspace: Workspace;
   budget: RunBudget;
   session: SessionRecord;
@@ -111,10 +111,6 @@ export interface ModelSelection {
   thinkingLevel: ThinkingLevel;
 }
 
-export type SystemPromptInput =
-  | { kind: "composed"; text: string }
-  | { kind: "context"; texts: readonly string[] };
-
 export interface Workspace {
   cwd: string;
   roots: readonly string[];
@@ -126,10 +122,28 @@ export interface RunBudget {
   turns: number | null;
 }
 
-export type SessionRecord =
-  | { kind: "new_file"; path: string }
-  | { kind: "directory"; directory: string; id: string | null }
-  | { kind: "memory" };
+export const SessionKind = {
+  NewFile: "new_file",
+  Directory: "directory",
+  Memory: "memory",
+} as const;
+
+export interface NewFileSession {
+  kind: typeof SessionKind.NewFile;
+  path: string;
+}
+
+export interface DirectorySession {
+  kind: typeof SessionKind.Directory;
+  directory: string;
+  id: string | null;
+}
+
+export interface MemorySession {
+  kind: typeof SessionKind.Memory;
+}
+
+export type SessionRecord = NewFileSession | DirectorySession | MemorySession;
 
 export type KnownSecrets = () => Promise<readonly string[]>;
 ```
@@ -140,7 +154,7 @@ Each field and its reader:
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | `profile`          | A name of the runtime catalog. The contract asserts it                                                                                                                                                                                                                                                                                                                          | Each consumer                                        |
 | `model`            | The model runtime holds the credential store ([L1 LLM credential](L1-model.md#llm-credential)). `thinkingLevel` must be in `getSupportedThinkingLevels(model)` (`@earendil-works/pi-ai`, `dist/models.d.ts:262`). Else the open throws `agent.level_unsupported`. The contract never clamps. pi clamps the level (`dist/core/sdk.js:144`), and a supported level stays the same | Each consumer                                        |
-| `systemPrompt`     | `composed`: the output of `finalPrompt` of the server part, whole. The agent adds no text ([L1 boundary rule 3](L1-model.md#agentworker-boundary)). `context`: the context texts in order. The contract composes the shipped profile prompt with them ([Profile prompts](#profile-prompts))                                                                                     | Server consumers: `composed`. `run agent`: `context` |
+| `systemPrompt`     | The composed system prompt, whole. The agent adds no text ([L1 boundary rule 3](L1-model.md#agentworker-boundary)). The server consumers pass `finalPrompt` of the server part. `run agent` passes `composeSystemPrompt(profilePrompt(profile), contextTexts)` ([Composition function](#composition-function))                                                                  | Each consumer                                        |
 | `workspace.cwd`    | An absolute path. The working directory of the session and the `cwd` of the session header                                                                                                                                                                                                                                                                                      | Each consumer                                        |
 | `workspace.roots`  | Absolute paths, not empty. The directories of the start preconditions and of the confinement                                                                                                                                                                                                                                                                                    | Each consumer                                        |
 | `budget`           | `deadline` is an epoch time in milliseconds. Each `null` is no limit ([Budget](#budget))                                                                                                                                                                                                                                                                                        | `deadline`, `usd`: `run agent`. `turns`: L5          |
@@ -169,12 +183,12 @@ Each field and its reader:
 `openAgent(input): Promise<AgentOpen>` does these steps in order:
 
 1. Find the profile in the runtime catalog. Check the names of `consumerTools` against the declared consumer tools. Check `thinkingLevel`.
-2. Check the [start preconditions](#start-preconditions) of the profile. A failure returns `{ kind: "refused" }` and does nothing else.
-3. Compose the system prompt, or take the composed text. Compute `systemPromptDigest`.
+2. Check the [start preconditions](#start-preconditions) of the profile. A failure returns `AgentRefused` and does nothing else.
+3. Compute `systemPromptDigest` of `systemPrompt`.
 4. Read the known secrets once.
 5. Load pi. Build the session manager of the [session record](#session-record), the wrapped `bash`, the guard list and the pi session runtime. The pi option `tools` holds the declared names of the session ([A declared consumer tool with no implementation](#a-declared-consumer-tool-with-no-implementation)). The option `customTools` holds the wrapped `bash` and `consumerTools`. Bind the error listener (`extensionRunner.onError`) after pi creates the session and before `bindExtensions`.
 6. Pin the system prompt (`pinInference`). Start the budget timer and the stop listener.
-7. Return `{ kind: "opened", run }`.
+7. Return `AgentOpened`.
 
 - Steps 1 and 2 write no file and send no request. Steps 3 to 6 send no provider request. `bindExtensions` emits only `session_start` ([L2 requirement 13](L2-agent-cli.md#requirements-on-l3)). pi writes the session file only at the first conversation entry, so a refused or failed open leaves no session file.
 - **Failed open.** Each failure of the open that is no refusal throws one error class, `AgentOpenError`, with a code and a message. The message passes `exitText`.
@@ -190,18 +204,35 @@ Each field and its reader:
 ### Run handle
 
 ```ts
-export type AgentOpen =
-  | { kind: "refused"; refusal: StartRefusal }
-  | { kind: "opened"; run: AgentRun };
+export const AgentOpenKind = {
+  Refused: "refused",
+  Opened: "opened",
+} as const;
+
+export interface AgentRefused {
+  kind: typeof AgentOpenKind.Refused;
+  refusal: StartRefusal;
+}
+
+export interface AgentOpened {
+  kind: typeof AgentOpenKind.Opened;
+  run: AgentRun;
+}
+
+export type AgentOpen = AgentRefused | AgentOpened;
 
 export interface StartRefusal {
   precondition: StartPrecondition;
   reason: string;
 }
 
+export interface SendOptions {
+  work: string | null;
+}
+
 export interface AgentRun {
   readonly systemPromptDigest: string;
-  send(text: string, options?: { pin?: string }): Promise<TurnEnd>;
+  send(text: string, options: SendOptions): Promise<TurnEnd>;
   endAfterTurn(): void;
   appendCustom(customType: string, data: unknown): Promise<void>;
   forceStop(): TurnEnd;
@@ -239,13 +270,15 @@ export interface RunFailure {
 export interface RunTotals {
   modelCalls: number;
   toolCalls: number;
-  usage: {
-    input: number;
-    output: number;
-    cacheRead: number;
-    cacheWrite: number;
-  };
+  usage: TokenUsage;
   listPriceUsd: number;
+}
+
+export interface TokenUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
 }
 
 export interface SecretWarning {
@@ -263,6 +296,17 @@ export interface SecretWarning {
 | `text`          | `getLastAssistantText()` after `exitText`, or `null` with no assistant text                                                                                                | `run agent`; L5                           |
 | `totals`        | The totals since the open: the assistant messages, the tool call blocks of the assistant messages, the token sums and the sum of `usage.cost.total`                        | `run agent`; L5                           |
 | `warnings`      | The rotate warnings since the last `send` returned, in order ([Rotate warning](#rotate-warning))                                                                           | `run agent`; L5                           |
+
+**What the output fixes.** These rules hold for each run, also with a real model:
+
+- Each `TurnEnd` has every field of its type.
+- `end` is one of the four values. `budgetReached` is not `null` only for `budget_end`. `failure` is not `null` only for `failed`.
+- `systemPromptDigest` is a pure function of the input. Two runs with the same input give the same digest.
+- Each text of the output passes `exitText`.
+- `totals` equals the sums over the assistant messages since the open.
+- Each child process ends before `send` returns.
+
+**What the output does not fix.** The model text, `complete`, the tool calls and their order, the values of `totals` and `warnings`, and the end that a run reaches. They depend on the model and the provider. An acceptance check asserts exact values only because the LLM stub scripts the model.
 
 ### Events
 
@@ -285,7 +329,7 @@ Each requirement of [L2](L2-agent-cli.md#requirements-on-l3) and the contract pa
 
 | L2 requirement                     | Contract part                                                                                                                                                                                              | Check                  |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| 1. Input                           | `AgentInput`: `systemPrompt.kind` `context`, `workspace` `{ cwd: W, roots: [W] }`, `session.kind` `new_file`, no `consumerTools`, no `extensions`. The message goes to `send`. No clamp of `thinkingLevel` | L2-AC1, L2-AC13, L3-U7 |
+| 1. Input                           | `AgentInput`: `systemPrompt` from `composeSystemPrompt(profilePrompt(profile), contextTexts)`, `workspace` `{ cwd: W, roots: [W] }`, `session.kind` `new_file`, no `consumerTools`, no `extensions`. The message goes to `send` with `work` equal to the message. No clamp of `thinkingLevel` | L2-AC1, L2-AC13, L3-U7 |
 | 2. Catalog                         | `getProfile` and `PROFILE_NAMES` of `catalog.ts`; `bee@1`, `fee@1`, `te@1` are profiles                                                                                                                    | L2-AC8, L3-U2          |
 | 3. Declared consumer tools         | The pi option `tools` holds the declared names. pi declares only a registered tool ([A declared consumer tool with no implementation](#a-declared-consumer-tool-with-no-implementation))                   | L2-AC1, L3-AC3         |
 | 4. Start refusal                   | `AgentOpen` `refused` with `StartRefusal`, at step 2 of the [open order](#open-order)                                                                                                                      | L2-AC12, L3-AC5, L3-U4 |
@@ -401,12 +445,11 @@ export function systemPromptDigest(composed: string): string;
 - `composeSystemPrompt` is pure. It renders each part as `heading + "\n\n" + text` when the part has a heading, else as `text`. It joins the profile parts, then the instruction parts, with `"\n\n"`. It changes no text. It asserts that the profile list is not empty and that each text is not empty.
 - This is the join of today: `partText` and the join of `finalPrompt` (`src/agent/prompt-render.ts:204-216`).
 - **Callers.** `composeSystemPrompt` has two callers:
-  - The contract, for `systemPrompt.kind` `context`: `composeSystemPrompt(profilePrompt(profile), contextTexts)`, each context text with no heading ([L2 Prompt](L2-agent-cli.md#prompt), rule 3). `run agent` passes the texts and never calls the function.
+  - `run agent`: `composeSystemPrompt(profilePrompt(profile), contextTexts)`, each context text with no heading ([L2 Prompt](L2-agent-cli.md#prompt), rule 3). It passes the result in `systemPrompt`.
   - `finalPrompt` of `prompt-render.ts`, in the server part. It keeps the unresolved-part rule of today. It asserts that the last part is the framing. It returns `null` when a part is not resolved. Else it maps the parts to `PromptText` and calls `composeSystemPrompt`. Its callers stay: `prompt-resolve.ts`, `service.ts` and `src/worker/execution-setup.ts`.
 - Change: `systemPrompt` of `prompt-render.ts` leaves ([L1-D10](L1-model.md#decisions)). Its two callers, the Workbench Service and the Project Service, append the framing part and call `finalPrompt`. They assert that the result is not `null`. The composed text of a worker execution, a Workbench session and an `env@1` session stays byte-equal ([L1 E1, fit rule 9](L1-model.md#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule)).
 - `profilePrompt` gives the shipped parts of a profile, each with no heading.
 - `systemPromptDigest` is the SHA-256 hex digest of the output of `composeSystemPrompt`. It takes the text before the input redaction and before pi adds `<cwd>` (`dist/core/system-prompt.js:110`). Reason: the marker of a redacted value holds a random tag per session (`tag` in `sensitiveTextRedaction`). So a digest after the redaction differs between two runs with the same input.
-- With `systemPrompt.kind` `composed`, the digest is the digest of the given text.
 
 ### Prompt files
 
@@ -642,12 +685,19 @@ export interface OpenSessionInput {
   sessionManager?: SessionManager;
 }
 
-export type SessionRedactionInput =
-  { knownSecrets: KnownSecrets } | { redaction: SessionRedaction };
+export interface FreshRedaction {
+  knownSecrets: KnownSecrets;
+}
+
+export interface ReusedRedaction {
+  redaction: SessionRedaction;
+}
+
+export type SessionRedactionInput = FreshRedaction | ReusedRedaction;
 ```
 
-- `OpenSessionInput` is unchanged. `SessionRedaction` is the state of `redaction.ts`, in place of `SensitiveTextRedaction`.
-- `{ redaction }`: at a reopen of one Workbench session, the Workbench passes the state of the earlier open (`src/workbench/service.ts:429-431`). The marker table of the session then stays valid for the session file.
+- `OpenSessionInput` is unchanged. `SessionRedactionInput` keeps its shape of today, with named members for the lint rule of [L3-D39](#decisions). `SessionRedaction` is the state of `redaction.ts`, in place of `SensitiveTextRedaction`.
+- `ReusedRedaction`: at a reopen of one Workbench session, the Workbench passes the state of the earlier open (`src/workbench/service.ts:429-431`). The marker table of the session then stays valid for the session file.
 - The outputs stay: `openSession` gives `{ session, redaction, systemPrompt }`, and `openSessionRuntime` gives `{ runtime, redaction, systemPrompt }`.
 - **Guards of the open paths of today.** `sessionParts` adds, in this order: `homeRelativeCwd`, `markerRestore`, the `hooks` of the caller, `inputRedaction`, `assistantRedaction`. It adds no `toolAllowlist`, no confinement and no `pinnedLayersHook`, because the callers add them in `hooks`, as today:
   - `agentPort`: `toolAllowlist`, the confinement for `re@1`, `pins.hook`, the capabilities (`guardsOf` and `hooks` in `src/agent/agent-port.ts:182-200`).
@@ -735,7 +785,7 @@ The catalog split changes the field reads of each consumer of `getAgentDeclarati
 
 ### Worker
 
-The worker side belongs to [L5](L5-worker.md). Until then the worker uses `openSessionRuntime` ([Open paths until L5 and the Workbench change](#open-paths-until-l5-and-the-workbench-change)). On the contract, the worker gives `systemPrompt.kind` `composed`, `session.kind` `directory`, `extensions` with the worker capabilities and `budget.turns`. It reads the `entry` and `session` events, `TurnEnd.complete`, `TurnEnd.failure` and `redactionSummary`. [Handoffs](#handoffs-to-later-layers) lists the items.
+The worker side belongs to [L5](L5-worker.md). Until then the worker uses `openSessionRuntime` ([Open paths until L5 and the Workbench change](#open-paths-until-l5-and-the-workbench-change)). On the contract, the worker gives the composed text of the server in `systemPrompt`, `session.kind` `directory`, `extensions` with the worker capabilities and `budget.turns`. It reads the `entry` and `session` events, `TurnEnd.complete`, `TurnEnd.failure` and `redactionSummary`. [Handoffs](#handoffs-to-later-layers) lists the items.
 
 ### Project Service
 
@@ -744,7 +794,7 @@ The Project Service opens each `env@1` session through `openAgent`:
 | Input              | Value                                                                                                          |
 | ------------------ | -------------------------------------------------------------------------------------------------------------- |
 | `profile`          | `env@1`                                                                                                        |
-| `systemPrompt`     | `composed`: `finalPrompt` of the parts that the server part resolves today, binding parts and framing included |
+| `systemPrompt`     | `finalPrompt` of the parts that the server part resolves today, binding parts and framing included             |
 | `workspace`        | `{ cwd: checkout, roots: [checkout] }`; the profile sets the confinement                                       |
 | `budget`           | `deadline` from the context of the setup run; `usd` and `turns` `null`                                         |
 | `session`          | `memory`, as today                                                                                             |
@@ -936,6 +986,7 @@ These are order hints. [L6](L6-migration.md) fixes the order.
 7. The Project Service on the contract. It needs no worker change, so L6 can place it in part A or part B.
 8. The gate check of [L1 U8](L1-model.md#unit-level-rules) after the test files of [Extension modules](#extension-modules) exist.
 9. `docs/cli/run.md`: the text of the start preconditions, with the differences from a `git status` of the developer ([Start preconditions](#start-preconditions)).
+10. The lint rule `kanthord/no-inline-object-type` of [L3-D39](#decisions) comes in the first step. Each step lists the files that it adds or rewrites, and the rule applies to them.
 
 ### To L5
 
@@ -977,7 +1028,7 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 5. **L3-D5.** `AgentTools` of the branch is the field shape. `main` holds `builtin`, `host` and `environment`; the merge adds `operation` and `workbench`. Constraint: a field exists only with its reader. `offer_action` and `request_owner_act` join `workbench`. The role profiles declare no consumer tool.
 6. **L3-D6.** The pi option `tools` holds the declared names of the session. An undeclared name in `consumerTools` makes the open throw `agent.tool_undeclared`. An undeclared extension tool gets `Tool <name> not found`. Reason: pi drops an undeclared tool with no signal. Constraint: the allowlist guard blocks only a nested `ctx.executeTool` call, and its block text stays `The tool <name> is not declared for this agent.`.
 7. **L3-D7.** The profile prompt of a coding profile is `base.md`, `coding.md` and `role/<name>.md`. `coding.md` holds the three sections that `swe@1.md` and `re@1.md` share today. Constraint: the worker path keeps `swe@1.md` and `re@1.md` until layer 2 of E1, and L3-U3 fails on a difference between the two copies. `bee@1` and `te@1` differ from `swe@1` only in the role statement, and `fee@1` also in item 6.
-8. **L3-D8.** `composeSystemPrompt` of `prompt-chain.ts` is the one composition function. Its callers are the contract, for the kind `context`, and `finalPrompt` of the server part. `system_prompt_digest` is the digest of its output before the redaction. Reason: the redaction marker holds a random tag per session. Constraint: `finalPrompt` keeps the unresolved-part rule; `systemPrompt` leaves; the composed text of each consumer of today stays byte-equal.
+8. **L3-D8.** `composeSystemPrompt` of `prompt-chain.ts` is the one composition function. Its callers are `run agent` and `finalPrompt` of the server part. The input `systemPrompt` is the composed text, whole, for every consumer. `system_prompt_digest` is the digest of its output before the redaction. Reason: the redaction marker holds a random tag per session. Constraint: `finalPrompt` keeps the unresolved-part rule; `systemPrompt` leaves; the composed text of each consumer of today stays byte-equal.
 9. **L3-D9.** The start preconditions are `workspace_directory`, `git_worktree` and `git_clean`. The coding implementation profiles declare all three. `re@1`, `env@1`, `ops@1` and `plan@1` declare `workspace_directory`. Each root must be the top level of a git worktree. Constraint: `git` runs with `isolatedGitEnvironment(childEnvironment({ ...input.childEnvironment, PATH }))` and `--no-optional-locks`. `PATH` is the `PATH` of the input, else of the runtime process. The check runs no fsmonitor command and no hook, and it keeps the filter drivers. The reason holds no path.
 10. **L3-D10.** The guard order of a contract session is `homeRelativeCwd`, `toolAllowlist`, `markerRestore`, `checkoutConfinement`, `pinnedLayersHook`, the consumer extensions, `inputRedaction`, `outputFinding`. Constraint: the consumer gives only its extensions, and each guard fails closed.
 11. **L3-D11.** `markerRestore` blocks a tool call whose input holds a known secret as raw text, in every tool, with the matcher `secretMatcher` of the session. Reason: it keeps AH-Q3 after R2-H. Constraint: the block changes no recorded response.
@@ -1008,6 +1059,8 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 36. **L3-D36. Applied to L2.** A failed open gives `cli.run.agent.open_failed` with the `reason` row, class `terminal`, exit `1` and no result. A signal during the open keeps the rule of L2 Shutdown, rule 5: exit `2` and no result.
 37. **L3-D37.** At the Workbench change, the runtime `bash` of the Workbench kills the process group at the end of each command, as for every other consumer, with the 600 s command limit (Ulrich, 2026-11-22). Constraint: no process of a Workbench command outlives that command.
 38. **L3-D38.** At the Workbench change, the Workbench gives each new `swe@1` session its own new directory, with `git init` and one empty commit (Ulrich, 2026-11-22). A resume of that session uses the same directory and skips `git_clean`. Constraint: two sessions never share a working directory. When a Workbench session later binds a repository, its directory is a `git worktree` of that repository.
+39. **L3-D39.** A new engine lint rule `kanthord/no-inline-object-type` refuses an object type literal in a union member (`TSUnionType > TSTypeLiteral`) and in a property type (`TSPropertySignature > TSTypeAnnotation > TSTypeLiteral`). It applies to each file that the V3 work adds or rewrites, and each build step of [L6](L6-migration.md) lists those files. Constraint: the rule adds no entry to `eslint-suppressions.json`. Each type of this page uses named interfaces and a const object for each kind. The other sites of today go to [HANDOFF.md](../HANDOFF.md#architecture), Architecture.
+40. **L3-D40.** The contract fixes the input type, the output type and the invariants of [Output](#output). It does not fix the model text, the tool calls or the end that a run reaches. Constraint: an acceptance check asserts an exact model-dependent value only through the LLM stub.
 
 ## Open questions for Ulrich
 
