@@ -61,8 +61,12 @@ The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A
 L1 links these anchors of later files. Each later file keeps the heading of each anchor.
 
 - `L3-agent.md#coding-tools`, `#profile-prompts`, `#input-and-output-contract`, `#constraints-on-the-workbench-branch-at-rebase`
-- `L7-agent-evaluation.md#exit-rule`, `#one-evaluation-run`, `#unit-level-rules`
+- `L7-agent-evaluation.md#exit-rule`, `#unit-level-rules`
 - `L5-worker.md#worker-instructions`, `#worker-capabilities`, `#worker-tools`
+
+L2 links this anchor of a later file.
+
+- `L7-agent-evaluation.md#one-evaluation-run`
 
 [L1](L1-model.md#handoffs-to-later-layers) lists the other items that it hands to a later layer.
 
@@ -76,7 +80,8 @@ One meaning per term. A term of today keeps its meaning unless its entry marks `
 
 - **eval model.** The model that runs the agents under test in the agent evaluation. Calibration fixes its level. Change: a new term ([L7](L7-agent-evaluation.md#eval-model)).
 - **production model.** The model of the confirming check, `anthropic/claude-sonnet-5-5:high`. Change: a new term ([L7](L7-agent-evaluation.md#confirming-check)).
-- **case.** One task of the evaluation set: a repository snapshot, a task text and hidden checks. Change: a new term ([L7](L7-agent-evaluation.md#case-folder)).
+- **case.** One work item of the evaluation set: a repository snapshot, a task text and hidden checks. Change: a new term ([L7](L7-agent-evaluation.md#case-folder)).
+- **group.** The kind of work of a case: `backend`, `frontend` or `test`. The group gives the role profile of the case. Change: a new term ([L7](L7-agent-evaluation.md#groups)).
 - **calibration.** The runs of `swe@1` that fix the level of the eval model before the comparison. Change: a new term ([L7](L7-agent-evaluation.md#calibration)).
 - **confirming check.** The runs on the production model that confirm a role profile that wins on the eval model. Change: a new term ([L7](L7-agent-evaluation.md#confirming-check)).
 

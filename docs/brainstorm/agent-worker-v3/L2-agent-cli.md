@@ -308,7 +308,7 @@ Ulrich ruled on 2026-11-22: `--output` names where the result goes. The exit red
 
 ### The result
 
-The result of one run holds these fields. The JSON form uses these names. The [comparison](#comparison-rule) of the evaluation reads each field.
+The result of one run holds these fields. The JSON form uses these names. The [comparison rule](#comparison-rule) names the fields that the evaluation reads.
 
 | Field                  | Value                                                                                                                                                                            |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -490,9 +490,9 @@ A Commander syntax error, for example an unknown option, writes the Commander me
 - The comparison reads the lines of `results.jsonl`.
 - The common keys are `input_digest`, `engine_version`, `provider`, `model`, `reasoning_effort` and `budget`.
 - Two runs of one profile compare only when the common keys and `system_prompt_digest` are equal.
-- Two runs of two profiles compare only when the common keys are equal. Each run must also have the `system_prompt_digest` of the other runs of its profile in the evaluation.
+- Two runs of two profiles compare only when the common keys are equal. Each run must also have the `system_prompt_digest` of the other runs of its profile on that case.
 - Equal `input_digest` means the same prompt parts and context parts in the same order. Equal `system_prompt_digest` means the same composed system prompt of the profile. Equal `engine_version` means the same engine release, with its tools and its pi version. The other common keys give the same model selection and budget.
-- The comparison of [L7](L7-agent-evaluation.md) groups the runs by `agent`. It reads `end`, `session`, `agent`, the common keys and `system_prompt_digest` for the verdict. It reads `list_price_usd`, `duration_ms` and `tool_calls` as the cost of each run. The other fields serve the stdout layout and the gate procedure.
+- The comparison of [L7](L7-agent-evaluation.md) groups the runs by `agent`. It reads `end`, `session`, `agent`, the common keys and `system_prompt_digest` for the verdict. It reads `usage`, `list_price_usd`, `duration_ms` and `tool_calls` as the cost of each run. The other fields serve the stdout layout and the gate procedure.
 - A run with the class `retryable` runs again with a new session path and a new worktree of C. Its line stays in the file.
 - The model output is not deterministic. [L7](L7-agent-evaluation.md) owns the evaluation plan: the cases, the count of runs per profile, the pass rule and the exit rule, which is fixed before the first run.
 
