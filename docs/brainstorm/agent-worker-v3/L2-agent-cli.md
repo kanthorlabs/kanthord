@@ -272,7 +272,7 @@ Ulrich ruled on 2026-11-22: `run agent` uses the KanthorD XDG directories and ig
 6. Make R. Open the output file, when `--output` names a path. Run the ambient removal.
 7. Install the pi tools in the pi directory. Refuse a failed install with `cli.run.agent.tool_install_failed`.
 8. Build the model runtime from the checked credential and the metadata (`createModelRuntime` in `src/llm/model-connector.ts`). The runtime makes no network call here (`allowModelNetwork: false`, `refreshOnCreate: false`).
-9. Read the clock once. That instant starts the wall budget and `duration_ms`, and the wall deadline is that instant plus the wall budget. Run the expiry check (entry check 6). Resolve the model with the rules 4 to 6 of [Model selection](#model-selection). Refuse an unpriced cost budget with `cli.run.agent.budget_unpriced`. Open the session through the agent contract. A failed start precondition gives `cli.run.agent.start_refused`, with the `reason` row of L3. The open sends no provider request ([Requirements on L3](#requirements-on-l3), item 13).
+9. Read the clock once. That instant starts the wall budget and `duration_ms`, and the wall deadline is that instant plus the wall budget. Run the expiry check (entry check 6). Resolve the model with the rules 4 to 6 of [Model selection](#model-selection). Refuse an unpriced cost budget with `cli.run.agent.budget_unpriced`. Open the session through the agent contract. A failed start precondition gives `cli.run.agent.start_refused`, with the `reason` row of L3. A failed open that is no refusal (`AgentOpenError` of [L3](L3-agent.md#open-order)) gives `cli.run.agent.open_failed`, with the error message in the `reason` row. A signal during the open follows [Shutdown](#shutdown), rule 5. The open sends no provider request ([Requirements on L3](#requirements-on-l3), item 13).
 10. Send the message of [Prompt](#prompt). Wait for the end of the turn.
 11. Remove R. Write the result to the [output](#output). Exit with the code of [Exit codes](#exit-codes).
 
@@ -414,14 +414,14 @@ Ulrich ruled on 2026-11-22: each end and each diagnostic code has a class.
 
 Ulrich ruled on 2026-11-22 that the retryable class has its own exit code. Aelita decision: the values of the table.
 
-| Exit | End or cause                                                                        | Class       |
-| ---- | ----------------------------------------------------------------------------------- | ----------- |
-| `0`  | `completed`                                                                         | none        |
-| `1`  | A refusal of the [run order](#run-order), steps 1 to 9, or a Commander syntax error | `terminal`  |
-| `2`  | `stopped`: SIGINT or SIGTERM                                                        | `terminal`  |
-| `4`  | `budget_end`: the first limit of [Budget](#budget)                                  | `terminal`  |
-| `5`  | `failed` with a terminal failure                                                    | `terminal`  |
-| `75` | `failed` with a retryable failure                                                   | `retryable` |
+| Exit | End or cause                                                                                                 | Class       |
+| ---- | ------------------------------------------------------------------------------------------------------------ | ----------- |
+| `0`  | `completed`                                                                                                  | none        |
+| `1`  | A refusal of the [run order](#run-order), steps 1 to 9, a failed open at step 9, or a Commander syntax error | `terminal`  |
+| `2`  | `stopped`: SIGINT or SIGTERM                                                                                 | `terminal`  |
+| `4`  | `budget_end`: the first limit of [Budget](#budget)                                                           | `terminal`  |
+| `5`  | `failed` with a terminal failure                                                                             | `terminal`  |
+| `75` | `failed` with a retryable failure                                                                            | `retryable` |
 
 - Exit `75` is `EX_TEMPFAIL` of `sysexits.h`: a temporary failure, and a later try can succeed.
 - Exit `3` stays the code of a superseded `serve worker` (`ExitCode` in `src/apps/cli/constants.ts`).
@@ -469,6 +469,7 @@ Each code of `run agent` has the form `cli.run.agent.<reason>`. The rows use the
 | `cli.run.agent.level_unsupported`         | The resolved model does not support the level                                                                                                                         | none                               | `terminal`  | Rule 6                                          |
 | `cli.run.agent.budget_unpriced`           | A cost budget names a model with no price                                                                                                                             | `option`                           | `terminal`  | [Budget](#budget), rule 6                       |
 | `cli.run.agent.start_refused`             | The agent contract refuses the start: a start precondition fails                                                                                                      | `reason`                           | `terminal`  | [L1-D21](L1-model.md#decisions); step 9         |
+| `cli.run.agent.open_failed`               | The agent contract throws `AgentOpenError` at the open. The `reason` row is the error message after the exit redaction. No result                                     | `reason`                           | `terminal`  | [L3](L3-agent.md#open-order); step 9            |
 | `cli.run.agent.provider_retryable`        | The end `failed`, and pi accepts the last error as retryable. It follows the result                                                                                   | `reason`                           | `retryable` | [Classes](#classes)                             |
 | `cli.run.agent.provider_failed`           | The end `failed` with a provider error that pi does not retry. It follows the result                                                                                  | `reason`                           | `terminal`  | [Classes](#classes)                             |
 | `cli.run.agent.internal_error`            | The end `failed` with the failure `internal`. It follows the result                                                                                                   | `reason`                           | `terminal`  | [Classes](#classes)                             |
