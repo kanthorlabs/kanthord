@@ -54,7 +54,7 @@ The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A
 | L2    | [L2-agent-cli.md](L2-agent-cli.md)                 | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                                                     | R1, R6, R8     | `accepted` |
 | L3    | [L3-agent.md](L3-agent.md)                         | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract                                         | R1, R2, R6, R8 | `accepted` |
 | L4    | [L4-agent-evaluation.md](L4-agent-evaluation.md)   | The agent evaluation         | Specify the goals, the evaluation set, the grading, the diagnosis, the iterations, the stage gate and the runner of the agent evaluation | R6, R8, R9     | `accepted` |
-| LA    | [LA-agent-build.md](LA-agent-build.md)             | The agent build plan         | Specify the build steps of the agent and its evaluation from the code of today, and the agent gate with the evaluation run of L4         | R7             | `planned`  |
+| LA    | [LA-agent-build.md](LA-agent-build.md)             | The agent build plan         | Specify the build steps of the agent and its evaluation from the code of today, and the agent gate with the evaluation run of L4         | R7             | `draft`    |
 | L5    | [L5-worker-cli.md](L5-worker-cli.md)               | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                                                             | R5, R6, R8     | `planned`  |
 | L6    | [L6-worker.md](L6-worker.md)                       | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                                                 | R3, R4, R6, R8 | `planned`  |
 | L7    | [L7-worker-evaluation.md](L7-worker-evaluation.md) | The worker evaluation        | Specify the worker-level checks against a local KanthorD server, the review cases and the successor of the Worker V2 eval set            | R5             | `planned`  |
@@ -65,6 +65,11 @@ L1 links these anchors of later files. Each later file keeps the heading of each
 - `L3-agent.md#coding-tools`, `#profile-prompts`, `#input-and-output-contract`, `#constraints-on-the-workbench-branch-at-rebase`
 - `L4-agent-evaluation.md#stage-gate`, `#unit-level-rules`
 - `L6-worker.md#worker-instructions`, `#worker-capabilities`, `#worker-tools`
+- `LA-agent-build.md#step-12-the-project-service-on-the-contract`
+
+L3 links this anchor of a later file.
+
+- `LA-agent-build.md#step-12-the-project-service-on-the-contract`
 
 L2 links this anchor of a later file.
 
@@ -74,7 +79,7 @@ L2 links this anchor of a later file.
 
 ## Open rulings
 
-[L1](L1-model.md#open-questions-for-ulrich) holds no open question for Ulrich. [L2](L2-agent-cli.md#open-questions-for-ulrich) holds no open question for Ulrich. [L3](L3-agent.md#open-questions-for-ulrich) holds no open question for Ulrich. [L4](L4-agent-evaluation.md#open-questions-for-ulrich) holds no open question for Ulrich. Each layer marks a place that depends on a ruling with **(Q<n>)**.
+[L1](L1-model.md#open-questions-for-ulrich) holds no open question for Ulrich. [L2](L2-agent-cli.md#open-questions-for-ulrich) holds no open question for Ulrich. [L3](L3-agent.md#open-questions-for-ulrich) holds no open question for Ulrich. [L4](L4-agent-evaluation.md#open-questions-for-ulrich) holds no open question for Ulrich. [LA](LA-agent-build.md#open-questions-for-ulrich) holds no open question for Ulrich. Each layer marks a place that depends on a ruling with **(Q<n>)**.
 
 ## Glossary
 
