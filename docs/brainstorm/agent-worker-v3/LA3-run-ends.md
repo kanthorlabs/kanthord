@@ -28,11 +28,11 @@ After LA3, a user can run each command line of [L2 Run order](L2-agent-cli.md#ru
 | Added   | `src/agent/start-preconditions.ts` and its test | The checks of [L3 Start preconditions](L3-agent.md#start-preconditions)                                        |
 | Changed | `src/agent/agent-contract.ts`                   | Open step 2 calls the preconditions and returns `AgentRefused`                                                 |
 | Changed | `src/agent/run-outcome.ts`                      | The class from `isContextOverflow` and `isRetryableAssistantError`; the end to exit code map                   |
-| Changed | `src/agent/run-budget.ts`                       | The `usd` limit at `message_end`, the first-limit rule and the `finishTurn` wrap of `endAfterTurn`             |
+| Changed | `src/agent/run-budget.ts`                       | The `usd` limit at `message_end` and the first-limit rule                                                      |
 | Changed | `src/apps/cli/run-agent-budget.ts`              | The `usd` form, the refusal `cli.run.agent.budget_unpriced` at step 9                                          |
 | Changed | `src/apps/cli/run-agent-signal.ts`              | SIGTERM, the 10-second limit, the forced stop, the second signal, step 11 and a signal before step 10          |
 | Changed | `src/apps/cli/run-agent.ts`                     | `cli.run.agent.start_refused`, `cli.run.agent.provider_retryable`, exit `75`, the removal of R at each refusal |
-| Added   | `src/apps/cli/e2e-run-agent-ends.test.ts`       | The four e2e checks of [Acceptance checks](#acceptance-checks)                                                 |
+| Added   | `src/apps/cli/e2e-run-agent-ends.test.ts`       | The five e2e checks of [Acceptance checks](#acceptance-checks)                                                 |
 | Changed | The LLM stub of the LA1 e2e support             | A delayed answer, a fixed HTTP status with a body, and the record of a closed connection                       |
 | Changed | `engine/docs/cli/run.md`                        | Start preconditions, the differences from a `git status` of the developer, Budget, Classes, Shutdown           |
 | Changed | `engine/docs/cli/other.md`                      | The exit `75` row of the root exit list                                                                        |
@@ -57,10 +57,10 @@ Each pull request is one engine pull request and one root pull request that move
 - Makes pass: [L3-U5](L3-agent.md#unit-level-rules); [L2 unit-level rule 10](L2-agent-cli.md#unit-level-rules); [L2-AC10](L2-agent-cli.md#checks).
 - `main` works: a terminal failure keeps exit `5`. Only a failure that pi retries changes from exit `5` to exit `75`.
 
-### PR 3. Cost budget and `endAfterTurn`
+### PR 3. Cost budget
 
-- Files: the `usd` limit, the first-limit rule and the `finishTurn` wrap in `run-budget.ts`; `endAfterTurn` of the run handle in `agent-contract.ts`; the `usd` form and `cli.run.agent.budget_unpriced` in `run-agent-budget.ts`; the section "Budget" of `docs/cli/run.md`.
-- Makes pass: [L3-U6](L3-agent.md#unit-level-rules); [L2 unit-level rule 9](L2-agent-cli.md#unit-level-rules); the `--budget` rows of [L2 unit-level rule 1](L2-agent-cli.md#unit-level-rules). L2-AC10 case 1 stays green.
+- Files: the `usd` limit and the first-limit rule in `run-budget.ts`; the `usd` form and `cli.run.agent.budget_unpriced` in `run-agent-budget.ts`; the section "Budget" of `docs/cli/run.md`.
+- Makes pass: [L3-U6](L3-agent.md#unit-level-rules) less the `endAfterTurn` cases; [L2 unit-level rule 9](L2-agent-cli.md#unit-level-rules); the `--budget` rows of [L2 unit-level rule 1](L2-agent-cli.md#unit-level-rules); [L2-AC15](L2-agent-cli.md#checks). L2-AC10 case 1 stays green.
 - `main` works: the refusal of a `usd` value becomes an accepted limit. A run with no cost budget does not change.
 
 ### PR 4. Signal handler
@@ -78,6 +78,7 @@ Each check runs the built `kanthord run agent` as a process, with a real file sy
 | [L2-AC12](L2-agent-cli.md#checks)       | 1   | Two W variants: a changed tracked file; an empty directory. Run once per variant        | Scripted text `ok`; it must receive no request                                                                           | The text of L2-AC12 |
 | [L3-AC5](L3-agent.md#acceptance-checks) | 1   | Six variants of `swe@1` and `re@1`, with the scripts `$TEST/fsmonitor` and `$TEST/hook` | Scripted text `ok`                                                                                                       | The text of L3-AC5  |
 | [L2-AC10](L2-agent-cli.md#checks)       | 2   | Run with `--budget 5s` against A; Run against B; Run against C                          | A: answer after 30 s. B: HTTP 429 to each request. C: HTTP 401 with a body that holds K, K of ASCII letters only         | The text of L2-AC10 |
+| [L2-AC15](L2-agent-cli.md#checks)       | 3   | Run with `--budget 1usd`                                                                | It must receive no request                                                                                               | The text of L2-AC15 |
 | [L2-AC11](L2-agent-cli.md#checks)       | 4   | Variant 1: SIGTERM after `$TEST/pid` exists. Variant 2: SIGINT after the first request  | Variant 1: a `bash` call of `echo $$ > "$TEST/pid"; exec sleep 600`. Variant 2: answer after 30 s, with the close record | The text of L2-AC11 |
 
 - **Refusal.** A refusal is exit `1`, no result, and a first stderr line that is no JSON line and starts with the code ([L2 Acceptance checks](L2-agent-cli.md#acceptance-checks)).
@@ -97,7 +98,7 @@ Each check runs the built `kanthord run agent` as a process, with a real file sy
 | [L2 rule 10](L2-agent-cli.md#unit-level-rules) Class map  | `src/agent/run-outcome.ts`          | `src/agent/run-outcome.test.ts`          |
 | [L2 rule 11](L2-agent-cli.md#unit-level-rules) Signal     | `src/apps/cli/run-agent-signal.ts`  | `src/apps/cli/run-agent-signal.test.ts`  |
 
-The forced stop has no e2e check ([L3 Rules with no check](L3-agent.md#rules-with-no-check-and-the-reason)). The cost limit has no e2e check, because the stub provider has no price ([L2 Rules with no check](L2-agent-cli.md#rules-with-no-check-and-the-reason)).
+The forced stop has no e2e check ([L3 Rules with no check](L3-agent.md#rules-with-no-check-and-the-reason)). The cost limit has no e2e check, because the stub provider has no price. L2-AC15 proves the refusal of a cost budget on that provider ([L2 Rules with no check](L2-agent-cli.md#rules-with-no-check-and-the-reason)).
 
 ## Credentials
 
@@ -113,12 +114,12 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 ## Handoffs
 
-- **To LA4.** `endAfterTurn` and `deadline: null` for the Project Service ([L3 Project Service](L3-agent.md#project-service)). The start preconditions of `env@1` (`workspace_directory` only) hold for the Project Service when it opens through `openAgent`.
+- **To LA4.** `endAfterTurn`, its `finishTurn` wrap and the `endAfterTurn` cases of L3-U6, and `deadline: null` for the Project Service ([L3 Project Service](L3-agent.md#project-service)). The start preconditions of `env@1` (`workspace_directory` only) hold for the Project Service when it opens through `openAgent`.
 - **To LA5.** The runner of L4 reads the exits `0`, `2`, `4`, `5` and `75`, the `end`, `class` and `budget_reached` fields, and passes `--budget <usd>usd` with a priced model.
 
 ## Decisions
 
 1. **LA3-D1.** LA3 requires the [Entry state](#entry-state) from LA1. Constraint: LA1 ships the wall half of `run-budget.ts`, the base of `run-outcome.ts` with the class `terminal` only, and the SIGINT-only stop of today; LA1 refuses a `usd` budget.
 2. **LA3-D2.** LA3 has four pull requests in the order start preconditions, class, cost budget, signal handler. Constraint: the refusal before any request ships first; each pull request keeps `main` working.
-3. **LA3-D3.** The four e2e checks of LA3 live in `src/apps/cli/e2e-run-agent-ends.test.ts`, and `pnpm run verify` runs them. Constraint: they need no network namespace and no test user.
+3. **LA3-D3.** The five e2e checks of LA3 live in `src/apps/cli/e2e-run-agent-ends.test.ts`, and `pnpm run verify` runs them. Constraint: they need no network namespace and no test user.
 4. **LA3-D4.** Each pull request changes the sections of `docs/cli/run.md` that its behavior owns. Constraint: the start preconditions text holds the differences from a `git status` of the developer ([L3 Start preconditions](L3-agent.md#start-preconditions)).

@@ -42,8 +42,8 @@ A sub-layer is a group of build steps that ends with acceptance checks. Each che
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | [LA1 Run skeleton](LA1-run-skeleton.md)               | 1 to 6, 8, the base of 7 and the core of 10, with the `--auth` reader, the run directory and the pi directory | L2-AC1, AC3, AC4, AC8, AC9, AC13; L3-AC1, AC2, AC3, AC4 |
 | [LA2 Credential boundary](LA2-credential-boundary.md) | 9, the proxy-name removal and the `env_proxy` refusal                                                         | L2-AC2, AC5, AC6, AC7, AC14                             |
-| [LA3 Run ends](LA3-run-ends.md)                       | the rest of 7 and the end part of 10                                                                          | L2-AC10, AC11, AC12; L3-AC5                             |
-| [LA4 Consumer migration](LA4-consumer-migration.md)   | 11, 12                                                                                                        | L1 AC20; the refusal of the deleted command             |
+| [LA3 Run ends](LA3-run-ends.md)                       | the rest of 7 and the end part of 10                                                                          | L2-AC10, AC11, AC12, AC15; L3-AC5                       |
+| [LA4 Consumer migration](LA4-consumer-migration.md)   | 12, then 11                                                                                                   | L1 AC20, AC28, AC29                                     |
 | [LA5 Evaluation runner](LA5-evaluation-runner.md)     | 13                                                                                                            | L4-AC1 to AC10                                          |
 
 - LA1 ships `run agent` with the credential checks of `tasks run` at their strength of today or stricter. LA2 adds the Linux job, the proxy-name removal and the `env_proxy` refusal, and owns the credential checks over the code of LA1.
@@ -213,23 +213,17 @@ Each file has its test file next to it. The command entry is `src/apps/cli/run-a
 
 ### Step 11. The deletion of `tasks run`
 
-- Files:
-  - delete `src/worker/unit/tasks-run.ts`, `src/apps/cli/worker-tasks.ts`, `src/apps/worker/tasks-host-tools.ts` and their tests;
-  - delete the modules with no reader: `chain-tasks-prepare.ts`, `tasks-capture.ts`, `tasks-compare.ts`, `tasks-open-world.ts`, `tasks-output.ts`, `tasks-seed.ts`, `tasks-seed-file.ts`, `tasks-steps.ts`, `tasks-trees.ts`, `tasks-turns.ts`, `tasks-turns-file.ts` and `tasks-verify.ts` of `src/worker/unit/`; `worker-tasks-seed.ts`, `worker-tasks-compare.ts` and `tasks-test-support.ts` of `src/apps/cli/`;
-  - delete `KANTHORD_CAPTURE_TASKS` in `chain-runner.ts`, `native-method.ts`, `src/apps/server/thread-driver.ts` and `src/apps/server/container-runtime.ts`;
-  - remove the server operation `worker.execution.seed.get` ([L1-D23](L1-model.md#decisions));
-  - remove `FoundryHost.capabilities` (`src/worker/unit/foundry.ts:36`) and its three arguments, the exports `foundryEvaluation` and `foundryExamine`, and update `chain-golden.txt` and the two `name` strings;
-  - delete the section "Local tasks runs" and `tasks seed` of `engine/docs/cli/worker.md`.
-- Lint scope: `chain-runner.ts` (3, 0, 0), `native-method.ts` (0, 1, 0), `foundry.ts`, `thread-driver.ts`, `container-runtime.ts`, `chain-evaluation.ts` and `chain-examine.ts` (0, 0, 0).
-- Makes pass: the tests of today less the deleted ones; [L1 U7](L1-model.md#unit-level-rules) on the line.
+- Files: the rows of [LA4 Scope](LA4-consumer-migration.md#scope) for [PR 2](LA4-consumer-migration.md#pr-2-the-deletion-of-tasks-run) and [PR 3](LA4-consumer-migration.md#pr-3-the-unread-foundry-fields). The capture variable `KANTHORD_CAPTURE_TASKS` is in `src/worker/unit/tasks-capture.ts:5`, `src/apps/server/thread-driver.ts:40` and `src/apps/server/container-runtime.ts:45`. `chain-runner.ts:68` and `native-method.ts:77` hold only `capture?: TasksCapture`.
+- Lint scope: as LA4 states.
+- Makes pass: [L1 U7](L1-model.md#unit-level-rules); [L1 AC28 and AC29](L1-model.md#checks).
 - `main` works: `run agent` holds each check that it takes over since step 10. The removal of `worker.execution.seed.get` is the breaking change that Ulrich accepted (L1-D23).
 
 ### Step 12. The Project Service on the contract
 
-- Files: `src/project/environment-agent.ts` opens `env@1` through `openAgent`, with `deadline: null`, `work: null` and `endAfterTurn` ([L3 Project Service](L3-agent.md#project-service)). `src/project/onboarding.ts` changes only where the call shape needs it.
-- Lint scope: `environment-agent.ts` (0, 0, 0). When the step edits a declaration of `onboarding.ts`, it adds that file (3, 1, 0).
-- Makes pass: [L1 AC20](L1-model.md#checks).
-- `main` works: the Project Service keeps the end mapping of today ([L3 Project Service](L3-agent.md#project-service)). The Workbench keeps `openSession` with the interim redaction (L3-D41).
+- Files: the rows of [LA4 Scope](LA4-consumer-migration.md#scope) for [PR 1](LA4-consumer-migration.md#pr-1-the-project-service-on-the-contract): `endAfterTurn` with its `finishTurn` wrap, and `src/project/environment-agent.ts` on `openAgent`, with `deadline: null` and `work: null` ([L3 Project Service](L3-agent.md#project-service)).
+- Lint scope: as LA4 states.
+- Makes pass: [L1 AC20](L1-model.md#checks); the `endAfterTurn` cases of [L3-U6](L3-agent.md#unit-level-rules); the Project Service half of [L1 U13](L1-model.md#unit-level-rules).
+- `main` works: the Project Service keeps the end mapping of today ([L3 Project Service](L3-agent.md#project-service)). The Workbench keeps `openSession` with the interim redaction (L3-D41). Step 12 ships before step 11 ([LA4-D1](LA4-consumer-migration.md#decisions)).
 
 ### Step 13. The evaluation runner
 

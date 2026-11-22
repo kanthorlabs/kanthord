@@ -515,9 +515,9 @@ The check IDs stay stable. The IDs AC5, AC9, AC11 to AC17 and AC25 moved to [Uni
   - Pass: the tool result is the pi result `Tool <name> not found` (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:486`, `prepareToolCall`). The tool implementation does not run. The first request lists no tool name that the profile does not declare. Each text that the Workbench Service gives out holds K zero times.
   - Today: a Workbench session holds only `toolApproval`, and the Workbench Service reads the session events with no exit redaction (`src/workbench/service.ts`).
 
-- **AC20. A Project Service session of `env@1` holds the exit redaction** ([Other consumers](#other-consumers); L1-D8). Owner: L3, built in [LA](LA-agent-build.md#step-12-the-project-service-on-the-contract) step 12.
+- **AC20. A Project Service session of `env@1` holds the exit redaction** ([Other consumers](#other-consumers); L1-D8). Owner: L3, built in [LA4](LA4-consumer-migration.md#acceptance-checks).
   - Fixture: a local KanthorD server as a process, a repository binding, Stub. The server agent credential is K, for `openai-compatible`, routed to Stub. The scripted assistant text holds K.
-  - Command: the environment setup of the binding. L6 names the operation and the read command for its output.
+  - Command: a repository binding apply starts the environment setup. The reads are `kanthord project environment list` and `kanthord project environment show`.
   - Pass: each text that the Project Service gives out holds K zero times. U13 holds the allowlist part, because only a test seam gives an `env@1` session a tool that it does not declare.
   - Today: the Project Service registers `probe` and `environment_write` (`src/project/environment-agent-tools.ts`). An `env@1` session holds only `checkoutConfinement` (`src/project/environment-agent.ts`).
 
@@ -564,6 +564,16 @@ The check IDs stay stable. The IDs AC5, AC9, AC11 to AC17 and AC25 moved to [Uni
   - Pass: the exit code is 0. No file exists at M7 or M9. No request to Stub holds M8.
   - Today: `sessionParts` gives pi `noExtensions: true` and `noContextFiles: true` (`src/agent/agent-session.ts`). E1 fit rule 2 rules that this round loads no `AGENTS.md`.
 
+- **AC28. The local tasks commands are unknown** (L1-D23). Owner: [LA4](LA4-consumer-migration.md#acceptance-checks).
+  - Fixture: an empty directory T as the working directory and as `XDG_CONFIG_HOME`. Standard input is a pipe that holds the text `K`.
+  - Command: `kanthord worker tasks run S --credential-stdin --tree a=T`, `kanthord worker tasks seed exe_1 --output T/out` and `kanthord worker tasks compare T/a T/b`.
+  - Pass: each process exits `1`. The first stderr line is `error: unknown command 'tasks'`. Stdout is empty. T holds no new entry. The process reads no byte of standard input.
+
+- **AC29. The seed route is absent** (L1-D23). Owner: [LA4](LA4-consumer-migration.md#acceptance-checks).
+  - Fixture: a local KanthorD server as a process, with a human token.
+  - Command: `GET /api/worker/execution/exe_1/seed` with the human token.
+  - Pass: the status is `404` and the error code is `gateway.routing.not_found`.
+
 ### Unit-level rules
 
 Each rule holds in one module, with no process, no file system flow and no LLM stub, so its test is a unit test ([index](index.md#reading-order)). Each item names its former check ID and the owning module. The owner layer assigns the exact file. Each rule stays in the text of this page.
@@ -580,7 +590,7 @@ Each rule holds in one module, with no process, no file system flow and no LLM s
 10. **U10, from AC15.** The agent contract reports a known secret in LLM output as one finding and one warning with the rule and the count. The assistant entry stays byte for byte. Module: the redaction hook of the agent runtime (L3).
 11. **U11, from AC16.** The lint rule on `modelRegistry` and `registerProvider` covers each directory of a capability or a consumer hook. Module: `eslint.config.js` (L6).
 12. **U12, from AC17.** `kanthord run --help` lists `worker`. Module: the program of the CLI (L5).
-13. **U13, from the allowlist parts of AC18 and AC20.** The test uses a seam that no shipped command reaches. A Project Service tool in `consumerTools` that the profile does not declare makes the open throw `agent.tool_undeclared`. A worker capability can register a tool that the profile does not declare. That tool gets `Tool <name> not found` at a call, and its implementation does not run. Module: the worker host and the Project Service (L6).
+13. **U13, from the allowlist parts of AC18 and AC20.** The test uses a seam that no shipped command reaches. A Project Service tool in `consumerTools` that the profile does not declare makes the open throw `agent.tool_undeclared`. A worker capability can register a tool that the profile does not declare. That tool gets `Tool <name> not found` at a call, and its implementation does not run. Module: the worker host (L6) and the Project Service (built in [LA4](LA4-consumer-migration.md#unit-level-rules)).
 14. **U14, from AC24 variant 2.** `run agent` refuses a set `NODE_USE_ENV_PROXY` and a `--use-env-proxy` option. Module: the start checks of `run agent` (L2).
 15. **U15, from AC25.** The agent runtime imports no worker, project, mission or scheduler module. Module: the import check of the build (LA).
 16. **U16, from AC9.** `run worker` refuses `--token` before it claims an execution. Module: the option parser of `run worker` (L5).

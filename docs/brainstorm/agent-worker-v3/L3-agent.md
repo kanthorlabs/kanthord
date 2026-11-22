@@ -1016,7 +1016,7 @@ Each rule holds in one module, with no process and no LLM stub ([index](index.md
 ### Rules with no check, and the reason
 
 - **The forced stop end to end.** `run agent` reaches it only after a 10-second graceful stop that a test cannot force with no hang of pi. L3-U7 and the signal handler rule of L2 cover it.
-- **The Workbench and the Project Service.** L1 [AC19](L1-model.md#checks) runs on the Workbench branch after its rebase. L1 [AC20](L1-model.md#checks) belongs to L6.
+- **The Workbench and the Project Service.** L1 [AC19](L1-model.md#checks) runs on the Workbench branch after its rebase. L1 [AC20](L1-model.md#checks) is built in [LA4](LA4-consumer-migration.md).
 - **The interim redaction and the open paths of today.** They are temporary paths. L3-U12 and L3-U13 cover them.
 - **The filter driver of a repository.** A filter command can run at `git_clean`, by design. No check asserts its absence.
 

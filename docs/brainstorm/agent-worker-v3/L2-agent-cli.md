@@ -663,6 +663,10 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
     - Fixture: Auth, Stub, H, X, T, D. A marker file outside W holds the unique text M6. The one commit of W holds a file F with known text and a symbolic link L whose target is the marker file. The scripted calls: `read` of the marker file by its absolute path; `grep` for M6 on the directory of the marker file; `read` of the marker file by a relative `../` path; `read` of L; `read` of F. Then a text answer.
     - Command: Run with the profile `re@1` in place of `swe@1`.
     - Assert: exit `0`. The first four calls get a block result in S. The fifth call returns the text of F. M6 is in no request to Stub, in no entry of S and not in O.
+15. **L2-AC15. A cost budget on a model with no price starts nothing.**
+    - Fixture: Auth, Stub, W, H, X, T, D. The model `stub-1` of `openai-compatible` has no price ([Budget](#budget), rule 6).
+    - Command: Run with `--budget 1usd`.
+    - Assert: refused with `cli.run.agent.budget_unpriced`, with the row `option: --budget`. Stub receives no request. No file exists at S. O does not exist. T holds no file.
 
 ### Unit-level rules
 

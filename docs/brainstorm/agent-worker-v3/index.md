@@ -19,7 +19,7 @@ This set designs the next agent and worker of KanthorD. It starts from the direc
 1. Read [L1](L1-model.md) first. It fixes the actors, the boundaries, the tool ownership rule and the credential flow.
 2. Read [L2](L2-agent-cli.md), then [L3](L3-agent.md), for the agent CLI and then the agent.
 3. Read [L4](L4-agent-evaluation.md) after L3, for the agent evaluation.
-4. Read [LA](LA-agent-build.md) after L4, for the build plan of the agent and its evaluation.
+4. Read [LA](LA-agent-build.md) after L4, for the build plan of the agent and its evaluation. Then read its sub-layers in order: [LA1](LA1-run-skeleton.md), [LA2](LA2-credential-boundary.md), [LA3](LA3-run-ends.md), [LA4](LA4-consumer-migration.md) and [LA5](LA5-evaluation-runner.md). Each sub-layer ends with end-to-end checks.
 5. Read [L5](L5-worker-cli.md), then [L6](L6-worker.md), for the worker CLI and then the worker. Then read [L7](L7-worker-evaluation.md), for the worker evaluation.
 6. Read [LB](LB-worker-build.md) last, for the build plan of the worker and its evaluation.
 
@@ -48,17 +48,22 @@ Ulrich set this order on 2026-11-22, and renumbered the layer chain on the same 
 
 The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A Fable review with the verdict accept sets `reviewed`. Ulrich sets `accepted` at the joint review.
 
-| Layer | File                                               | Title                        | Purpose                                                                                                                                  | Round goals    | Status     |
-| ----- | -------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- |
-| L1    | [L1-model.md](L1-model.md)                         | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today                                | R3, R4, R6, R8 | `accepted` |
-| L2    | [L2-agent-cli.md](L2-agent-cli.md)                 | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                                                     | R1, R6, R8     | `accepted` |
-| L3    | [L3-agent.md](L3-agent.md)                         | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract                                         | R1, R2, R6, R8 | `accepted` |
-| L4    | [L4-agent-evaluation.md](L4-agent-evaluation.md)   | The agent evaluation         | Specify the goals, the evaluation set, the grading, the diagnosis, the iterations, the stage gate and the runner of the agent evaluation | R6, R8, R9     | `accepted` |
-| LA    | [LA-agent-build.md](LA-agent-build.md)             | The agent build plan         | Specify the build steps of the agent and its evaluation from the code of today, and the agent gate with the evaluation run of L4         | R7             | `draft`    |
-| L5    | [L5-worker-cli.md](L5-worker-cli.md)               | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                                                             | R5, R6, R8     | `planned`  |
-| L6    | [L6-worker.md](L6-worker.md)                       | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                                                 | R3, R4, R6, R8 | `planned`  |
-| L7    | [L7-worker-evaluation.md](L7-worker-evaluation.md) | The worker evaluation        | Specify the worker-level checks against a local KanthorD server, the review cases and the successor of the Worker V2 eval set            | R5             | `planned`  |
-| LB    | [LB-worker-build.md](LB-worker-build.md)           | The worker build plan        | Specify the build steps of the worker and its evaluation after the agent gate, and the worker gate with the evaluation run of L7         | R7             | `planned`  |
+| Layer | File                                                     | Title                        | Purpose                                                                                                                                  | Round goals    | Status     |
+| ----- | -------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- |
+| L1    | [L1-model.md](L1-model.md)                               | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today                                | R3, R4, R6, R8 | `accepted` |
+| L2    | [L2-agent-cli.md](L2-agent-cli.md)                       | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                                                     | R1, R6, R8     | `accepted` |
+| L3    | [L3-agent.md](L3-agent.md)                               | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract                                         | R1, R2, R6, R8 | `accepted` |
+| L4    | [L4-agent-evaluation.md](L4-agent-evaluation.md)         | The agent evaluation         | Specify the goals, the evaluation set, the grading, the diagnosis, the iterations, the stage gate and the runner of the agent evaluation | R6, R8, R9     | `accepted` |
+| LA    | [LA-agent-build.md](LA-agent-build.md)                   | The agent build plan         | Specify the build steps of the agent and its evaluation from the code of today, and the agent gate with the evaluation run of L4         | R7             | `draft`    |
+| LA1   | [LA1-run-skeleton.md](LA1-run-skeleton.md)               | The run skeleton             | Build `run agent` on the agent contract, with the credential checks of `tasks run` at their strength of today or stricter                | R7             | `draft`    |
+| LA2   | [LA2-credential-boundary.md](LA2-credential-boundary.md) | The credential boundary      | Build the Linux test job, the proxy-name removal and the `env_proxy` refusal, and prove the credential boundary end to end               | R7             | `draft`    |
+| LA3   | [LA3-run-ends.md](LA3-run-ends.md)                       | The run ends                 | Build the start preconditions, the cost budget, the retryable class and the signal handler                                               | R7             | `draft`    |
+| LA4   | [LA4-consumer-migration.md](LA4-consumer-migration.md)   | The consumer migration       | Move the Project Service onto the agent contract and delete `tasks run`                                                                  | R7             | `draft`    |
+| LA5   | [LA5-evaluation-runner.md](LA5-evaluation-runner.md)     | The evaluation runner        | Build the runner of L4                                                                                                                   | R7             | `draft`    |
+| L5    | [L5-worker-cli.md](L5-worker-cli.md)                     | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                                                             | R5, R6, R8     | `planned`  |
+| L6    | [L6-worker.md](L6-worker.md)                             | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                                                 | R3, R4, R6, R8 | `planned`  |
+| L7    | [L7-worker-evaluation.md](L7-worker-evaluation.md)       | The worker evaluation        | Specify the worker-level checks against a local KanthorD server, the review cases and the successor of the Worker V2 eval set            | R5             | `planned`  |
+| LB    | [LB-worker-build.md](LB-worker-build.md)                 | The worker build plan        | Specify the build steps of the worker and its evaluation after the agent gate, and the worker gate with the evaluation run of L7         | R7             | `planned`  |
 
 L1 links these anchors of later files. Each later file keeps the heading of each anchor.
 
@@ -66,10 +71,16 @@ L1 links these anchors of later files. Each later file keeps the heading of each
 - `L4-agent-evaluation.md#stage-gate`, `#unit-level-rules`
 - `L6-worker.md#worker-instructions`, `#worker-capabilities`, `#worker-tools`
 - `LA-agent-build.md#step-12-the-project-service-on-the-contract`
+- `LA4-consumer-migration.md#acceptance-checks`, `#unit-level-rules`
 
-L3 links this anchor of a later file.
+L3 links these anchors of later files.
 
 - `LA-agent-build.md#step-12-the-project-service-on-the-contract`
+- `LA4-consumer-migration.md`
+
+L4 links this file of a later layer.
+
+- `LA2-credential-boundary.md`
 
 L2 links this anchor of a later file.
 

@@ -89,8 +89,8 @@ Each pull request is one engine pull request and one root pull request that move
    - Rules: [L3-U1](L3-agent.md#unit-level-rules).
    - `main` works: L3-U1 proves the byte-equal composed text of each consumer of today.
 7. **PR7. The wall budget and the base outcome** (the base of LA step 7, [LA3 Entry state](LA3-run-ends.md#entry-state) items 2 and 4).
-   - Files: `src/agent/run-budget.ts` with the wall limit only: a timer at `deadline` aborts the session, and the end is `budget_end` with `budgetReached` `wall`; `endAfterTurn`. `src/agent/run-outcome.ts` with the ends `completed`, `budget_end`, `stopped` and `failed`, the totals, the failure kind of `providerFailureOf` and the class `terminal` for each end that is no completion.
-   - Rules: the wall, first-limit and `endAfterTurn` cases of [L3-U6](L3-agent.md#unit-level-rules); the end, failure kind, `internal` and totals cases of [L3-U5](L3-agent.md#unit-level-rules). LA3 adds the `usd` cases and the class cases.
+   - Files: `src/agent/run-budget.ts` with the wall limit only: a timer at `deadline` aborts the session, and the end is `budget_end` with `budgetReached` `wall`. `src/agent/run-outcome.ts` with the ends `completed`, `budget_end`, `stopped` and `failed`, the totals, the failure kind of `providerFailureOf` and the class `terminal` for each end that is no completion.
+   - Rules: the wall and first-limit cases of [L3-U6](L3-agent.md#unit-level-rules); the end, failure kind, `internal` and totals cases of [L3-U5](L3-agent.md#unit-level-rules). LA3 adds the `usd` cases and the class cases. LA4 adds the `endAfterTurn` cases.
    - `main` works: no consumer calls the new modules.
 8. **PR8. The agent contract** (LA step 8).
    - Files: `src/agent/tool-table.ts`; `setWork(work: WorkPin | null)` in `src/agent/pinned-layers.ts`; the move of `pinned-layers.test.ts` onto Faux; `src/agent/agent-contract.ts` with `openAgent`, which takes `RunBudget { deadline, usd }` and checks no start precondition. Close the two HANDOFF items of [L3 To HANDOFF.md](L3-agent.md#to-handoffmd).
