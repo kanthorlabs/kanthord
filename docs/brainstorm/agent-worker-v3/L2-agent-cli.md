@@ -15,26 +15,27 @@ Back to the [index](index.md). The terms follow the [glossary](index.md#glossary
 
 (G6)
 
-### R1. Input as options, a JSON file or a Markdown file (fits, with a fit rule)
+### R1. Input as options, a JSON file or a Markdown file (fits in part, with a suggestion)
 
-- **Verdict.** Fits. The engine reads a JSON file for a command input today: `--file` of `kanthord agent enablement put` (`docs/cli/common-flags.md`, section `--file`), and the seed of `tasks run` (`src/worker/unit/tasks-seed.ts`, `readSeed`). A work prompt is free text, so a Markdown file carries it.
+- **Verdict.** Options and a Markdown file fit. The JSON file does not fit.
+- **Evidence.** pi takes the prompt as positional arguments: `pi [options] [--] [@files...] [messages...]` (pi `docs/cli.md`, section "Command Line"). An `@path` includes a text file, so a Markdown file carries a work prompt. pi takes extra system prompt text with `--append-system-prompt` (`dist/cli/args.js`). pi has no JSON input file. With the options and the pi forms, each field has one source, so a JSON file has no reader.
+- **Suggestion for Ulrich.** Drop the JSON input file. The command line of a run records its fixed input, and the `input_digest` of the result proves that two runs had the same input ([Comparison rule](#comparison-rule)). Aelita applied this on 2026-11-22.
 - **Fit rule.**
-  1. The options give each input.
-  2. The JSON file `--input` gives the fixed part of the input: the work prompt, the instructions, the model selection and the wall budget. One input file thus runs under two profiles, and the results compare ([L1](L1-model.md#handoffs-to-later-layers), goal "One input runs under two profiles, and the results compare").
-  3. A Markdown file gives the work prompt (`--prompt-file`) or one instruction text (`--instructions-file`).
-  4. The per-run inputs are options only: the profile, the workspace, the session file, the `--auth` file, the pi directory and the passed variables.
-  5. Each field has exactly one source. A field that two sources give is refused.
+  1. The work prompt takes the pi forms: an `@path` text file or a literal message, positional after the profile ([Prompt](#prompt)).
+  2. A Markdown file of extra instructions goes in with `--append-system-prompt <path>`.
+  3. Each other input is one option. Each field has exactly one source.
 
 ## Command and the root `run`
 
 (G1)
 
 ```text
-kanthord run agent <agent-name>
-  [--input <path>]
-  [--prompt <text> | --prompt-file <path>] [--instructions-file <path>]...
-  [--model <provider>/<model>:<level>] [--budget-wall <duration>]
-  --session <path> [--workspace <path>] [--auth <path>] [--pi-directory <path>]
+kanthord run agent <agent-name> [options] [--] [@files...] [messages...]
+
+options:
+  --model <provider>/<model>:<level>   --session <path>
+  [--append-system-prompt <path>]...   [--budget-wall <duration>]
+  [--workspace <path>] [--auth <path>] [--pi-directory <path>]
   [--pass-env <name>]...
 ```
 
@@ -56,26 +57,22 @@ kanthord run agent <agent-name>
 
 ### Options
 
-| Input            | Option or operand                    | Rule                                                                                                                                                                                                                                                                                                                              |
-| ---------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Profile          | `<agent-name>`                       | Required operand. One profile name of the runtime catalog, for example `swe@1` or `bee@1`. An unknown name is refused with `cli.run.agent.agent_unknown`.                                                                                                                                                                         |
-| Fixed input file | `--input <path>`                     | Optional. A JSON file with the [input file schema](#the-input-file). It gives each field that it holds.                                                                                                                                                                                                                           |
-| Work prompt      | `--prompt <text>`                    | The work prompt as text. Exactly one source gives the work prompt: `--prompt`, `--prompt-file` or the field `prompt` of `--input`.                                                                                                                                                                                                |
-| Work prompt      | `--prompt-file <path>`               | The work prompt as the text of a Markdown file.                                                                                                                                                                                                                                                                                   |
-| Instructions     | `--instructions-file <path>`         | Repeatable. Each file is one instruction text, in the order of the command line. The field `instructions` of `--input` is the other source. With no source, the run has no instructions.                                                                                                                                          |
-| Model selection  | `--model <provider>/<model>:<level>` | Required from one source: this option or the field `model` of `--input`. The pi CLI form of one model selection with its reasoning effort. [Model selection](#model-selection) holds the rules. No default: a profile names no model ([L1-D3](L1-model.md#decisions)).                                                            |
-| Wall budget      | `--budget-wall <duration>`           | Optional, from one source: this option or the field `budget_wall` of `--input`. A positive integer with `s`, `m` or `h`, as `tasks run` (`DURATION_PATTERN` in `src/worker/unit/tasks-seed.ts`). Default `2h`, the wall budget of a native worker (`NATIVE_RESOURCE_BUDGET` in `src/worker/catalog.ts`).                          |
-| Session file     | `--session <path>`                   | Required. The path of the new pi session file. [Session file path](#session-file-path) holds the rules.                                                                                                                                                                                                                           |
-| Workspace        | `--workspace <path>`                 | Optional. The working directory of the session, and the one confinement root of a confined profile. Default: the current directory of the process. The start preconditions of the profile apply to it ([L3](L3-agent.md)).                                                                                                        |
-| LLM credential   | `--auth <path>`                      | Optional. The pi `auth.json` file. Default: `.pi/agent/auth.json` in the home directory of the OS user. [The `--auth` file](#the---auth-file) holds the rules.                                                                                                                                                                    |
-| pi directory     | `--pi-directory <path>`              | Optional. The pi directory of the run. Default: the pi directory of the engine, `kanthord/pi` under the XDG state directory (`piDirectory` in `src/agent/pi.ts`). [Home, temporary and pi directories](#home-temporary-and-pi-directories) holds the rules.                                                                       |
-| Passed variables | `--pass-env <name>`                  | Repeatable. The run passes this variable of the shell to each child process. The refusals of `tasks run` apply (`passEnvRefused` in `src/worker/unit/tasks-seed.ts`), with `cli.run.agent.option_invalid`. A value of 12 or more characters joins the known secrets (`knownPassValues` in `src/worker/unit/tasks-credential.ts`). |
+| Input                 | Option or operand                    | Rule                                                                                                                                                                                                                                                                                                                              |
+| --------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Profile               | `<agent-name>`                       | Required operand. One profile name of the runtime catalog, for example `swe@1` or `bee@1`. An unknown name is refused with `cli.run.agent.agent_unknown`.                                                                                                                                                                         |
+| Work prompt           | `[@files...] [messages...]`          | Positional, after `<agent-name>`. At least one nonempty `@path` file or one message. [Prompt](#prompt) holds the rules.                                                                                                                                                                                                           |
+| Appended instructions | `--append-system-prompt <path>`      | Repeatable. Each file is one instruction text, in the order of the command line. Path only: the run reads no text from the option itself. With no option, the run has no instructions. [Prompt](#prompt) holds the rules.                                                                                                         |
+| Model selection       | `--model <provider>/<model>:<level>` | Required. The pi CLI form of one model selection with its reasoning effort. [Model selection](#model-selection) holds the rules. No default: a profile names no model ([L1-D3](L1-model.md#decisions)).                                                                                                                           |
+| Wall budget           | `--budget-wall <duration>`           | Optional. A positive integer with `s`, `m` or `h`, as `tasks run` (`DURATION_PATTERN` in `src/worker/unit/tasks-seed.ts`). Default `2h`, the wall budget of a native worker (`NATIVE_RESOURCE_BUDGET` in `src/worker/catalog.ts`).                                                                                                |
+| Session file          | `--session <path>`                   | Required. The path of the new pi session file. [Session file path](#session-file-path) holds the rules.                                                                                                                                                                                                                           |
+| Workspace             | `--workspace <path>`                 | Optional. The working directory of the session, and the one confinement root of a confined profile. Default: the current directory of the process. The start preconditions of the profile apply to it ([L3](L3-agent.md)).                                                                                                        |
+| LLM credential        | `--auth <path>`                      | Optional. The pi `auth.json` file. Default: `.pi/agent/auth.json` in the home directory of the OS user. [The `--auth` file](#the---auth-file) holds the rules.                                                                                                                                                                    |
+| pi directory          | `--pi-directory <path>`              | Optional. The pi directory of the run. Default: the pi directory of the engine, `kanthord/pi` under the XDG state directory (`piDirectory` in `src/agent/pi.ts`). [Home, temporary and pi directories](#home-temporary-and-pi-directories) holds the rules.                                                                       |
+| Passed variables      | `--pass-env <name>`                  | Repeatable. The run passes this variable of the shell to each child process. The refusals of `tasks run` apply (`passEnvRefused` in `src/worker/unit/tasks-seed.ts`), with `cli.run.agent.option_invalid`. A value of 12 or more characters joins the known secrets (`knownPassValues` in `src/worker/unit/tasks-credential.ts`). |
 
 - A relative path resolves against the current directory of the process.
 - A single-value option given twice is refused with `cli.option.duplicate` (`singleUse` in `src/apps/cli/shared.ts`).
-- A field with two sources, or a required field with no source, is refused with `cli.run.agent.option_invalid`. The `option` row names the option of the field: `--prompt` for the work prompt, `--instructions-file`, `--model` or `--budget-wall`. The run checks the fields in this order and refuses the first failed field.
-- `--prompt` with an empty or blank text is refused with `cli.run.agent.option_invalid`.
-- A file of `--input`, `--prompt-file` or `--instructions-file` is a regular UTF-8 file. Else the run refuses it with `cli.run.agent.input_file_invalid`, with the `path` row.
+- An absent `--model` is refused with `cli.run.agent.option_invalid`, `option: --model`.
 
 ### Model selection
 
@@ -90,26 +87,27 @@ Ulrich ruled on 2026-11-22: the model selection takes the official pi CLI form `
 
 Change: `tasks run` takes `--model <provider/model>` and `--reasoning <level>` as two options (`withModel` in `src/worker/unit/tasks-seed.ts`).
 
-### The input file
+### Prompt
 
-`--input` holds one JSON object. The schema is strict: an unknown key is refused with `cli.run.agent.input_file_invalid`, and the `field` row names the key. Each key is optional.
+The work prompt takes the pi forms (pi `docs/cli.md`, section "Invocation and output"; `dist/cli/args.js`). Each positional argument after `<agent-name>` that starts with `@` is a file; each other one is a message. `--` stops the option parse, so a message can start with `-`.
 
-| Key            | Type                                | Meaning                                           |
-| -------------- | ----------------------------------- | ------------------------------------------------- |
-| `prompt`       | nonblank string                     | The work prompt                                   |
-| `instructions` | array of nonblank strings           | The instruction texts, in order                   |
-| `model`        | string `<provider>/<model>:<level>` | The model selection, with the rule of `--model`   |
-| `budget_wall`  | string                              | The wall budget, with the rule of `--budget-wall` |
-
-The input file holds no profile, no workspace, no session file, no credential, no `--auth` path, no endpoint and no passed variable. The strict schema refuses each of them.
+1. **`@path`.** The path resolves against the workspace, the working directory of the session, as pi resolves it against its working directory. An absolute path stays as given. `run agent` expands no `~`; pi expands it (`resolveReadPath` in `dist/core/tools/path-utils.js`). The file is a regular UTF-8 text file. Else the run refuses it with `cli.run.agent.file_invalid`, with the `path` row. An empty file adds no text, as in pi.
+2. **No image.** pi also takes an image `@path` (`processFileArguments` in `dist/cli/file-processor.js`). `run agent` refuses it this round, as a file that is not UTF-8 text. Reason: the coding profiles of L3 need no image input (R2), and the session file holds no image record that the evaluation reads.
+3. **Text form.** The text of each file is `<file name="<absolute path>">`, a newline, the content without a byte order mark, a newline, `</file>` and a newline. This is the form of pi (`processFileArguments`). pi does not export that function, so `run agent` builds the same text.
+4. **Turns.** As in pi, the first turn is the text of each file in order, followed by the first message. Each later message is one more turn of the same session, in order (`buildInitialMessage` in `dist/cli/initial-message.js`; `runPrintMode` in `dist/modes/print-mode.js`). A turn starts after the end of the turn before it. The run ends after the last turn, or at the first end that is not `completed`.
+5. **Required.** With no message and no file text, the run refuses the input with `cli.run.agent.prompt_missing`.
+6. **Standard input.** pi prepends piped standard input to the first turn. `run agent` reads no standard input (L1-D22), so a piped text never reaches a turn.
+7. **`--append-system-prompt <path>`.** The pi option name. pi takes text or a file path; `run agent` takes a path only, which resolves against the current directory of the process. The file is a regular UTF-8 text file, else `cli.run.agent.file_invalid`. Each file is one instruction text, in the order of the command line. An empty file adds no instruction text.
+8. **Reader of the appended instructions.** The [evaluation](#one-evaluation-run) gives the stored Repository prompt and the Binding prompt of `swe@1` with this option, so a role profile runs with the same repository context. `run agent` reads no server, so no other source of these texts exists. The agent composes the appended texts at the place of the Repository prompt, layer 2 of the KanthorD prompt chain ([Requirements on L3](#requirements-on-l3), item 12).
 
 ### Inputs that do not exist
 
 - No option other than `--auth` names a credential source ([L1-D14](L1-model.md#decisions)). No option, no environment variable and no input file other than the `--auth` file names an endpoint.
-- `run agent` never reads standard input ([L1-D22](L1-model.md#decisions)). Change: `tasks run` reads the credential from standard input with `--credential-stdin` (`readDescriptor` and `runAction` in `src/apps/cli/worker-tasks.ts`).
+- `run agent` never reads standard input ([L1-D22](L1-model.md#decisions)), also for the work prompt ([Prompt](#prompt), rule 6). Change: `tasks run` reads the credential from standard input with `--credential-stdin` (`readDescriptor` and `runAction` in `src/apps/cli/worker-tasks.ts`).
 - `--token` is refused with `cli.run.agent.token`. The command declares `--token [value]` as a hidden option only to refuse it, as `serve worker` does (`serveWorker` in `src/apps/cli/index.ts`). The refusal comes first, before each other check.
 - No resume input exists in this round. `--session` names a new file only ([L2-D5](#decisions)).
 - No telemetry output exists. The session file is the record of the run.
+- No JSON input file exists. Each field has one source, the option or the positional argument ([R1](#r1-input-as-options-a-json-file-or-a-markdown-file-fits-in-part-with-a-suggestion)).
 
 ## The `--auth` file
 
@@ -222,7 +220,7 @@ R lies in T and not in P. Reason: AC1 requires that P holds only shipped files, 
 (G1, G2)
 
 1. Parse the command line. Refuse `--token` with `cli.run.agent.token`.
-2. Check each option value and each source rule. Read the files of `--input`, `--prompt-file` and `--instructions-file`. Read each `--pass-env` value from the shell.
+2. Check each option value. Resolve the workspace path. Read each `@path` file against the workspace and each `--append-system-prompt` file against the current directory. Read each `--pass-env` value from the shell.
 3. Find the profile in the runtime catalog.
 4. Resolve the workspace, the session file path and the pi directory. Run the checks of [Session file path](#session-file-path) and of [The pi directory](#the-pi-directory).
 5. Read and check the `--auth` entry.
@@ -230,7 +228,7 @@ R lies in T and not in P. Reason: AC1 requires that P holds only shipped files, 
 7. Install the pi tools in the pi directory.
 8. Build the model runtime from the checked credential and the metadata (`createModelRuntime` in `src/llm/model-connector.ts`). Resolve the model with the rules 4 to 6 of [Model selection](#model-selection): `cli.run.agent.model_unknown`, `cli.run.agent.model_inexact` or `cli.run.agent.level_unsupported`. The runtime makes no network call here (`allowModelNetwork: false`, `refreshOnCreate: false`).
 9. Open the session through the agent contract. A failed start precondition gives `cli.run.agent.start_refused`, with the `reason` row of L3.
-10. Send the work prompt as one turn. Wait for the end of the turn.
+10. Send the turns of [Prompt](#prompt), rule 4. Wait for the end of each turn.
 11. Write the result line on stdout. Remove R. Exit.
 
 - A refusal at steps 1 to 9 writes nothing on stdout and gives exit `1`. Its diagnostic is the first stderr line. No model request leaves before step 10, so the provider receives no request.
@@ -260,7 +258,7 @@ After each end of step 10, stdout is exactly one line: one compact JSON object. 
 | `session_id`           | The pi session id, equal to `id` of the header entry of the session file                                                |
 | `end`                  | `completed`, `budget_end`, `stopped` or `failed`                                                                        |
 | `exit_code`            | The exit code of the process                                                                                            |
-| `duration_ms`          | The wall time from the session open to the end of the turn                                                              |
+| `duration_ms`          | The wall time from the session open to the end of the last turn                                                         |
 | `model_calls`          | The count of assistant messages of the run                                                                              |
 | `tool_calls`           | The count of tool calls of the run                                                                                      |
 | `usage`                | `{ "input", "output", "cache_read", "cache_write" }`: the sums of the token counts of the assistant messages of the run |
@@ -271,7 +269,7 @@ After each end of step 10, stdout is exactly one line: one compact JSON object. 
 
 ### Input digest
 
-`input_digest` is `digest` (`src/kernel/json.ts`) of this object: `prompt`, `instructions`, `provider`, `model`, `reasoning_effort`, `budget_wall_ms` and `pass_env`, the list of passed names. The digest does not depend on the source of a field. A prompt from `--prompt`, from `--prompt-file` and from `--input` with the same text gives the same digest. The digest holds no value of a passed variable.
+`input_digest` is `digest` (`src/kernel/json.ts`) of this object: `files`, `messages`, `append_system_prompt`, `provider`, `model`, `reasoning_effort`, `budget_wall_ms` and `pass_env`. `files` is the list of `{ "path", "text" }` of each `@path` file in order: the path as given and the file content. `messages` is the list of messages in order. `append_system_prompt` is the list of the appended instruction texts in order. `pass_env` is the list of passed names. The digest holds no workspace path and no value of a passed variable, so two runs in two worktrees with the same input give the same digest.
 
 ### stderr
 
@@ -299,33 +297,34 @@ Exit `3` stays the code of a superseded `serve worker` (`ExitCode` in `src/apps/
 
 Each code of `run agent` has the form `cli.run.agent.<reason>`. The table lists each code. The rows use the closed row names of `docs/cli/other.md`, section "Output and exit behavior".
 
-| Code                                      | Condition                                                                                                                               | Rows            | Source                                               |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------- |
-| `cli.run.agent.token`                     | `--token` is on the command line                                                                                                        | `option`        | [L1-D17](L1-model.md#decisions), AC8                 |
-| `cli.run.agent.option_invalid`            | An option value fails its rule; a required field has no source; a field has two sources; the work prompt has zero or two sources        | `option`        | [Options](#options)                                  |
-| `cli.option.duplicate`                    | A single-value option is repeated. The code exists today (`src/apps/cli/shared.ts`)                                                     | `option`        | [Options](#options)                                  |
-| `cli.run.agent.agent_unknown`             | The profile name is in no entry of the runtime catalog                                                                                  | `option`        | [Options](#options)                                  |
-| `cli.run.agent.input_file_invalid`        | A file of `--input`, `--prompt-file` or `--instructions-file` is absent, is no regular file or is not UTF-8; `--input` fails its schema | `path`, `field` | [The input file](#the-input-file)                    |
-| `cli.run.agent.auth_file_invalid`         | The `--auth` path is absent, is a symbolic link or is no regular file                                                                   | `path`          | Item 5; L2-D10                                       |
-| `cli.run.agent.auth_file_owner`           | Another user owns the `--auth` file                                                                                                     | `path`          | Item 5                                               |
-| `cli.run.agent.auth_file_mode`            | The mode of the `--auth` file has a group or other bit                                                                                  | `path`          | Item 5                                               |
-| `cli.run.agent.auth_entry_missing`        | The read gives no entry of the selected provider                                                                                        | `path`, `field` | Items 3 and 10                                       |
-| `cli.run.agent.auth_entry_invalid`        | The entry fails the entry schema, the provider check or the routing metadata mapping                                                    | `path`, `field` | Items 4 and 10; [mapping](#routing-metadata-mapping) |
-| `cli.run.agent.auth_key_command`          | The key starts with `!`                                                                                                                 | `path`, `field` | Item 7                                               |
-| `cli.run.agent.auth_key_reference`        | The key holds `$`                                                                                                                       | `path`, `field` | Item 6                                               |
-| `cli.run.agent.credential_expiring`       | The OAuth `expires` is before the wall deadline plus the refresh window                                                                 | `path`          | Item 4                                               |
-| `cli.run.agent.auth_in_pi_directory`      | The pi directory holds `auth.json`                                                                                                      | `path`          | Item 9                                               |
-| `cli.run.agent.pi_directory_invalid`      | The pi directory path does not end with the segment `pi`, is no directory, is a symbolic link or another user owns it                   | `path`          | [The pi directory](#the-pi-directory)                |
-| `cli.run.agent.session_exists`            | An entry exists at the session file path, a symbolic link included                                                                      | `path`          | [Session file path](#session-file-path), rule 2      |
-| `cli.run.agent.session_directory_invalid` | The parent directory of the session file path is absent or no directory                                                                 | `path`          | Rule 3                                               |
-| `cli.run.agent.session_directory_owner`   | Another user owns the real parent directory of the session file path                                                                    | `path`          | Rule 4                                               |
-| `cli.run.agent.session_place`             | The session file path is inside the workspace or the pi directory                                                                       | `path`          | Rule 5                                               |
-| `cli.run.agent.model_unknown`             | `resolveCliModel` gives no model for the model selection                                                                                | none            | [Model selection](#model-selection), rule 4          |
-| `cli.run.agent.model_inexact`             | The resolved provider, model id or level differs from the text of `--model`                                                             | none            | Rule 5                                               |
-| `cli.run.agent.level_unsupported`         | The resolved model does not support the level                                                                                           | none            | Rule 6                                               |
-| `cli.run.agent.start_refused`             | The agent contract refuses the start: a start precondition fails                                                                        | `reason`        | [L1-D21](L1-model.md#decisions); step 9              |
-| `cli.run.agent.internal_error`            | The end `failed`. It follows the result line                                                                                            | `reason`        | [Exit codes](#exit-codes)                            |
-| `cli.run.agent.secret_exposed`            | A warning, not a refusal: model output holds a known secret                                                                             | none; JSON line | R2-H                                                 |
+| Code                                      | Condition                                                                                                                 | Rows            | Source                                               |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------- |
+| `cli.run.agent.token`                     | `--token` is on the command line                                                                                          | `option`        | [L1-D17](L1-model.md#decisions), AC8                 |
+| `cli.run.agent.option_invalid`            | An option value fails its rule; `--model` is absent                                                                       | `option`        | [Options](#options)                                  |
+| `cli.option.duplicate`                    | A single-value option is repeated. The code exists today (`src/apps/cli/shared.ts`)                                       | `option`        | [Options](#options)                                  |
+| `cli.run.agent.agent_unknown`             | The profile name is in no entry of the runtime catalog                                                                    | `option`        | [Options](#options)                                  |
+| `cli.run.agent.file_invalid`              | An `@path` file or an `--append-system-prompt` file is absent, is no regular file or is not UTF-8 text, an image included | `path`          | [Prompt](#prompt), rules 1, 2 and 7                  |
+| `cli.run.agent.prompt_missing`            | The positional arguments give no message and no file text                                                                 | none            | [Prompt](#prompt), rule 5                            |
+| `cli.run.agent.auth_file_invalid`         | The `--auth` path is absent, is a symbolic link or is no regular file                                                     | `path`          | Item 5; L2-D10                                       |
+| `cli.run.agent.auth_file_owner`           | Another user owns the `--auth` file                                                                                       | `path`          | Item 5                                               |
+| `cli.run.agent.auth_file_mode`            | The mode of the `--auth` file has a group or other bit                                                                    | `path`          | Item 5                                               |
+| `cli.run.agent.auth_entry_missing`        | The read gives no entry of the selected provider                                                                          | `path`, `field` | Items 3 and 10                                       |
+| `cli.run.agent.auth_entry_invalid`        | The entry fails the entry schema, the provider check or the routing metadata mapping                                      | `path`, `field` | Items 4 and 10; [mapping](#routing-metadata-mapping) |
+| `cli.run.agent.auth_key_command`          | The key starts with `!`                                                                                                   | `path`, `field` | Item 7                                               |
+| `cli.run.agent.auth_key_reference`        | The key holds `$`                                                                                                         | `path`, `field` | Item 6                                               |
+| `cli.run.agent.credential_expiring`       | The OAuth `expires` is before the wall deadline plus the refresh window                                                   | `path`          | Item 4                                               |
+| `cli.run.agent.auth_in_pi_directory`      | The pi directory holds `auth.json`                                                                                        | `path`          | Item 9                                               |
+| `cli.run.agent.pi_directory_invalid`      | The pi directory path does not end with the segment `pi`, is no directory, is a symbolic link or another user owns it     | `path`          | [The pi directory](#the-pi-directory)                |
+| `cli.run.agent.session_exists`            | An entry exists at the session file path, a symbolic link included                                                        | `path`          | [Session file path](#session-file-path), rule 2      |
+| `cli.run.agent.session_directory_invalid` | The parent directory of the session file path is absent or no directory                                                   | `path`          | Rule 3                                               |
+| `cli.run.agent.session_directory_owner`   | Another user owns the real parent directory of the session file path                                                      | `path`          | Rule 4                                               |
+| `cli.run.agent.session_place`             | The session file path is inside the workspace or the pi directory                                                         | `path`          | Rule 5                                               |
+| `cli.run.agent.model_unknown`             | `resolveCliModel` gives no model for the model selection                                                                  | none            | [Model selection](#model-selection), rule 4          |
+| `cli.run.agent.model_inexact`             | The resolved provider, model id or level differs from the text of `--model`                                               | none            | Rule 5                                               |
+| `cli.run.agent.level_unsupported`         | The resolved model does not support the level                                                                             | none            | Rule 6                                               |
+| `cli.run.agent.start_refused`             | The agent contract refuses the start: a start precondition fails                                                          | `reason`        | [L1-D21](L1-model.md#decisions); step 9              |
+| `cli.run.agent.internal_error`            | The end `failed`. It follows the result line                                                                              | `reason`        | [Exit codes](#exit-codes)                            |
+| `cli.run.agent.secret_exposed`            | A warning, not a refusal: model output holds a known secret                                                               | none; JSON line | R2-H                                                 |
 
 A Commander syntax error, for example an unknown option or a missing `<agent-name>`, writes the Commander message and exits `1`, as for each command (`docs/cli/other.md`, section "Output and exit behavior").
 
@@ -337,33 +336,34 @@ A Commander syntax error, for example an unknown option or a missing `<agent-nam
 
 L1-D20 compares each role profile with `swe@1` on prepared workspaces with fixed inputs. One evaluation case holds one repository, one commit C and one task.
 
-1. **Instructions.** Export the stored Repository prompt and the Binding prompt of `swe@1` once. This is the only step that reads the server; each run reads no server. Each instruction is the heading, one blank line and the text of the part, as the server renders a part (`docs/cli/agent.md`, section "`get <agent-name>`"). E1 fit rule 5 adds no instruction file and no `AGENTS.md`.
+1. **Instructions.** Export the stored Repository prompt and the Binding prompt of `swe@1` once, one file per part. This is the only step that reads the server; each run reads no server. Each file holds the heading, one blank line and the text of the part, as the server renders a part (`docs/cli/agent.md`, section "`get <agent-name>`"). E1 fit rule 5 adds no instruction file and no `AGENTS.md`.
 
    ```sh
-   kanthord agent get swe@1 --project "$PROJECT" --binding-id "$BINDING" \
-     | jq --rawfile prompt task.md --arg model "$PROVIDER/$MODEL:$LEVEL" \
-       '{prompt: $prompt, model: $model, budget_wall: "2h",
-         instructions: [.prompt.parts[]
-           | select(.part == "repository" or .part == "binding")
-           | select(.state == "resolved" and (.text | test("\\S")))
-           | "\(.heading)\n\n\(.text)"]}' > input.json
+   kanthord agent get swe@1 --project "$PROJECT" --binding-id "$BINDING" > "$CASE/agent.json"
+   for part in repository binding; do
+     jq -j --arg part "$part" '.prompt.parts[]
+       | select(.part == $part and .state == "resolved" and (.text | test("\\S")))
+       | "\(.heading)\n\n\(.text)"' "$CASE/agent.json" > "$CASE/$part.md"
+   done
    ```
 
-2. **Workspace.** Prepare one new worktree of C for each run, with no uncommitted change: `git -C "$REPO" worktree add --detach "$CASE/$AGENT-$N/w" "$C"`. A run changes its workspace, so no two runs share one.
-3. **Run.** Give the same `input.json` to each profile. Only the profile, the workspace and the session file change.
+2. **Task.** Write the task text in `$CASE/task.md`. It lies outside each workspace, so each run gives it as one absolute `@path`.
+3. **Workspace.** Prepare one new worktree of C for each run, with no uncommitted change: `git -C "$REPO" worktree add --detach "$CASE/$AGENT-$N/w" "$C"`. A run changes its workspace, so no two runs share one.
+4. **Run.** Give the same task, instructions and model selection to each profile. Only the profile, the workspace and the session file change.
 
    ```sh
    mkdir -m 700 -p "$CASE/$AGENT-$N"
-   kanthord run agent "$AGENT" --input input.json \
+   kanthord run agent "$AGENT" --model "$PROVIDER/$MODEL:$LEVEL" \
+     --append-system-prompt "$CASE/repository.md" --append-system-prompt "$CASE/binding.md" \
      --workspace "$CASE/$AGENT-$N/w" --session "$CASE/$AGENT-$N/session.jsonl" \
-     > "$CASE/$AGENT-$N/result.json"
+     -- "@$CASE/task.md" > "$CASE/$AGENT-$N/result.json"
    ```
 
-4. **Record.** The pi session file is the record of the run: the model change, the thinking level, each message with its usage, and each tool call and tool result. `result.json` holds the identity and the totals of the run. The workspace holds the changes: `git -C w add -A && git -C w diff --cached "$C"`.
+5. **Record.** The pi session file is the record of the run: the model change, the thinking level, each message with its usage, and each tool call and tool result. `result.json` holds the identity and the totals of the run. The workspace holds the changes: `git -C w add -A && git -C w diff --cached "$C"`.
 
 ### Comparison rule
 
-- Two runs compare only when `input_digest`, `engine_version`, `provider`, `model`, `reasoning_effort` and `budget_wall_ms` are equal. Equal values mean the same input, the same shipped profile prompts and the same model selection.
+- Two runs compare only when `input_digest`, `engine_version`, `provider`, `model`, `reasoning_effort` and `budget_wall_ms` are equal. Equal values mean the same messages, the same `@path` file contents, the same appended instruction texts in the same order, the same shipped profile prompts and the same model selection.
 - `agent` and `system_prompt_digest` differ by profile. Two runs of one profile with equal fields above have an equal `system_prompt_digest`.
 - The model output is not deterministic. The evaluation plan of the agent gate sets the count of runs per profile and the verdict method. The verdict is a judgement with no fixed pass value ([L1](L1-model.md#rules-with-no-check-and-the-reason), L1-D16).
 
@@ -379,7 +379,7 @@ shasum -a 256 ~/.pi/agent/auth.json > "$GATE/auth.before"
 stat -f %Lp ~/.pi/agent/auth.json >> "$GATE/auth.before"
 kanthord run agent swe@1 --model "$PROVIDER/$MODEL:$LEVEL" \
   --workspace "$GATE/w" --session "$GATE/session.jsonl" \
-  --prompt "Run git log -1 --format=%H with bash. Reply with the commit id only." \
+  -- "Run git log -1 --format=%H with bash. Reply with the commit id only." \
   > "$GATE/result.json" 2> "$GATE/stderr.txt"
 ```
 
@@ -398,17 +398,18 @@ The run passes when each condition holds:
 
 L2 needs these items from the agent contract. [L3](L3-agent.md#input-and-output-contract) designs them.
 
-1. **Input.** The contract takes, from `run agent`: the profile name; the model runtime and the model that the consumer builds and resolves; the reasoning effort as the pi `thinkingLevel`, which the contract applies with no clamp; the workspace as the working directory and, for a confined profile, as the one root; the wall deadline; the instructions in order; one work prompt; the session file path; the known-secret source; the child environment; the host home; an abort signal. It takes no trace sink, no capability and no field of an execution.
+1. **Input.** The contract takes, from `run agent`: the profile name; the model runtime and the model that the consumer builds and resolves; the reasoning effort as the pi `thinkingLevel`, which the contract applies with no clamp; the workspace as the working directory and, for a confined profile, as the one root; the wall deadline; the appended instruction texts in order; the turns in order; the session file path; the known-secret source; the child environment; the host home; an abort signal. It takes no trace sink, no capability and no field of an execution.
 2. **Catalog.** The runtime exports a lookup of a profile by name, so the CLI refuses an unknown name before step 4. The role profiles `bee@1`, `fee@1` and `te@1` are in the runtime catalog.
 3. **Declared consumer tools with no implementation.** A session of a profile that declares a consumer tool opens and runs when the consumer gives no implementation. `swe@1` declares `evidence-upload` and `link_update_list`, and `run agent` gives no implementation ([L1](L1-model.md#handoffs-to-later-layers) hands the session shape to L3).
 4. **Start refusal.** A failed start precondition gives a refusal with a stable precondition id and a reason. It comes before any model request, any session file write and any workspace change.
 5. **Session file.** The contract writes the pi session file at the exact path of the input through pi, with the workspace as the `cwd` of the session header. It creates the file only through the `wx` open of pi.
-6. **Output.** The contract gives: the end of the turn (`completed`, `budget_end`, `stopped`, or `failed` with a reason); the last assistant text; the pi session id; the SHA-256 digest of the composed system prompt that the model reads; the counts of model calls and tool calls and the token usage, or the session events that give them; each rotate warning with its rule and count.
+6. **Output.** The contract gives: the end of each turn (`completed`, `budget_end`, `stopped`, or `failed` with a reason); the last assistant text; the pi session id; the SHA-256 digest of the composed system prompt that the model reads; the counts of model calls and tool calls and the token usage, or the session events that give them; each rotate warning with its rule and count.
 7. **Exit redaction.** Each text that the contract gives out passes the exit redaction, the failure reason included.
 8. **Silence.** The runtime writes nothing to the stdout or the stderr of the process.
 9. **No proxy from the environment.** The runtime calls no `configureHttpDispatcher` of pi and sets no global HTTP dispatcher (AC24). Today the engine does not call it; only `dist/main.js` of pi does (`dist/core/http-dispatcher.js`).
 10. **pi directory and resources.** The runtime writes into the pi directory only through the pi tool install. pi writes no `auth.json`, no settings file and no session file there. The runtime loads no extension, skill, prompt template, theme or context file from a path (AC1, AC27; `sessionParts` in `src/agent/agent-session.ts` does this today).
-11. **Budget.** The contract ends the turn with `budget_end` at the wall deadline.
+11. **Budget.** The contract ends the current turn with `budget_end` at the wall deadline. One wall deadline covers all turns of the run.
+12. **Place of the appended instructions.** The composition function of [L1-D10](L1-model.md#decisions) places the appended instruction texts, in order and with no added heading, at the place of the Repository prompt: layer 2, after the profile prompt ([agent.md](../agent.md#prompt-composer)). Each text carries its own heading from the export.
 
 ## Handoffs to later layers
 
@@ -430,13 +431,13 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
 - **Stub.** It serves `POST /v1/responses`, because the model connector gives `openai-compatible` the API `openai-responses` (`compatibleProvider` in `src/llm/model-connector.ts`). Its address is `http://127.0.0.1:$PORT`.
 - **Auth.** The file of the [example entry](#routing-metadata-mapping), mode `0600`, with `OPENAI_COMPATIBLE_BASE_URL` set to `http://127.0.0.1:$PORT/v1` and the model `stub-1`.
 - **P.** The path `$TEST/pi`, an empty directory.
-- **Run.** This command line, with `$INPUT` the input text of the check:
+- **Run.** This command line, with `$INPUT` the message of the check:
 
   ```sh
   HOME="$H" TMPDIR="$T" kanthord run agent swe@1 \
     --auth "$AUTH" --model openai-compatible/stub-1:off \
     --workspace "$W" --session "$S" --pi-directory "$P" \
-    --prompt "$INPUT"
+    -- "$INPUT"
   ```
 
 - **No request.** "Stub receives no request" means that the request log of Stub is empty after the exit.
@@ -509,24 +510,25 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
    - Assert: exit `0`. stdout is one line of one JSON object with exactly the 18 fields of [stdout](#stdout). `agent` is `swe@1`, `provider` is `openai-compatible`, `model` is `stub-1`, `reasoning_effort` is `off`, `budget_wall_ms` is `7200000`, `end` is `completed`, `exit_code` is `0`, `model_calls` is `1`, `tool_calls` is `0`, `usage` is `{"input":10,"output":2,"cache_read":0,"cache_write":0}` and `text` is `done-1`. `engine_version` equals the output of `kanthord --version`. `workspace` is the real path of W. `session_id` equals `id` of the first line of S. stderr is empty. T holds no file.
 
 2. **L2-AC2. One input runs under two profiles, and the results compare.**
-   - Fixture: Auth, Stub, H, P, T. W1, W2 and W3 are worktrees of one commit. J is `{"prompt":"M3","instructions":["Binding prompt of repository r:\n\nM4"],"model":"openai-compatible/stub-1:off","budget_wall":"10m"}`. F is a file with the text `Binding prompt of repository r:\n\nM4`. S1, S2 and S3 are paths in one `0700` directory.
-   - Command: `kanthord run agent swe@1 --input J --workspace W1 --session S1 --auth "$AUTH" --pi-directory "$P"`. Then the same with `re@1`, W2 and S2. Then `kanthord run agent swe@1 --prompt M3 --instructions-file F --model openai-compatible/stub-1:off --budget-wall 10m --workspace W3 --session S3 --auth "$AUTH" --pi-directory "$P"`.
-   - Assert: each run exits `0`. `input_digest` is equal for the three runs. `system_prompt_digest` is equal for runs 1 and 3 and differs for run 2. The first request of each run holds one user message with M3, and its system prompt holds M4.
+   - Fixture: Auth, Stub, H, P, T. W1, W2 and W3 are worktrees of one commit that holds `task.md` with the text M3. F is a file outside the worktrees with the text `Binding prompt of repository r:\n\nM4`. S1, S2 and S3 are paths in one `0700` directory.
+   - Command: `kanthord run agent swe@1 --model openai-compatible/stub-1:off --budget-wall 10m --append-system-prompt F --workspace W1 --session S1 --auth "$AUTH" --pi-directory "$P" -- @task.md M5`. Then the same with `re@1`, W2 and S2. Then the same with `swe@1`, W3 and S3.
+   - Assert: each run exits `0`. `input_digest` is equal for the three runs. `system_prompt_digest` is equal for runs 1 and 3 and differs for run 2. The first request of each run holds one user message: `<file name="<Wn>/task.md">`, M3, `</file>` and then M5, with `<Wn>` the real path of its workspace. Its system prompt holds M4 after the Role.
 
 3. **L2-AC3. Input refusals.**
-   - Fixture: Auth, Stub, W, H, P, T, S. J as in L2-AC2.
+   - Fixture: Auth, Stub, W, H, P, T, S. W holds the empty file `empty.md` and the PNG file `image.png` in its one commit.
    - Command: Run, changed once per case:
-     1. `--input J` added: `cli.run.agent.option_invalid`, `option: --prompt`;
-     2. `--input` of a file that adds the key `base_url` to J, with `--prompt` and `--model` removed: `cli.run.agent.input_file_invalid`, `field: base_url`;
-     3. `--prompt` removed: `cli.run.agent.option_invalid`, `option: --prompt`;
-     4. `--prompt-file F` added: `cli.run.agent.option_invalid`, `option: --prompt`;
-     5. `--model` removed: `cli.run.agent.option_invalid`, `option: --model`;
-     6. `--model openai-compatible/stub-1` with no level: `cli.run.agent.option_invalid`, `option: --model`;
-     7. `--budget-wall 10x` added: `cli.run.agent.option_invalid`, `option: --budget-wall`;
-     8. `--pass-env HOME` added: `cli.run.agent.option_invalid`, `option: --pass-env`;
-     9. a second `--auth "$AUTH"` added: `cli.option.duplicate`, `option: --auth`;
-     10. the profile `xx@1`: `cli.run.agent.agent_unknown`;
-     11. `--pi-directory "$TEST/tools"`: `cli.run.agent.pi_directory_invalid`.
+     1. no message: `cli.run.agent.prompt_missing`;
+     2. the message replaced by `@empty.md`: `cli.run.agent.prompt_missing`;
+     3. `@missing.md` added: `cli.run.agent.file_invalid`, `path` the real path of W plus `/missing.md`;
+     4. `@image.png` added: `cli.run.agent.file_invalid`;
+     5. `--append-system-prompt "$TEST/missing.md"` added: `cli.run.agent.file_invalid`;
+     6. `--model` removed: `cli.run.agent.option_invalid`, `option: --model`;
+     7. `--model openai-compatible/stub-1` with no level: `cli.run.agent.option_invalid`, `option: --model`;
+     8. `--budget-wall 10x` added: `cli.run.agent.option_invalid`, `option: --budget-wall`;
+     9. `--pass-env HOME` added: `cli.run.agent.option_invalid`, `option: --pass-env`;
+     10. a second `--auth "$AUTH"` added: `cli.option.duplicate`, `option: --auth`;
+     11. the profile `xx@1`: `cli.run.agent.agent_unknown`;
+     12. `--pi-directory "$TEST/tools"`: `cli.run.agent.pi_directory_invalid`.
    - Assert: each case is refused with the stated code and row. Stub receives no request. No file exists at S. T holds no file.
 
 4. **L2-AC4. A failed start precondition is a refusal of the CLI.**
@@ -566,7 +568,7 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
 
 8. **L2-AC8. The help of `run agent`.**
    - Command: `kanthord run agent --help`.
-   - Assert: exit `0`. The output lists `<agent-name>` and each option of the [synopsis](#command-and-the-root-run). It does not list `--token`.
+   - Assert: exit `0`. The output lists `<agent-name>`, the positional prompt arguments and each option of the [synopsis](#command-and-the-root-run). It does not list `--token`.
 
 9. **L2-AC9. The model selection is exact.**
    - Fixture: Stub, W, H, P, T, S. Auth with `OPENAI_COMPATIBLE_MODELS` set to `[{"id":"stub-1"},{"id":"stub-1-large"},{"id":"think-1","reasoning_levels":["off","high"]}]`.
@@ -579,6 +581,11 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
      6. `openai-compatible/think-1:high`: exit `0`.
    - Assert: cases 1 to 5 are refused with the stated code, Stub receives no request, and no file exists at S. Case 6 exits `0`, stdout holds `model` `think-1` and `reasoning_effort` `high`, and the request to Stub carries the reasoning effort `high`.
 
+10. **L2-AC10. Each message after the first is one more turn.**
+    - Fixture: Auth, Stub, W, H, P, T, S. Stub answers `a-1` to the first request and `a-2` to the second request. Standard input holds the text M6.
+    - Command: `printf M6 |` Run with the message `M1` and one more message `M2` after it.
+    - Assert: exit `0`. Stub receives two requests. The first request holds one user message, `M1`, and no M6. The second request holds `M1`, `a-1` and `M2`, in order. stdout holds `model_calls` `2` and `text` `a-2`.
+
 ### Rules with no check, and the reason
 
 - **Statelessness check 4, resume.** `run agent` has no resume input in this round ([L2-D5](#decisions)).
@@ -590,9 +597,9 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
 ## Decisions
 
 1. **L2-D1.** The agent CLI is the leaf `run agent <agent-name>` under the new global root `run`. Constraint: `run` joins `TOP_LEVEL_NAMES` and `CommandName`; `docs/cli/run.md` owns the command; `run worker` is reserved for L4.
-2. **L2-D2.** The inputs are the flags of [Options](#options). The profile is the operand. The model selection is required in the pi form `<provider>/<model>:<level>`, with the level required and no default. Constraint: each field has exactly one source; a second source is refused.
-3. **L2-D3.** The JSON file `--input` holds only the fixed part of the input: `prompt`, `instructions`, `model`, `budget_wall`. Constraint: the schema is strict, so the file names no credential, no endpoint, no profile and no per-run path.
-4. **L2-D4.** A Markdown file gives the work prompt (`--prompt-file`) or one instruction text (`--instructions-file`). Constraint: a Markdown file carries text only, with no front matter.
+2. **L2-D2.** The inputs are the options of [Options](#options) and the positional prompt arguments. The profile is the first operand. The model selection is required in the pi form `<provider>/<model>:<level>`, with the level required and no default. Constraint: each field has exactly one source; no JSON input file exists.
+3. **L2-D3.** The work prompt takes the pi forms `[@files...] [messages...]`. An `@path` resolves against the workspace and is a UTF-8 text file; the first turn joins the file texts and the first message, and each later message is one more turn. Constraint: no image `@path` this round; no standard input; `--prompt`, `--prompt-file` and `--input` do not exist.
+4. **L2-D4.** Extra instructions come only from `--append-system-prompt <path>`, repeatable, path only. Its reader is the evaluation with the repository context of `swe@1`. Constraint: the agent composes the texts at the place of the Repository prompt, layer 2.
 5. **L2-D5.** `--session` is required and names a new file. This round has no resume input. Constraint: an existing entry at the path is refused; the path lies in a directory that the current user owns, outside the workspace and the pi directory.
 6. **L2-D6.** The `--auth` entry passes a strict `api_key` branch or an `oauth` branch that keeps four fields. The provider check is the match of the entry type with the secret shape of the provider. Constraint: the run refuses each entry that pi refuses and an `api_key` entry with no key.
 7. **L2-D7.** The routing metadata comes from the `env` object through the [mapping](#routing-metadata-mapping), the inverse of `METADATA_ENV` plus `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_MODELS`. Constraint: the `env` object holds exactly the names of the provider; the raw `env` never reaches pi.
@@ -603,7 +610,7 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
 12. **L2-D12.** The exit codes are `0` completed, `1` refusal, `2` stopped, `4` budget end, `5` failed. Constraint: exit `3` stays the code of a superseded `serve worker`.
 13. **L2-D13.** Each code has the form `cli.run.agent.<reason>`, and [Diagnostic codes](#diagnostic-codes) lists each code. Constraint: L4 uses `cli.run.worker.<reason>`.
 14. **L2-D14.** `run agent` maps only the wall budget to the agent contract, with the default `2h`. Constraint: the OAuth expiry check uses this wall deadline.
-15. **L2-D15.** Two evaluation runs compare only with equal `input_digest`, `engine_version`, `provider`, `model`, `reasoning_effort` and `budget_wall_ms`. Constraint: each run has its own new worktree of the case commit; the session file and `result.json` are the record.
+15. **L2-D15.** Two evaluation runs compare only with equal `input_digest`, `engine_version`, `provider`, `model`, `reasoning_effort` and `budget_wall_ms`. Constraint: `input_digest` covers the messages, the `@path` file contents and the appended instruction texts, in order; each run has its own new worktree of the case commit; the session file and `result.json` are the record.
 16. **L2-D16.** `run agent` writes no telemetry file and gives the agent contract no trace sink. Constraint: the session file is the record of the run.
 17. **L2-D17.** The [run order](#run-order) is fixed. Constraint: steps 1 to 5 create no file; no model request leaves before step 10.
 18. **L2-D18.** `run agent` parses the model selection with the exported pi function `resolveCliModel` (Ulrich, 2026-11-22). Constraint: the run refuses a result that differs from the text of `--model` and a level that the model does not support; it never matches fuzzily and never clamps the level. `provider` is a pi provider id, and the entry type of `anthropic` selects `anthropic` or `anthropic-subscription`.
