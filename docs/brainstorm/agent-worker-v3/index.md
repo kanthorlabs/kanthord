@@ -26,13 +26,27 @@ Each layer file starts with its goals `G1`, `G2`, ..., ends with its decisions a
 
 Each layer file has a section "Acceptance checks". Each check states one public behavior of the layer: the fixture, the command or call, and the exact observable result (output, exit code, file, state or refusal). An agent runs each check end to end with no human step. Each check of L1 names the owner layer that makes it runnable. The implementation of a layer passes the checks of that layer and of every upper layer. A change to a check of an upper layer goes to that layer first. Each build step of L6 names the checks that it makes pass.
 
+## Round order
+
+Ulrich set this order on 2026-11-22. The worker work starts only after the agent gate passes.
+
+1. L1, the model. Status `accepted`.
+2. L2, the agent CLI. Then L3, the agent.
+3. L6 part A: the build steps of the agent, from the code of today to L2 and L3.
+4. The agent gate, in this order:
+   1. The acceptance checks of L1, L2 and L3 that their owner layers make runnable pass.
+   2. An end-to-end run of `kanthord run agent` with a real LLM credential passes. The credential comes from the pi `auth.json` of Ulrich, through `--auth`.
+   3. The evaluation of [L1-D20](L1-model.md#decisions) runs: each role profile against `swe@1`.
+5. L4, the worker CLI. Then L5, the worker.
+6. L6 part B: the build steps of the worker.
+
 ## Layer files
 
 The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A Fable review with the verdict accept sets `reviewed`. Ulrich sets `accepted` at the joint review.
 
 | Layer | File                                 | Title                        | Purpose                                                                                                   | Round goals    | Status     |
 | ----- | ------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------- | -------------- | ---------- |
-| L1    | [L1-model.md](L1-model.md)           | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today | R3, R4, R6, R8 | `reviewed` |
+| L1    | [L1-model.md](L1-model.md)           | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today | R3, R4, R6, R8 | `accepted` |
 | L2    | [L2-agent-cli.md](L2-agent-cli.md)   | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                      | R1, R6, R8     | `planned`  |
 | L3    | [L3-agent.md](L3-agent.md)           | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract          | R1, R2, R6, R8 | `planned`  |
 | L4    | [L4-worker-cli.md](L4-worker-cli.md) | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                              | R5, R6, R8     | `planned`  |
