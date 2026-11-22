@@ -16,9 +16,11 @@ This set designs the next agent and worker of KanthorD. It starts from the direc
 ## Reading order
 
 1. Read [L1](L1-model.md) first. It fixes the actors, the boundaries, the tool ownership rule and the credential flow.
-2. Read [L2](L2-agent.md), then [L3](L3-agent-cli.md), for the agent and its CLI.
-3. Read [L4](L4-worker.md), then [L5](L5-worker-cli.md), for the worker and its CLI.
+2. Read [L2](L2-agent-cli.md), then [L3](L3-agent.md), for the agent CLI and then the agent.
+3. Read [L4](L4-worker-cli.md), then [L5](L5-worker.md), for the worker CLI and then the worker.
 4. Read [L6](L6-migration.md) last, for the build order.
+
+The layers go from the overall to the details. Each CLI layer comes before the core layer that serves it, so the core satisfies the contract that the CLI states. When a core layer needs a change to that contract, the change goes to the CLI layer first. L6 gives the build order, which is a separate order.
 
 Each layer file starts with its goals `G1`, `G2`, ..., ends with its decisions and its open questions for Ulrich, and names the goals that each section serves.
 
@@ -29,16 +31,16 @@ The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A
 | Layer | File                                 | Title                        | Purpose                                                                                                   | Round goals    | Status     |
 | ----- | ------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------- | -------------- | ---------- |
 | L1    | [L1-model.md](L1-model.md)           | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today | R3, R4, R6, R8 | `reviewed` |
-| L2    | [L2-agent.md](L2-agent.md)           | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract          | R1, R2, R6, R8 | `planned`  |
-| L3    | [L3-agent-cli.md](L3-agent-cli.md)   | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                      | R1, R6, R8     | `planned`  |
-| L4    | [L4-worker.md](L4-worker.md)         | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                  | R3, R4, R6, R8 | `planned`  |
-| L5    | [L5-worker-cli.md](L5-worker-cli.md) | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                              | R5, R6, R8     | `planned`  |
+| L2    | [L2-agent-cli.md](L2-agent-cli.md)   | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                      | R1, R6, R8     | `planned`  |
+| L3    | [L3-agent.md](L3-agent.md)           | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract          | R1, R2, R6, R8 | `planned`  |
+| L4    | [L4-worker-cli.md](L4-worker-cli.md) | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                              | R5, R6, R8     | `planned`  |
+| L5    | [L5-worker.md](L5-worker.md)         | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                  | R3, R4, R6, R8 | `planned`  |
 | L6    | [L6-migration.md](L6-migration.md)   | Migration                    | Specify the build order from the code of today                                                            | R7             | `planned`  |
 
 L1 links these anchors of later files. Each later file keeps the heading of each anchor.
 
-- `L2-agent.md#coding-tools`, `#profile-prompts`, `#input-and-output-contract`
-- `L4-worker.md#worker-instructions`, `#worker-capabilities`, `#worker-tools`
+- `L3-agent.md#coding-tools`, `#profile-prompts`, `#input-and-output-contract`
+- `L5-worker.md#worker-instructions`, `#worker-capabilities`, `#worker-tools`
 
 [L1](L1-model.md#handoffs-to-later-layers) lists the other items that it hands to a later layer.
 
@@ -63,7 +65,7 @@ One meaning per term. A term of today keeps its meaning unless its entry marks `
 - **agent CLI.** The one-shot command `kanthord run agent`. It runs one agent profile from one input and exits. It holds only the LLM credential, from standard input or from its `--auth` file. Change: a new command under the new global root `run` ([L1](L1-model.md#e5-two-clis-fits-with-the-root-run)).
 - **worker CLI.** The one-shot command `kanthord run worker`. It claims one execution, runs it and exits. The instance key is its only start credential and its only credential toward the server, as `serve worker`. It reads the machine key and receives the handover as `serve worker` does. Change: a new command under the new global root `run` ([L1](L1-model.md#e5-two-clis-fits-with-the-root-run)).
 - **consumer.** The code that opens an agent session for its own purpose: a worker, the Workbench Service, the Project Service or the agent CLI. Change: today a consumer is a service ([agent.vocabulary.md](../agent.vocabulary.md#consumer)); the agent CLI is no service.
-- **agent contract.** The input and the output of a run. [L2](L2-agent.md#input-and-output-contract) specifies it. Change: a new term.
+- **agent contract.** The input and the output of a run. [L3](L3-agent.md#input-and-output-contract) specifies it. Change: a new term.
 - **agent input.** The input of one run: the profile name, the model selection and runtime, the workspace roots, the budget, the system prompt or the instructions, and the consumer records. Change: a new term.
 - **workspace roots.** The working directory of a session and, for a confined profile, the directories that the confinement guard accepts. Change: a new term for `cwd` and the `roots` of `Confinement` (`engine/src/agent/hooks/checkout-confinement.ts`).
 - **category.** A kind of work that one or more workers automate, for example coding. Change: a new term.

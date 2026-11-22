@@ -33,8 +33,8 @@ The direction of Ulrich is his thinking, not a fixed specification. This section
   4. A role profile runs only through `kanthord run agent`, for the evaluation against `swe@1`. [L1-D20](#decisions) states the evaluation.
   5. The repository context of a role profile comes from the KanthorD prompt chain: the Standard, the Role, the stored Repository prompt and the Binding prompt. This round loads no `AGENTS.md`. The instruction file stays as today, absent by default.
   6. A later round designs a selection rule only after a role profile wins. The work unit that gets `te@1` goes with that selection. A worker that runs `te@1` in its own step is the worker `tdd@1`, which stays an example.
-  7. The profile prompt holds one coding text that the coding profiles share. A Role holds only the role statement and its method. [L2](L2-agent.md#profile-prompts) writes the texts. Each method rule of a Role traces to one dogfood finding or to one evaluation result.
-  8. The four implementation profiles hold the seven agent tools of today. A role gets another tool only for a need of today. [L2](L2-agent.md#coding-tools) applies the rule.
+  7. The profile prompt holds one coding text that the coding profiles share. A Role holds only the role statement and its method. [L3](L3-agent.md#profile-prompts) writes the texts. Each method rule of a Role traces to one dogfood finding or to one evaluation result.
+  8. The four implementation profiles hold the seven agent tools of today. A role gets another tool only for a need of today. [L3](L3-agent.md#coding-tools) applies the rule.
   9. Build in two layers. Layer 1 is the role profiles in the runtime catalog and the agent CLI. Layer 1 adds no server operation, no server record and no server view. Layer 1 does not change the composed prompt or the prompt references of a worker execution. The evaluation baseline is `swe@1` as `run agent` composes it. Layer 2 starts only after a role profile wins. It holds the selection rule, the session per profile, the execution setup and the shared coding text in the worker path.
 
 #### E1 constraints
@@ -65,8 +65,8 @@ The direction of Ulrich is his thinking, not a fixed specification. This section
 
 - **Evidence.** `kanthord serve worker` starts one worker instance from its instance configuration and runs until it stops. The instance key is its only credential, and it refuses `--token` (`engine/docs/cli/other.md`, section `serve worker`). The direction pairs the worker CLI with an agent CLI that takes one input.
 - **Fit.** Both CLIs are one-shot commands under a new global root `run`. The binary stays `kanthord`, and `serve` stays the long-running process.
-  1. The agent CLI is `kanthord run agent`. It runs one agent profile from one input and exits ([L3](L3-agent-cli.md)). It holds only the LLM credential, from standard input or from its `--auth` file, and no KanthorD credential.
-  2. The worker CLI is `kanthord run worker`. It claims one execution, runs it and exits ([L5](L5-worker-cli.md)). The instance key is its only start credential and its only credential toward the server, as `serve worker`. It reads the machine key and receives the handover as `serve worker` does. It refuses `--token`.
+  1. The agent CLI is `kanthord run agent`. It runs one agent profile from one input and exits ([L2](L2-agent-cli.md)). It holds only the LLM credential, from standard input or from its `--auth` file, and no KanthorD credential.
+  2. The worker CLI is `kanthord run worker`. It claims one execution, runs it and exits ([L4](L4-worker-cli.md)). The instance key is its only start credential and its only credential toward the server, as `serve worker`. It reads the machine key and receives the handover as `serve worker` does. It refuses `--token`.
   3. Change: `run` joins the closed set of global root names. Today the set holds `config`, `upgrade`, `serve` and `auth` (`engine/docs/cli/other.md`, section "Closed root names and option scope").
 
 ### E6. Profile names `ops@1` and `comm@1` (fits)
@@ -79,7 +79,7 @@ The direction of Ulrich is his thinking, not a fixed specification. This section
 - `evidence-upload` and `link_update_list` belong to the worker layer. Both call the server through the worker host (`engine/src/apps/worker/execution.ts`, `hostToolsOf`). The [tool inventory](#tool-inventory) moves them.
 - The agent runs on pi-coding-agent (`engine/src/agent/agent-session.ts`, `openSessionRuntime`).
 - The worker adds a repository instruction to the system prompt. The Repository prompt does this today ([agent.md](../agent.md#prompt-composer)).
-- Define only the coding tool set of today. [L2](L2-agent.md#coding-tools) applies the rule of this page.
+- Define only the coding tool set of today. [L3](L3-agent.md#coding-tools) applies the rule of this page.
 
 ## Roles
 
@@ -111,7 +111,7 @@ The diagram states these facts:
 - The agent profile fixes the profile prompt, the full tool set of the profile by name, the start preconditions and the confinement.
 - The agent is stateless and runs without KanthorD. [Statelessness](#statelessness) holds the checks.
 - The agent knows no worker, no execution, no claim and no node. [agent.md](../agent.md#boundary) states this for the input. Change: the code follows it. Today `SessionOpenRequest` carries `claim.execution_id` (`engine/src/agent/agent-port.ts`).
-- Every consumer opens a session through the agent contract of [L2](L2-agent.md#input-and-output-contract): a worker, the Workbench Service, the Project Service and the agent CLI.
+- Every consumer opens a session through the agent contract of [L3](L3-agent.md#input-and-output-contract): a worker, the Workbench Service, the Project Service and the agent CLI.
 
 #### Setup and start preconditions
 
@@ -126,10 +126,10 @@ Change: the Agent component of [agent.md](../agent.md#scope) splits into two par
 
 - **Agent runtime.** The session open, the profiles, the guards, the tools and the prompt composition. Files of `engine/src/agent/` today: `agent-session.ts`, `agent-port.ts`, `tool-table.ts`, `bash-process.ts`, `environment.ts`, `pi.ts`, `pi-tools.ts`, `catalog.ts`, `pinned-layers.ts`, `sensitive-text.ts`, `hooks/`, and the joins `finalPrompt` and `systemPrompt` of `prompt-render.ts`.
 - **Server part.** The configuration, the selection, the prompt sources and references, and the migrations. Files of `engine/src/agent/` today: `service.ts`, `configuration.ts`, `enablements.ts`, `cooldowns.ts`, `migrations.ts`, `prompt-resolve.ts`, `prompt-source.ts`, `prompt-files.ts`, `instruction-files.ts`, `prompt-templates.ts`, and the part reads of `prompt-render.ts`.
-- **Files that L2 splits or assigns.** `prompt-render.ts` splits: the joins go to the runtime, and the part reads stay in the server part. `contract.ts` serves both parts and imports `engine/src/scheduler/contract.ts`. `prompt-composer.ts` serves `pinned-layers.ts` and imports `prompt-templates.ts` of the server part. `prompt-assets.ts`, `config.ts` and `index.ts` have no part yet.
+- **Files that L3 splits or assigns.** `prompt-render.ts` splits: the joins go to the runtime, and the part reads stay in the server part. `contract.ts` serves both parts and imports `engine/src/scheduler/contract.ts`. `prompt-composer.ts` serves `pinned-layers.ts` and imports `prompt-templates.ts` of the server part. `prompt-assets.ts`, `config.ts` and `index.ts` have no part yet.
 - The server part imports custody, project, mission and tracking modules and uses the store (`engine/src/agent/service.ts`). Those imports stay.
 - The runtime imports today: `engine/src/worker/contract.ts` (`catalog.ts`, `agent-port.ts`, `pi-tools.ts`, `capabilities/*.ts`), `engine/src/tracking/contract.ts` (`SpanStatus` in `agent-port.ts`) and `engine/src/custody/contract.ts` (`SecretShape` in `hooks/sensitive-text-redaction.ts`).
-- Change: the runtime imports no worker, project, mission or scheduler module, no transport and no gateway client. [L2](L2-agent.md) assigns each file and rules the `SpanStatus` and `SecretShape` imports.
+- Change: the runtime imports no worker, project, mission or scheduler module, no transport and no gateway client. [L3](L3-agent.md) assigns each file and rules the `SpanStatus` and `SecretShape` imports.
 
 ### Worker
 
@@ -144,7 +144,7 @@ Change: the Agent component of [agent.md](../agent.md#scope) splits into two par
   - The import closure of the line holds no client, no transport and no credential (`engine/src/worker/unit/foundry-boundary.test.ts`).
   - The build rule `FoundryReadsSshAccess` refuses a `tasks` step that reads `sshAccess` (`engine/src/worker/unit/chain.ts`).
 - Every D32 rule of the Foundry applies to the line ([design.md D32](../worker-execution-refactor/design.md#1-decisions)). The line holds no client, no transport and no credential. It makes a side effect only through a host tool.
-- Change: the line opens an agent session only through the agent contract of [L2](L2-agent.md). The port `agent.open` builds the agent input from the execution setup and the worker layer (`engine/src/worker/unit/foundry-ports.ts`, `AgentPort`).
+- Change: the line opens an agent session only through the agent contract of [L3](L3-agent.md). The port `agent.open` builds the agent input from the execution setup and the worker layer (`engine/src/worker/unit/foundry-ports.ts`, `AgentPort`).
 - The code keeps its names this round: `foundry-*.ts`, `FoundryHost` and `FoundryStep`. The Worker V2 pages keep the terms Foundry, Foundry host and CLI host. "Line" names the code of the Foundry. "Worker host" names the code of the Foundry host that talks to the server.
 
 ### Server
@@ -158,7 +158,7 @@ Change: the Agent component of [agent.md](../agent.md#scope) splits into two par
 
 - The Workbench Service adds server operation tools, its own `bash` wrapper and the approval hook (`engine/src/workbench/tools.ts`, `builtinTools`, `toolOperations`). Its session holds only `toolApproval` (`engine/src/workbench/service.ts`).
 - The Project Service adds the tools `probe` and `environment_write` (`engine/src/project/environment-agent-tools.ts`). Its session holds only `checkoutConfinement` (`engine/src/project/environment-agent.ts`).
-- The agent CLI of [L3](L3-agent-cli.md) is a consumer that is no service and gives no tool implementation.
+- The agent CLI of [L2](L2-agent-cli.md) is a consumer that is no service and gives no tool implementation.
 - Change: the Workbench Service and the Project Service open each session through the agent contract. The profile declares each of their tools by name, and they give only the implementation. Every guard applies ([L1-D8](#decisions)).
 - Change: the Workbench code lives on the branch `feature/workbench-v2`. The Workbench change starts after that branch merges into `main`.
 
@@ -179,7 +179,7 @@ Change: the Agent component of [agent.md](../agent.md#scope) splits into two par
 
 (G2)
 
-The worker calls the agent; the agent never calls the worker. [L2](L2-agent.md#input-and-output-contract) specifies the agent side. [L4](L4-worker.md) specifies the worker side.
+The worker calls the agent; the agent never calls the worker. [L3](L3-agent.md#input-and-output-contract) specifies the agent side. [L5](L5-worker.md) specifies the worker side.
 
 | Direction      | Item              | Content at L1 level                                                                                     | Today                                                      |
 | -------------- | ----------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
@@ -220,7 +220,7 @@ Boundary rules:
 7. In a confined session, the confinement guard refuses each tool with no location declaration (`engine/src/agent/hooks/checkout-confinement.ts`). Each declared tool carries its location list, also when the list is empty. A new tool of a confined profile needs a D27 test ([design.md §5.4](../worker-execution-refactor/design.md#54-credentials)).
 8. A line port is no tool. Step code calls it outside a turn, and the model never sees it.
 
-[L2](L2-agent.md#coding-tools) applies rules 1 and 2. [L4](L4-worker.md#worker-tools) applies rules 3 to 7 to the worker tools of `coder@1` and `reviewer@1`.
+[L3](L3-agent.md#coding-tools) applies rules 1 and 2. [L5](L5-worker.md#worker-tools) applies rules 3 to 7 to the worker tools of `coder@1` and `reviewer@1`.
 
 ### Tool inventory
 
@@ -234,7 +234,7 @@ Each tool, hook, port and prompt part that an agent session gets today, with its
 | `evidence-upload`                                                                                                                | `src/agent/capabilities/execution-evidence.ts`; `src/apps/worker/evidence-upload.ts`; `src/apps/worker/tasks-host-tools.ts` | Worker tool that `swe@1` declares. Change: the implementation leaves `src/agent/`; `tasks-host-tools.ts` goes                                                                                                       |
 | `link_update_list`                                                                                                               | `src/agent/capabilities/link-updates.ts`; `src/apps/worker/execution.ts`                                                    | Worker tool that `swe@1` declares. Change: the implementation leaves `src/agent/`                                                                                                                                   |
 | `SessionHostTools`, `asToolError`                                                                                                | `src/agent/capabilities/host-tools.ts`                                                                                      | Worker layer                                                                                                                                                                                                        |
-| `host_tools`, `HOST_TOOL_PARAMETERS`, their `TOOL_CATALOG` entries                                                               | `src/agent/catalog.ts`                                                                                                      | Agent catalog: the declaration of the consumer tools of a profile. [L2](L2-agent.md#coding-tools) takes the field shape `AgentTools` of `feature/workbench-v2`                                                      |
+| `host_tools`, `HOST_TOOL_PARAMETERS`, their `TOOL_CATALOG` entries                                                               | `src/agent/catalog.ts`                                                                                                      | Agent catalog: the declaration of the consumer tools of a profile. [L3](L3-agent.md#coding-tools) takes the field shape `AgentTools` of `feature/workbench-v2`                                                      |
 | `probe`, `environment_write`                                                                                                     | `src/project/environment-agent-tools.ts`; `EnvironmentTool` in `src/agent/catalog.ts`                                       | Consumer tools of the Project Service. Change: `env@1` declares them; today its declaration names only `read`, `grep`, `find` and `ls`                                                                              |
 | Workbench operation tools and Workbench `bash`                                                                                   | `src/workbench/tools.ts` (`toolOperations`, `builtinTools`)                                                                 | Consumer tools of the Workbench. Change: `swe@1` and `re@1` declare them. The catalog of `feature/workbench-v2` already declares them in `AgentTools` (`git show origin/feature/workbench-v2:src/agent/catalog.ts`) |
 | `homeRelativeCwd`                                                                                                                | `src/agent/hooks/home-relative-cwd.ts`                                                                                      | Agent                                                                                                                                                                                                               |
@@ -264,7 +264,7 @@ No tool of today goes to removal. Only the implementations of the worker tools l
 1. Each pi extension is one module that exports one extension factory. Its test file is next to it.
 2. pi receives each extension as a function at session start: an `InlineExtension` through `extensionFactories` (`engine/src/agent/agent-session.ts`, `sessionParts`). The in-memory closures thus stay: the redaction secrets, the worker tool transport function and the confinement roots.
 3. No consumer loads an extension from a file path.
-4. The extension lists of [L2](L2-agent.md) and [L4](L4-worker.md) follow this rule.
+4. The extension lists of [L3](L3-agent.md) and [L5](L5-worker.md) follow this rule.
 
 Change: these modules of engine `c864130e` break rule 1.
 
@@ -277,7 +277,7 @@ Change: these modules of engine `c864130e` break rule 1.
 
 (G4)
 
-"Stateless and runs without KanthorD" means that each check holds for every session that the agent runtime opens. [L3](L3-agent-cli.md) tests the checks with the agent CLI. Only the agent is stateless; the worker is not.
+"Stateless and runs without KanthorD" means that each check holds for every session that the agent runtime opens. [L2](L2-agent-cli.md) tests the checks with the agent CLI. Only the agent is stateless; the worker is not.
 
 1. **No server call.** The runtime holds no transport, no gateway client and no server address. The child environment holds no `KANTHORD_TOKEN`, `KANTHORD_ENDPOINT`, `KANTHORD_WORKER_CONFIG` or `KANTHORD_MACHINE_CONFIG` (`engine/src/agent/environment.ts`, `childEnvironment`). A worker tool is the only path from a worker session to a server.
 2. **No database.** The runtime opens no database and no store of a service.
@@ -317,7 +317,7 @@ Change: these modules of engine `c864130e` break rule 1.
 - **Fact (engine `c864130e`, pi `1.1.0`).** The `hook` factory of the redaction replaces each input message at `message_end` (`engine/src/agent/hooks/sensitive-text-redaction.ts`). pi writes the message to the session file after that event (`@earendil-works/pi-coding-agent`, `dist/core/agent-session.js`, `_handleAgentEvent`). Each input message thus reaches the file redacted.
 - **Change against today.** Today the `hook` makes three more redactions of LLM output ([agent.impl.md](../agent.impl.md#sensitive-text-redaction)). It redacts the `assistant` message with rule 0. It keeps a signed or redacted thinking block whole, with the count `thinking_kept`. It redacts the compaction summary at `context` and at `session_compact`. These three redactions leave.
 - **Exit redaction.** R2-H covers only the pi record: the memory of the session and the session file. Each text that a consumer takes out of a session passes the known-secret redaction. This holds for the last assistant text that the worker reads (`redaction.modelOutput` in `lastText`, `engine/src/worker/unit/native-agent.ts`). It also holds for each session entry that the worker sends to the server (`redactValue` in `sessionEntryRecord`, `engine/src/worker/unit/session-entries.ts`), the `run agent` result output and the run log on stderr. Owner: the agent runtime applies the exit redaction at the output of the agent contract, so no consumer can omit it. Change: the Workbench Service and the Project Service have no exit redaction today. They read the session events (`engine/src/workbench/service.ts`, `agent.subscribe`) and rely on the `assistant` redaction that R2-H removes.
-- **Constraint.** [L2](L2-agent.md) specifies the build change and the check that no input entry of the session file holds a known secret. The check covers each entry kind that pi writes, not only messages. This check replaces rule 10 and the `turns.jsonl` part of rule 9 of `tasks run` (`engine/docs/cli/worker.md`).
+- **Constraint.** [L3](L3-agent.md) specifies the build change and the check that no input entry of the session file holds a known secret. The check covers each entry kind that pi writes, not only messages. This check replaces rule 10 and the `turns.jsonl` part of rule 9 of `tasks run` (`engine/docs/cli/worker.md`).
 - **Order.** [L6](L6-migration.md) orders the build change and the check before the step that makes `run agent` write a session file. The evaluation of [L1-D20](#decisions) starts after that step.
 - **Place.** A session file lies in a private place. The worker host keeps it in a `0700` directory (`engine/src/agent/session-directory.ts`, `ensureDirectory`). `run agent` writes it as a `0600` file, and it refuses a path that is a symbolic link or that another user owns. Today pi creates the file with `openSync(file, "wx")` and no mode (`dist/core/session-manager.js`, `_persist`).
 
@@ -417,18 +417,18 @@ This section states what each item becomes. [L6](L6-migration.md) plans the buil
 
 ## Handoffs to later layers
 
-- [L2](L2-agent.md): the file assignment of the [agent runtime](#agent-runtime-and-server-part-of-the-agent-component), with the split of `prompt-render.ts` and the part of `contract.ts`, `prompt-composer.ts`, `prompt-assets.ts`, `config.ts` and `index.ts`; the anchors `#coding-tools`, `#profile-prompts` and `#input-and-output-contract`; the composition function of boundary rule 2; the extension list under the [extension rule](#extension-rule).
-- [L2](L2-agent.md): the full tool set of each profile in the catalog, and the field that declares the consumer tools. L2 takes the field shape `AgentTools` of `feature/workbench-v2`. L2 states the session of a consumer that gives no implementation of a declared consumer tool, for example `run agent` with `swe@1`. L2 states whether the Workbench `bash` wrapper becomes the agent `bash`.
-- [L2](L2-agent.md): the exit redaction at the output of the agent contract, for every consumer. For the Workbench Service and the Project Service, this is new work: R2-H removes their only redaction of LLM output.
-- [L2](L2-agent.md): the start preconditions of each profile and the refusal output. The list holds for every consumer, the Workbench and the Project Service included. L2 rules the Workbench `swe@1` session, whose working directory is no git worktree today (`engine/src/workbench/sessions.ts`, `workbenchDirectory`), and the check at a resume.
-- [L2](L2-agent.md): the split of `swe@1.md` into the shared coding text and the Role. Layer 1 does not change the composed prompt or the prompt references of a worker execution.
-- [L2](L2-agent.md): the build change of [Session file](#session-file). Remove the redaction of `assistant` messages, thinking blocks and the compaction summary. Keep the input redaction, the `restore` and `modelOutput`. Add the rotate warning, and specify the shape of its finding and warning. Add the check that no input entry of the session file holds a known secret, for each entry kind that pi writes.
-- [L3](L3-agent-cli.md): the command `kanthord run agent` under the global root `run`. L3 adds `run` to the closed root set of `engine/docs/cli/other.md` ("Closed root names and option scope"), because `run agent` is the first command under it. The session file path is an input, under the place rule of [Session file](#session-file). The `--auth` file follows [The `--auth` file](#the---auth-file-of-run-agent). L3 specifies the mapping from the `env` object of an `--auth` entry to the routing metadata of the provider, and the schema of the raw `--auth` entry. Goal "One input runs under two profiles, and the results compare." The checks of [Statelessness](#statelessness). The command page tells the developer the [reach of an unconfined session](#reach-of-an-unconfined-session) and to use a credential that the developer owns.
-- [L3](L3-agent-cli.md): the evaluation input of [L1-D20](#decisions): a prepared workspace, a fixed input, the stored Repository prompt and the Binding prompt of `swe@1` as instructions of the input, and the pi session file as the record.
-- [L4](L4-worker.md): the anchors `#worker-instructions`, `#worker-capabilities`, `#worker-tools`; the lint glob of the [LLM credential](#llm-credential); the extension list under the [extension rule](#extension-rule).
-- [L4](L4-worker.md): boundary rule 9. The worker commits the work of a session before it opens the next session of the same execution.
-- [L4](L4-worker.md) and [L6](L6-migration.md): the Workbench Service and the Project Service open each session through the agent contract, with every guard. The Workbench change starts after `feature/workbench-v2` merges into `main`.
-- [L5](L5-worker-cli.md): the command `kanthord run worker` under the global root `run`.
+- [L2](L2-agent-cli.md): the command `kanthord run agent` under the global root `run`. L2 adds `run` to the closed root set of `engine/docs/cli/other.md` ("Closed root names and option scope"), because `run agent` is the first command under it. The session file path is an input, under the place rule of [Session file](#session-file). The `--auth` file follows [The `--auth` file](#the---auth-file-of-run-agent). L2 specifies the mapping from the `env` object of an `--auth` entry to the routing metadata of the provider, and the schema of the raw `--auth` entry. Goal "One input runs under two profiles, and the results compare." The checks of [Statelessness](#statelessness). The command page tells the developer the [reach of an unconfined session](#reach-of-an-unconfined-session) and to use a credential that the developer owns.
+- [L2](L2-agent-cli.md): the evaluation input of [L1-D20](#decisions): a prepared workspace, a fixed input, the stored Repository prompt and the Binding prompt of `swe@1` as instructions of the input, and the pi session file as the record.
+- [L3](L3-agent.md): the file assignment of the [agent runtime](#agent-runtime-and-server-part-of-the-agent-component), with the split of `prompt-render.ts` and the part of `contract.ts`, `prompt-composer.ts`, `prompt-assets.ts`, `config.ts` and `index.ts`; the anchors `#coding-tools`, `#profile-prompts` and `#input-and-output-contract`; the composition function of boundary rule 2; the extension list under the [extension rule](#extension-rule).
+- [L3](L3-agent.md): the full tool set of each profile in the catalog, and the field that declares the consumer tools. L3 takes the field shape `AgentTools` of `feature/workbench-v2`. L3 states the session of a consumer that gives no implementation of a declared consumer tool, for example `run agent` with `swe@1`. L3 states whether the Workbench `bash` wrapper becomes the agent `bash`.
+- [L3](L3-agent.md): the exit redaction at the output of the agent contract, for every consumer. For the Workbench Service and the Project Service, this is new work: R2-H removes their only redaction of LLM output.
+- [L3](L3-agent.md): the start preconditions of each profile and the refusal output. The list holds for every consumer, the Workbench and the Project Service included. L3 rules the Workbench `swe@1` session, whose working directory is no git worktree today (`engine/src/workbench/sessions.ts`, `workbenchDirectory`), and the check at a resume.
+- [L3](L3-agent.md): the split of `swe@1.md` into the shared coding text and the Role. Layer 1 does not change the composed prompt or the prompt references of a worker execution.
+- [L3](L3-agent.md): the build change of [Session file](#session-file). Remove the redaction of `assistant` messages, thinking blocks and the compaction summary. Keep the input redaction, the `restore` and `modelOutput`. Add the rotate warning, and specify the shape of its finding and warning. Add the check that no input entry of the session file holds a known secret, for each entry kind that pi writes.
+- [L4](L4-worker-cli.md): the command `kanthord run worker` under the global root `run`.
+- [L5](L5-worker.md): the anchors `#worker-instructions`, `#worker-capabilities`, `#worker-tools`; the lint glob of the [LLM credential](#llm-credential); the extension list under the [extension rule](#extension-rule).
+- [L5](L5-worker.md): boundary rule 9. The worker commits the work of a session before it opens the next session of the same execution.
+- [L5](L5-worker.md) and [L6](L6-migration.md): the Workbench Service and the Project Service open each session through the agent contract, with every guard. The Workbench change starts after `feature/workbench-v2` merges into `main`.
 - [L6](L6-migration.md): layer 2 of E1 starts only after a role profile wins; the import check of [L1-D5](#decisions); the order of [Session file](#session-file): the build change and the check come before the step that makes `run agent` write a session file.
 - [L6](L6-migration.md): remove the field `FoundryHost.capabilities` (`engine/src/worker/unit/foundry.ts:36`) and its three arguments, because `runTasks` never reads it. Remove the exports `foundryEvaluation` and `foundryExamine`, which have no caller. Update `chain-golden.txt` and the `name` strings `"foundryEvaluation"` (`engine/src/worker/unit/chain-evaluation.ts:42`) and `"foundryExamine"` (`engine/src/worker/unit/chain-examine.ts:26`).
 - [L6](L6-migration.md): for the [extension rule](#extension-rule), split `sensitive-text-redaction.ts` into one factory per module and add the missing tests. Add a gate check that fails on an extension file with no test file next to it.
