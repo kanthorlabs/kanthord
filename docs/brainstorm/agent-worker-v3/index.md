@@ -12,7 +12,7 @@ This set designs the next agent and worker of KanthorD. It starts from the direc
 6. **R6.** Each credential rule of today keeps its strength or becomes stricter at every layer.
 7. **R7.** [LA](LA-agent-build.md) and [LB](LB-worker-build.md) give ordered lists of build steps from the code of today to this design. After each step, `main` works, and the step names the check that proves it.
 8. **R8.** Each point of the direction of Ulrich has a verdict with evidence. A point that does not fit has a suggestion for Ulrich.
-9. **R9.** Each role profile has a verdict from the fixed evaluation set of [L4](L4-agent-evaluation.md): keep or leave.
+9. **R9.** `swe@1` passes the stage gate of each stage of [L4](L4-agent-evaluation.md#stage-gate) on the fixed evaluation set.
 
 ## Reading order
 
@@ -35,11 +35,11 @@ Ulrich set this order on 2026-11-22, and renumbered the layer chain on the same 
 
 1. L1, the model. Status `accepted`.
 2. L2, the agent CLI. Then L3, the agent. Then L4, the agent evaluation (Ulrich, 2026-11-22).
-3. LA: the build plan of the agent and its evaluation. It holds the build steps from the code of today to L1, L2, L3 and L4. It also holds the runner and the evaluation set of L4, the agent gate and the removal of each `leave` profile.
+3. LA: the build plan of the agent and its evaluation. It holds the build steps from the code of today to L1, L2, L3 and L4. It also holds the runner and the evaluation set of L4, and the agent gate.
 4. The agent gate, in this order:
    1. The acceptance checks and the unit-level rules of L1, L2, L3 and L4 that their owner layers make runnable pass.
    2. An end-to-end run of `kanthord run agent` with a real LLM credential passes. The credential comes from the pi `auth.json` of Ulrich, through `--auth`.
-   3. The agent evaluation of [L4](L4-agent-evaluation.md) runs against the built agent, in this order: the calibration of the eval model, the comparison of each role profile against `swe@1`, then the confirming check on the production model. An evaluation with no verdict fails this step, and Ulrich decides the next step.
+   3. The agent evaluation of [L4](L4-agent-evaluation.md) runs against the built agent, in this order: the iterations of stage 1 on the dev set, the stage gate of stage 1, the iterations of stage 2, then the stage gate of stage 2. Each stage gate passes, or Ulrich decides the next step.
 5. L5, the worker CLI. Then L6, the worker. Then L7, the worker evaluation.
 6. LB: the build plan of the worker and its evaluation. It holds the build steps from the agent gate to L5, L6 and L7, and the worker gate with the evaluation run of L7.
 7. After this round, `feature/workbench-v2` rebases onto `main` and moves the Workbench to the agent contract (Ulrich, 2026-11-22). The Agent V2 and Worker V3 work merges into `main` first. [L3](L3-agent.md#constraints-on-the-workbench-branch-at-rebase) lists the constraints of that rebase.
@@ -48,22 +48,22 @@ Ulrich set this order on 2026-11-22, and renumbered the layer chain on the same 
 
 The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A Fable review with the verdict accept sets `reviewed`. Ulrich sets `accepted` at the joint review.
 
-| Layer | File                                               | Title                        | Purpose                                                                                                                                | Round goals    | Status     |
-| ----- | -------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- |
-| L1    | [L1-model.md](L1-model.md)                         | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today                              | R3, R4, R6, R8 | `accepted` |
-| L2    | [L2-agent-cli.md](L2-agent-cli.md)                 | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                                                   | R1, R6, R8     | `accepted` |
-| L3    | [L3-agent.md](L3-agent.md)                         | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract                                       | R1, R2, R6, R8 | `draft`    |
-| L4    | [L4-agent-evaluation.md](L4-agent-evaluation.md)   | The agent evaluation         | Specify the evaluation set, the eval model, the calibration, the pass rule, the fixed exit rule and the runner of the agent evaluation | R6, R8, R9     | `draft`    |
-| LA    | [LA-agent-build.md](LA-agent-build.md)             | The agent build plan         | Specify the build steps of the agent and its evaluation from the code of today, and the agent gate with the evaluation run of L4       | R7             | `planned`  |
-| L5    | [L5-worker-cli.md](L5-worker-cli.md)               | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                                                           | R5, R6, R8     | `planned`  |
-| L6    | [L6-worker.md](L6-worker.md)                       | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                                               | R3, R4, R6, R8 | `planned`  |
-| L7    | [L7-worker-evaluation.md](L7-worker-evaluation.md) | The worker evaluation        | Specify the worker-level checks against a local KanthorD server, the review cases and the successor of the Worker V2 eval set          | R5             | `planned`  |
-| LB    | [LB-worker-build.md](LB-worker-build.md)           | The worker build plan        | Specify the build steps of the worker and its evaluation after the agent gate, and the worker gate with the evaluation run of L7       | R7             | `planned`  |
+| Layer | File                                               | Title                        | Purpose                                                                                                                                  | Round goals    | Status     |
+| ----- | -------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- |
+| L1    | [L1-model.md](L1-model.md)                         | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today                                | R3, R4, R6, R8 | `accepted` |
+| L2    | [L2-agent-cli.md](L2-agent-cli.md)                 | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                                                     | R1, R6, R8     | `accepted` |
+| L3    | [L3-agent.md](L3-agent.md)                         | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract                                         | R1, R2, R6, R8 | `draft`    |
+| L4    | [L4-agent-evaluation.md](L4-agent-evaluation.md)   | The agent evaluation         | Specify the goals, the evaluation set, the grading, the diagnosis, the iterations, the stage gate and the runner of the agent evaluation | R6, R8, R9     | `draft`    |
+| LA    | [LA-agent-build.md](LA-agent-build.md)             | The agent build plan         | Specify the build steps of the agent and its evaluation from the code of today, and the agent gate with the evaluation run of L4         | R7             | `planned`  |
+| L5    | [L5-worker-cli.md](L5-worker-cli.md)               | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                                                             | R5, R6, R8     | `planned`  |
+| L6    | [L6-worker.md](L6-worker.md)                       | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                                                 | R3, R4, R6, R8 | `planned`  |
+| L7    | [L7-worker-evaluation.md](L7-worker-evaluation.md) | The worker evaluation        | Specify the worker-level checks against a local KanthorD server, the review cases and the successor of the Worker V2 eval set            | R5             | `planned`  |
+| LB    | [LB-worker-build.md](LB-worker-build.md)           | The worker build plan        | Specify the build steps of the worker and its evaluation after the agent gate, and the worker gate with the evaluation run of L7         | R7             | `planned`  |
 
 L1 links these anchors of later files. Each later file keeps the heading of each anchor.
 
 - `L3-agent.md#coding-tools`, `#profile-prompts`, `#input-and-output-contract`, `#constraints-on-the-workbench-branch-at-rebase`
-- `L4-agent-evaluation.md#exit-rule`, `#unit-level-rules`
+- `L4-agent-evaluation.md#stage-gate`, `#unit-level-rules`
 - `L6-worker.md#worker-instructions`, `#worker-capabilities`, `#worker-tools`
 
 L2 links this anchor of a later file.
@@ -80,20 +80,21 @@ L2 links this anchor of a later file.
 
 One meaning per term. A term of today keeps its meaning unless its entry marks `Change:`.
 
-- **eval model.** The model that runs the agents under test in the agent evaluation. Calibration fixes its level. Change: a new term ([L4](L4-agent-evaluation.md#eval-model)).
-- **production model.** The model of the confirming check, `anthropic/claude-sonnet-5-5:high`. Change: a new term ([L4](L4-agent-evaluation.md#confirming-check)).
-- **case.** One work item of the evaluation set: a repository snapshot, a case text and hidden checks. Change: a new term ([L4](L4-agent-evaluation.md#case-folder)).
-- **group.** The kind of work of a case: `backend`, `frontend` or `test`. The group gives the role profile of the case. Change: a new term ([L4](L4-agent-evaluation.md#groups)).
-- **calibration.** The runs of `swe@1` that fix the level of the eval model before the comparison. Change: a new term ([L4](L4-agent-evaluation.md#calibration)).
-- **confirming check.** The runs on the production model that confirm a role profile that wins on the eval model. Change: a new term ([L4](L4-agent-evaluation.md#confirming-check)).
+- **case.** One work item of the evaluation set: a repository snapshot, a case text, a kind and hidden checks. Change: a new term ([L4](L4-agent-evaluation.md#case-folder)).
+- **goal aspect.** One of the aspects A1 to A9 that the agent evaluation measures for each run. Change: a new term ([L4](L4-agent-evaluation.md#goal-aspects)).
+- **dev set.** The cases that each iteration of the agent evaluation runs. Change: a new term ([L4](L4-agent-evaluation.md#dev-and-held-out-sets)).
+- **held-out set.** The cases that only the stage gate runs. Change: a new term ([L4](L4-agent-evaluation.md#dev-and-held-out-sets)).
+- **stage.** A part of the agent evaluation with one context: stage 1 with no context, stage 2 with the binding prompt of the case kind. Change: a new term ([L4](L4-agent-evaluation.md#stages)).
+- **stage gate.** The held-out pass share and the A9 rule that end a stage. Change: a new term ([L4](L4-agent-evaluation.md#stage-gate)).
+- **iteration.** One evaluation of the dev set with one prompt change of `swe@1` and one hypothesis. Change: a new term ([L4](L4-agent-evaluation.md#iteration)).
+- **diagnosis.** The findings of an Opus run of `re@1` on one dev run. It decides no pass. Change: a new term ([L4](L4-agent-evaluation.md#diagnosis)).
 - **base model.** The model whose catalog price measures the spend of an evaluation, `base_model` of `config.json`. Change: a new term ([L4](L4-agent-evaluation.md#configuration)).
 - **base cost.** The spend of a run in base dollars: its list price divided by the price ratio of its model. Change: a new term ([L4](L4-agent-evaluation.md#price-ratio)).
 
 - **agent.** One LLM working unit that runs one agent profile on pi-coding-agent. It is stateless and runs without KanthorD ([L1](L1-model.md#statelessness)). Change: today an agent is "an automated participant responsible for carrying out steps as the WHO" ([overview.vocabulary.md](../overview.vocabulary.md#agent)). The role in the WHO stays. The new meaning adds the unit and its boundary.
 - **agent runtime.** The part of the Agent component that is the agent of the model: the session open, the profiles, the guards, the tools and the prompt join. Change: a new term ([L1](L1-model.md#agent-runtime-and-server-part-of-the-agent-component)).
 - **agent profile.** The catalog declaration of one agent name of the form `<role>@<version>`, for example `swe@1` or `re@1`. It fixes the profile prompt, the full tool set of the profile by name, the start preconditions and the confinement. Change: a new term for the "agent declaration" of today (`engine/src/agent/catalog.ts`). The catalog declares each consumer tool of the profile too.
-- **role profile.** An implementation profile of one role of a category, for example `bee@1`, `fee@1` or `te@1`. It uses the configuration of its configuration owner. Change: a new term.
-- **configuration owner.** The profile whose enablement, providers, fallback chain, cooldown, selection, pin, worker binding entry and Binding prompt a role profile uses. `swe@1` is the configuration owner of the coding role profiles. Change: a new term.
+- **configuration owner.** A profile that the server configures: its enablement, providers, fallback chain, cooldown, selection, pin, worker binding entry and Binding prompt. `declarations.ts` of the server part lists each configuration owner ([L3](L3-agent.md#file-assignment)). Change: a new term.
 - **profile prompt.** The Standard (`base.md`), the shared text of the category, and the Role (`<agent_name>.md`) of a profile. Change: today the agent part of the KanthorD prompt (layer 1) is the Standard and the Role ([agent.md](../agent.md#prompt-composer)). The shared text of the category is new.
 - **agent session.** The pi session of one agent profile for one consumer, known by its session identity. A resume restores it after its close ([agent.md](../agent.md#agent-session)). Change: wording only; [agent.vocabulary.md](../agent.vocabulary.md#agent-session) defines it with "run".
 - **session file.** The pi session file of an agent session: the single record of the session. The consumer names its path and owns it. It holds no credential value that the LLM did not see. Change: the turn record `turns.jsonl` of `tasks run` leaves ([L1](L1-model.md#session-file)).
