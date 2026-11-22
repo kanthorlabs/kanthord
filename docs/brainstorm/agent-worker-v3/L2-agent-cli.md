@@ -676,6 +676,11 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
     - Command: Run with `--model openai-compatible/org/think:1:high`.
     - Assert: exit `0`. The request to Stub names the model `org/think:1`, and its field `reasoning.effort` equals `high`. The line in O has `model` `org/think:1` and `reasoning_effort` `high`.
 
+14. **L2-AC14. A confined profile reads nothing outside its root.** Covers L1 AC26.
+    - Fixture: Auth, Stub, H, X, T, D. A marker file outside W holds the unique text M6. The one commit of W holds a file F with known text and a symbolic link L whose target is the marker file. The scripted calls: `read` of the marker file by its absolute path; `grep` for M6 on the directory of the marker file; `read` of the marker file by a relative `../` path; `read` of L; `read` of F. Then a text answer.
+    - Command: Run with the profile `re@1` in place of `swe@1`.
+    - Assert: exit `0`. The first four calls get a block result in S. The fifth call returns the text of F. M6 is in no request to Stub, in no entry of S and not in O.
+
 ### Unit-level rules
 
 These rules hold with no process, no file system flow and no LLM stub, so their tests are unit tests ([index](index.md#layer-files)). Each item names the owning module. L3 or L6 assigns the exact file. Each rule stays in the text of this page.
