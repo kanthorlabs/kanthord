@@ -332,7 +332,7 @@ Ulrich ruled Q8 on 2026-11-21 and changed it on 2026-11-22. `run agent` takes th
 3. It reads the entry with the exported pi function `readStoredCredential(providerId, authPath)`, with an explicit path (`@earendil-works/pi-coding-agent`, `dist/index.js`). The function makes one synchronous read, makes no store, writes nothing, resolves no key value and returns the raw entry (`dist/core/auth-storage.js`). pi does not export `ReadOnlyAuthStorage`.
 4. It loads only the entry of the selected provider. The provider check and the `credential_expiring` check apply to the entry (`credentialOf` in `engine/src/worker/unit/tasks-credential.ts`). The human refreshes an expiring OAuth entry with pi.
 5. It refuses a file that the current user does not own, or whose mode gives group or other access.
-6. It refuses an entry whose key holds an environment variable reference, `$NAME` or `${NAME}`, and states the reason. Such a reference reads the `env` object of the entry and then `process.env` (`dist/core/resolve-config-value.js`, `resolveEnvConfigValue`). The read of item 2 runs before the ambient removal, so a reference takes the credential from an ambient variable. The refusal keeps the rule that no environment variable takes a credential.
+6. It refuses an entry whose key holds the character `$` anywhere, and states the reason. This covers the environment variable references `$NAME`, `${NAME}`, `prefix-$NAME` and `prefix-${NAME}`, and the pi escapes `$$` and `$!` (`parseConfigValueTemplate` in `dist/core/resolve-config-value.js`). A reference reads the `env` object of the entry and then `process.env` (`dist/core/resolve-config-value.js`, `resolveEnvConfigValue`). The read of item 2 runs before the ambient removal, so a reference takes the credential from an ambient variable. The refusal keeps the rule that no environment variable takes a credential.
 7. It refuses a key that starts with `!`, and states the reason. In pi, such a key is a shell command whose output is the key (`dist/core/resolve-config-value.js`, `resolveConfigValue`). `run agent` runs no shell code for a credential. `--auth` thus accepts only a literal API key or an OAuth entry.
 8. Each credential value of the entry joins the known secrets.
 9. `run agent` still refuses an `auth.json` in its own pi directory.
@@ -368,29 +368,29 @@ The OS containment of these processes is an open item of [HANDOFF.md](../HANDOFF
 
 ### Rules of today and their strength in the model
 
-| Rule of today                                                                                                                                    | Source                                                                                                                                                                                      | Rule in the model                                                                                                                                                                                                                                                                                        | Strength                                       |
-| ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Frozen store: no refresh, rotation, lease or report                                                                                              | `engine/src/llm/refresh-watch.ts` (`frozenStore`)                                                                                                                                           | `run agent` uses it. Only the worker host refreshes, through C1                                                                                                                                                                                                                                          | Same                                           |
-| `--credential-stdin` with the `isatty(0)` check and a zeroed buffer; a failed check reads no standard input                                      | `readDescriptor` and `runAction` in `engine/src/apps/cli/worker-tasks.ts`; `credentialOf` in `engine/src/worker/unit/tasks-credential.ts`; `engine/docs/cli/worker.md`, `tasks run`, rule 2 | Change: `run agent` reads no credential from standard input. The `--auth` file is its only credential input (L1-D22, 2026-11-22)                                                                                                                                                                         | Removed with its input                         |
-| Provider check, routing metadata only from standard input, metadata schema check, `credential_expiring`                                          | `credentialOf` and `routingMetadataOf` in `engine/src/worker/unit/tasks-credential.ts`                                                                                                      | The routing metadata enters with the credential, only from the `env` object of the selected `--auth` entry. The provider check, the metadata schema check and `credential_expiring` apply to it. No option and no variable names an endpoint                                                             | Weaker for `run agent` (Q8, ruled 2026-11-21)  |
-| No option, environment variable or file takes a credential                                                                                       | [design.md §5.7](../worker-execution-refactor/design.md#57-standalone-tasks-run)                                                                                                            | The `--auth` file of `run agent` takes the LLM credential. Conditions: the own file of the human, no group or other access, a read-only read, one provider entry, no variable reference, no `!` command ([The `--auth` file](#the---auth-file-of-run-agent)). No environment variable takes a credential | Weaker for `run agent` (Q8, ruled 2026-11-21)  |
-| Session redaction with the known secrets on every session, LLM output included                                                                   | `engine/src/agent/hooks/sensitive-text-redaction.ts`; `sessionParts`                                                                                                                        | Kept for each input to the LLM. Change: LLM output is not redacted, and a finding raises the rotate warning of [Session file](#session-file). The `run agent` result output passes the writer redaction                                                                                                  | Weaker for LLM output (R2-H, ruled 2026-11-21) |
-| In-memory session of `tasks run`; `turns.jsonl` in a `0700` output folder, with the writer redaction                                             | [design.md §5.7](../worker-execution-refactor/design.md#57-standalone-tasks-run); `engine/docs/cli/worker.md`, `tasks run`, rule 10 and the `turns.jsonl` part of rule 9                    | Change: `run agent` writes the session file that the consumer names. The rules of [Session file](#session-file) replace these rules                                                                                                                                                                      | Replaced (R2-A)                                |
-| Each output file, the run log on stderr and the last text that the worker reads pass the known-secret redaction                                  | `engine/docs/cli/worker.md`, `tasks run`, rule 9; `redaction.modelOutput` in `engine/src/worker/unit/native-agent.ts`; `sessionEntryRecord` in `engine/src/worker/unit/session-entries.ts`  | Kept: the agent runtime redacts each text that a consumer takes out of a session, at the output of the agent contract. Change: the Workbench Service and the Project Service get the exit redaction too ([Session file](#session-file))                                                                  | Same                                           |
-| `childEnvironment` for each child process                                                                                                        | `engine/src/agent/environment.ts`                                                                                                                                                           | Kept                                                                                                                                                                                                                                                                                                     | Same                                           |
-| A child process of a local run gets only the fixed names, the git isolation values and the passed variables                                      | `engine/docs/cli/worker.md`, `tasks run`, rule 8; `SHELL_NAMES` in `engine/src/apps/cli/worker-tasks.ts`; `FIXED_GIT_ENV` in `engine/src/worker/unit/tasks-run.ts`                          | `run agent` applies the same child environment                                                                                                                                                                                                                                                           | Same                                           |
-| `--pass-env` refuses a fixed name, an ambient-removal name and a name that `childEnvironment` removes; each passed value joins the known secrets | `passEnvRefused` in `engine/src/worker/unit/tasks-seed.ts`; `engine/src/apps/cli/worker-tasks.ts`; `engine/src/worker/unit/tasks-run.ts`                                                    | A value that a consumer passes to the child environment: the same name refusals apply, and each value joins the known secrets                                                                                                                                                                            | Same                                           |
-| Ambient credential removal before pi loads, `HOME`, AWS file paths, metadata endpoints off                                                       | `withoutAmbientCredentials` in `engine/src/worker/unit/tasks-credential.ts`                                                                                                                 | Change: `run agent` applies it too                                                                                                                                                                                                                                                                       | Stricter                                       |
-| `checkoutConfinement` on each `re@1` session that `agentPort` opens and each `env@1` session                                                     | `engine/src/agent/agent-port.ts` (`guardsOf`); `engine/src/project/environment-agent.ts`                                                                                                    | Change: confinement is a profile property for every consumer, the Workbench `re@1` session included                                                                                                                                                                                                      | Stricter                                       |
-| The allowlist runs only in sessions that `agentPort` opens; a Workbench session holds only `toolApproval`                                        | `engine/src/agent/agent-port.ts` (`guardsOf`); `engine/src/workbench/service.ts`                                                                                                            | Change: the allowlist, the confinement where the profile sets it and the redaction apply to every consumer                                                                                                                                                                                               | Stricter                                       |
-| None: no check of a session file for a known secret                                                                                              | None                                                                                                                                                                                        | Change: a check that no input entry of a session file holds a known secret ([Session file](#session-file))                                                                                                                                                                                               | Stricter                                       |
-| None for a session file of `run agent`                                                                                                           | `engine/src/agent/session-directory.ts`; `PRIVATE_DIRECTORY_MODE` in `engine/src/kernel/files.ts`                                                                                           | Change: a session file lies in a private place: a `0700` directory for the worker host, a `0600` file for `run agent`. `run agent` refuses a path that is a symbolic link or that another user owns                                                                                                      | Stricter                                       |
-| No context key holds a credential; a capability gets no handover result, `sshAccess` or model runtime                                            | [design.md §5.4](../worker-execution-refactor/design.md#54-credentials)                                                                                                                     | Kept for the line and each worker capability                                                                                                                                                                                                                                                             | Same                                           |
-| Lint rule on `modelRegistry` and `registerProvider`                                                                                              | `engine/eslint.config.js`                                                                                                                                                                   | Change: the glob covers each directory of a capability or consumer hook                                                                                                                                                                                                                                  | Stricter                                       |
-| The runtime imports `worker/contract.ts`                                                                                                         | `engine/src/agent/catalog.ts`, `agent-port.ts`                                                                                                                                              | Change: the runtime imports no worker module, so no agent tool reaches a server                                                                                                                                                                                                                          | Stricter                                       |
-| pi writes no `auth.json` or settings file; `tasks run` refuses an `auth.json`                                                                    | `engine/src/agent/agent-session.ts`; `bindPiDirectory` in `engine/src/worker/unit/tasks-run.ts`                                                                                             | `run agent` reads one entry of the `--auth` file with `readStoredCredential` and never writes the file. It refuses a key with a variable reference or a `!` command. pi writes no `auth.json`. `run agent` refuses an `auth.json` in its own pi directory and loads no extension from a path             | Weaker for `run agent` (Q8, ruled 2026-11-21)  |
-| `serve worker`: the instance key is the only credential; `--token` refused with `cli.serve.worker_token`                                         | `engine/docs/cli/other.md`, section `serve worker`                                                                                                                                          | Kept. `run worker` has the same rule                                                                                                                                                                                                                                                                     | Same                                           |
-| `--token` applies only to a remote command that declares it                                                                                      | `engine/docs/cli/other.md`, section "Closed root names and option scope"                                                                                                                    | `run agent` and `run worker` declare no `--token`, and each refuses it. `run agent` holds no KanthorD credential                                                                                                                                                                                         | Same                                           |
+| Rule of today                                                                                                                                    | Source                                                                                                                                                                                      | Rule in the model                                                                                                                                                                                                                                                                                    | Strength                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Frozen store: no refresh, rotation, lease or report                                                                                              | `engine/src/llm/refresh-watch.ts` (`frozenStore`)                                                                                                                                           | `run agent` uses it. Only the worker host refreshes, through C1                                                                                                                                                                                                                                      | Same                                           |
+| `--credential-stdin` with the `isatty(0)` check and a zeroed buffer; a failed check reads no standard input                                      | `readDescriptor` and `runAction` in `engine/src/apps/cli/worker-tasks.ts`; `credentialOf` in `engine/src/worker/unit/tasks-credential.ts`; `engine/docs/cli/worker.md`, `tasks run`, rule 2 | Change: `run agent` reads no credential from standard input. The `--auth` file is its only credential input (L1-D22, 2026-11-22)                                                                                                                                                                     | Removed with its input                         |
+| Provider check, routing metadata only from standard input, metadata schema check, `credential_expiring`                                          | `credentialOf` and `routingMetadataOf` in `engine/src/worker/unit/tasks-credential.ts`                                                                                                      | The routing metadata enters with the credential, only from the `env` object of the selected `--auth` entry. The provider check, the metadata schema check and `credential_expiring` apply to it. No option and no variable names an endpoint                                                         | Weaker for `run agent` (Q8, ruled 2026-11-21)  |
+| No option, environment variable or file takes a credential                                                                                       | [design.md §5.7](../worker-execution-refactor/design.md#57-standalone-tasks-run)                                                                                                            | The `--auth` file of `run agent` takes the LLM credential. Conditions: the own file of the human, no group or other access, a read-only read, one provider entry, no `$` in the key, no `!` command ([The `--auth` file](#the---auth-file-of-run-agent)). No environment variable takes a credential | Weaker for `run agent` (Q8, ruled 2026-11-21)  |
+| Session redaction with the known secrets on every session, LLM output included                                                                   | `engine/src/agent/hooks/sensitive-text-redaction.ts`; `sessionParts`                                                                                                                        | Kept for each input to the LLM. Change: LLM output is not redacted, and a finding raises the rotate warning of [Session file](#session-file). The `run agent` result output passes the writer redaction                                                                                              | Weaker for LLM output (R2-H, ruled 2026-11-21) |
+| In-memory session of `tasks run`; `turns.jsonl` in a `0700` output folder, with the writer redaction                                             | [design.md §5.7](../worker-execution-refactor/design.md#57-standalone-tasks-run); `engine/docs/cli/worker.md`, `tasks run`, rule 10 and the `turns.jsonl` part of rule 9                    | Change: `run agent` writes the session file that the consumer names. The rules of [Session file](#session-file) replace these rules                                                                                                                                                                  | Replaced (R2-A)                                |
+| Each output file, the run log on stderr and the last text that the worker reads pass the known-secret redaction                                  | `engine/docs/cli/worker.md`, `tasks run`, rule 9; `redaction.modelOutput` in `engine/src/worker/unit/native-agent.ts`; `sessionEntryRecord` in `engine/src/worker/unit/session-entries.ts`  | Kept: the agent runtime redacts each text that a consumer takes out of a session, at the output of the agent contract. Change: the Workbench Service and the Project Service get the exit redaction too ([Session file](#session-file))                                                              | Same                                           |
+| `childEnvironment` for each child process                                                                                                        | `engine/src/agent/environment.ts`                                                                                                                                                           | Kept                                                                                                                                                                                                                                                                                                 | Same                                           |
+| A child process of a local run gets only the fixed names, the git isolation values and the passed variables                                      | `engine/docs/cli/worker.md`, `tasks run`, rule 8; `SHELL_NAMES` in `engine/src/apps/cli/worker-tasks.ts`; `FIXED_GIT_ENV` in `engine/src/worker/unit/tasks-run.ts`                          | `run agent` applies the same child environment                                                                                                                                                                                                                                                       | Same                                           |
+| `--pass-env` refuses a fixed name, an ambient-removal name and a name that `childEnvironment` removes; each passed value joins the known secrets | `passEnvRefused` in `engine/src/worker/unit/tasks-seed.ts`; `engine/src/apps/cli/worker-tasks.ts`; `engine/src/worker/unit/tasks-run.ts`                                                    | A value that a consumer passes to the child environment: the same name refusals apply, and each value joins the known secrets                                                                                                                                                                        | Same                                           |
+| Ambient credential removal before pi loads, `HOME`, AWS file paths, metadata endpoints off                                                       | `withoutAmbientCredentials` in `engine/src/worker/unit/tasks-credential.ts`                                                                                                                 | Change: `run agent` applies it too                                                                                                                                                                                                                                                                   | Stricter                                       |
+| `checkoutConfinement` on each `re@1` session that `agentPort` opens and each `env@1` session                                                     | `engine/src/agent/agent-port.ts` (`guardsOf`); `engine/src/project/environment-agent.ts`                                                                                                    | Change: confinement is a profile property for every consumer, the Workbench `re@1` session included                                                                                                                                                                                                  | Stricter                                       |
+| The allowlist runs only in sessions that `agentPort` opens; a Workbench session holds only `toolApproval`                                        | `engine/src/agent/agent-port.ts` (`guardsOf`); `engine/src/workbench/service.ts`                                                                                                            | Change: the allowlist, the confinement where the profile sets it and the redaction apply to every consumer                                                                                                                                                                                           | Stricter                                       |
+| None: no check of a session file for a known secret                                                                                              | None                                                                                                                                                                                        | Change: a check that no input entry of a session file holds a known secret ([Session file](#session-file))                                                                                                                                                                                           | Stricter                                       |
+| None for a session file of `run agent`                                                                                                           | `engine/src/agent/session-directory.ts`; `PRIVATE_DIRECTORY_MODE` in `engine/src/kernel/files.ts`                                                                                           | Change: a session file lies in a private place: a `0700` directory for the worker host, a `0600` file for `run agent`. `run agent` refuses a path that is a symbolic link or that another user owns                                                                                                  | Stricter                                       |
+| No context key holds a credential; a capability gets no handover result, `sshAccess` or model runtime                                            | [design.md §5.4](../worker-execution-refactor/design.md#54-credentials)                                                                                                                     | Kept for the line and each worker capability                                                                                                                                                                                                                                                         | Same                                           |
+| Lint rule on `modelRegistry` and `registerProvider`                                                                                              | `engine/eslint.config.js`                                                                                                                                                                   | Change: the glob covers each directory of a capability or consumer hook                                                                                                                                                                                                                              | Stricter                                       |
+| The runtime imports `worker/contract.ts`                                                                                                         | `engine/src/agent/catalog.ts`, `agent-port.ts`                                                                                                                                              | Change: the runtime imports no worker module, so no agent tool reaches a server                                                                                                                                                                                                                      | Stricter                                       |
+| pi writes no `auth.json` or settings file; `tasks run` refuses an `auth.json`                                                                    | `engine/src/agent/agent-session.ts`; `bindPiDirectory` in `engine/src/worker/unit/tasks-run.ts`                                                                                             | `run agent` reads one entry of the `--auth` file with `readStoredCredential` and never writes the file. It refuses a key that holds `$` or that starts with `!`. pi writes no `auth.json`. `run agent` refuses an `auth.json` in its own pi directory and loads no extension from a path             | Weaker for `run agent` (Q8, ruled 2026-11-21)  |
+| `serve worker`: the instance key is the only credential; `--token` refused with `cli.serve.worker_token`                                         | `engine/docs/cli/other.md`, section `serve worker`                                                                                                                                          | Kept. `run worker` has the same rule                                                                                                                                                                                                                                                                 | Same                                           |
+| `--token` applies only to a remote command that declares it                                                                                      | `engine/docs/cli/other.md`, section "Closed root names and option scope"                                                                                                                    | `run agent` and `run worker` declare no `--token`, and each refuses it. `run agent` holds no KanthorD credential                                                                                                                                                                                     | Same                                           |
 
 ## Mapping of today
 
@@ -421,124 +421,231 @@ This section states what each item becomes. [L6](L6-migration.md) plans the buil
 
 Each check states one public behavior of the model. An agent runs each check end to end with no human step. The owner layer turns the check into a runnable command or test. The implementation of each layer passes the checks of its layer and of every upper layer. A check becomes runnable when its owner layer builds it. Each KanthorD path starts at `engine/`.
 
-A refusal in these checks means: a nonzero exit code, and one line on stderr that names the failed rule. L2 and L4 name the diagnostic codes.
+A refusal in these checks means: a nonzero exit code, and a first stderr line that starts with the diagnostic code of the failed rule. L2 and L4 name the codes.
 
 ### Shared fixtures
 
-- **K.** A literal API key of 40 characters. It is longer than `KNOWN_VALUE_MIN_CHARACTERS` (`src/agent/sensitive-text.ts`), so it joins the known secrets.
+- **K.** A literal API key. It joins the known secrets by item 8 of the [`--auth` file](#the---auth-file-of-run-agent) and has more than `KNOWN_VALUE_MIN_CHARACTERS` characters (`src/agent/sensitive-text.ts`). K matches no pattern rule of the redaction rule set.
 - **Stub.** A scripted LLM stub of the provider `openai-compatible` on a loopback address. It records each request, headers included, and replies with the scripted turns of the check (`Platform.OpenAICompatible`, `openaiCompatibleMetadataSchema` in `src/llm/platforms.ts`).
-- **Auth.** An `auth.json` file with mode `0600`, owned by the current user. It holds one `openai-compatible` entry with the literal key K. The `env` object of the entry holds the `base_url` of Stub.
+- **Auth.** An `auth.json` file with mode `0600`, owned by the current user. It holds one `openai-compatible` entry with the literal key K. The `env` object of the entry holds the routing metadata in the mapping of L2. Its `base_url` is the address of Stub, and its model list holds the model of Run.
 - **W.** A git worktree with one commit and no uncommitted change. It is the workspace root.
+- **H.** An empty directory. It is `HOME` of the process.
+- **P.** An empty directory for the pi directory input of `run agent`. L2 names the input. The default pi directory of today is `kanthord/pi` under `XDG_STATE_HOME` (`directories` in `src/kernel/xdg.ts`; `piDirectory` in `src/agent/pi.ts`).
+- **T.** An empty directory. It is `TMPDIR` of the process.
 - **S.** A path in a new `0700` directory. No file exists at S. It is the session file path input of `run agent`.
 - **Faux.** The scripted model of pi (`fauxAssistantMessage`, `fauxToolCall`, exported by `@earendil-works/pi-ai`). A check at the agent contract uses it in place of Stub.
-- **Run.** `kanthord run agent --auth <Auth>` with the profile `swe@1`, the session file path input S, the workspace root W and a fixed input. L2 names the inputs that L1 names no flag for.
+- **Test consumer.** A test consumer of the agent contract. It gives the inputs of the check and no other tool implementation.
+- **Run.** `kanthord run agent --auth <Auth>` with the profile `swe@1`, the session file path input S, the pi directory P, the workspace root W and a fixed input. L2 names the inputs that L1 names no flag for.
 
 ### Checks
 
 1. **AC1. No state outside the session file** ([Statelessness](#statelessness), checks 1, 2, 3, 5, 7). Owner: L2.
-   - Fixture: Auth, Stub, W, S. `HOME` is an empty directory H. The parent environment sets `KANTHORD_TOKEN`, `KANTHORD_ENDPOINT`, `KANTHORD_WORKER_CONFIG` and `KANTHORD_MACHINE_CONFIG` to marker values. The scripted turn calls `bash` with `env`.
-   - Command: Run. Then Run again with a new path S2 and the same input.
-   - Pass: each run exits 0. A file listing of H and of the parent directory of S, before and after, differs only by the session file. Auth is byte-equal, with the same mode. The pi directory holds no `auth.json` and no settings file. The `bash` tool result holds none of the four `KANTHORD_*` names. The first request of the second run holds no message of the first run.
+   - Fixture: Auth, Stub, W, H, P, T. S and S2 are two paths in the same `0700` directory. The parent environment sets `KANTHORD_TOKEN`, `KANTHORD_ENDPOINT`, `KANTHORD_WORKER_CONFIG` and `KANTHORD_MACHINE_CONFIG` to marker values. Input 1 holds the unique marker M1, and input 2 holds the unique marker M2. The scripted turn calls `bash` with `env`.
+   - Command: Run with input 1 and S. Then Run with input 2 and S2.
+   - Pass:
+     - Each run exits 0.
+     - A recursive listing of H, with a SHA-256 digest per file, is byte-equal before and after each run.
+     - The parent directory of S gains only S after run 1, and only S2 after run 2.
+     - P holds only shipped files: the binaries of the pi tool manifest and their license files (`installPiTools`, `publishLicense` in `src/agent/pi-tools.ts`). P holds no `auth.json` and no settings file. A recursive listing of P with digests is byte-equal after run 1 and after run 2.
+     - T holds no file after each exit.
+     - Auth is byte-equal, with the same mode.
+     - The `bash` tool result holds none of the four `KANTHORD_*` names.
+     - No request of run 2 holds M1. The first request of run 2 holds exactly the system prompt and one user message.
    - Today: `childEnvironment` removes the four names (`src/agent/environment.ts`).
 
 2. **AC2. The session file at the caller path, in a private place** ([Session file](#session-file), "Place"; L1-D19). Owner: L2.
-   - Fixture: Auth, Stub, W, S. A second fixture replaces S with a symbolic link to a file in another directory.
-   - Command: Run, once per fixture.
-   - Pass: with S, the exit code is 0, and a pi session file exists at S with mode `0600`. No other session file exists under H. With the symbolic link, `run agent` refuses, Stub receives no request, and the link target is byte-equal.
+   - Fixture: Auth, Stub, W, H, P, and one variant of S per case:
+     1. S as in the shared fixtures;
+     2. S is a symbolic link to a file in another directory;
+     3. S is a symbolic link to a path that does not exist;
+     4. S is a path in a directory that a second OS user owns, in a test container, with an ACL write grant to the current user.
+   - Command: Run, once per variant.
+   - Pass: for variant 1, the exit code is 0, and a pi session file exists at S with mode `0600`. No other session file exists under H, P or T. For variants 2, 3 and 4, `run agent` refuses before any pi session open. Stub receives no request. No file is created at S or at the link target, and the target of variant 2 is byte-equal.
    - Today: pi creates the file with `openSync(file, "wx")` and no mode (`@earendil-works/pi-coding-agent`, `dist/core/session-manager.js`, `_persist`).
 
 3. **AC3. No input entry of the session file holds a known secret** ([Session file](#session-file), "LLM input" and "Constraint"). Owner: L3.
-   - Fixture: Faux, W, a session file path. W holds a file whose text holds K. K is in the known-secret source. The work prompt holds K. The scripted turn calls `read` on that file.
+   - Fixture: Faux, the test consumer, W, a session file path. K is in the known-secret source. The fixture puts K into each input entry kind:
+     1. the system prompt, through the instructions of the input;
+     2. a user message, through the work prompt;
+     3. a `toolResult` message: W holds a file whose text holds K, and the scripted turn calls `read` on it;
+     4. a custom message, sent by a test extension;
+     5. a steering message, sent while the turn runs.
    - Call: open a `swe@1` session through the agent contract and send the work prompt.
    - Pass: the check of L3 reads each input entry of the session file, of each entry kind that pi writes. It finds K zero times. The context that Faux receives holds K zero times.
    - Today: the `hook` factory redacts each input message at `message_end` (`src/agent/hooks/sensitive-text-redaction.ts`). No check reads a session file for a known secret.
 
-4. **AC4. LLM output stays unchanged, and a known secret in it gives a rotate warning** ([Session file](#session-file), "LLM output" and "Finding in LLM output"; R2-H). Owner: L2.
-   - Fixture: Auth, Stub, W, S. The scripted assistant text holds K once.
+4. **AC4. `run agent` keeps LLM output unchanged and gives the rotate warning on stderr** ([Session file](#session-file), "LLM output", "Finding in LLM output" and "Exit redaction"; R2-H). Owner: L2.
+   - Fixture: Auth, Stub, W, H, P, S. The scripted assistant text holds K once.
    - Command: Run.
-   - Pass: the exit code is 0. The assistant entry of the session file holds the scripted text byte for byte, K included. stderr holds one warning that names the redaction rule and the count 1. stdout and stderr hold K zero times.
+   - Pass:
+     - The exit code is 0.
+     - The assistant entry of the session file holds the scripted text byte for byte, K included.
+     - stderr holds exactly one warning line. It names the redaction rule and the count 1.
+     - stdout and stderr hold K zero times. stdout holds the redaction marker in the place of K.
    - Today: the `hook` redacts the `assistant` message with rule 0 (`src/agent/hooks/sensitive-text-redaction.ts`). [Change against today](#session-file) removes that redaction.
 
-5. **AC5. Exit redaction of each text that a consumer takes out** ([Session file](#session-file), "Exit redaction"). Owner: L3.
-   - Fixture: Faux, W, a session file path. The scripted assistant text holds K. K is in the known-secret source.
-   - Call: open a `swe@1` session through the agent contract once per consumer: the worker, the Workbench Service, the Project Service and the agent CLI.
+5. **AC5. The agent contract applies the exit redaction** ([Session file](#session-file), "Exit redaction"). Owner: L3.
+   - Fixture: Faux, the test consumer, W, a session file path. The scripted assistant text holds K. K is in the known-secret source.
+   - Call: open a `swe@1` session through the agent contract and send one work prompt.
    - Pass: each text that the agent contract gives out holds K zero times: the last text, each session event and each session entry. Each text holds the redaction marker in the place of K.
-   - Today: the worker redacts the last text (`redaction.modelOutput` in `src/worker/unit/native-agent.ts`) and each session entry (`redactValue` in `sessionEntryRecord`, `src/worker/unit/session-entries.ts`). The Workbench Service reads the session events with no exit redaction (`src/workbench/service.ts`).
+   - Today: the worker redacts the last text itself (`redaction.modelOutput` in `src/worker/unit/native-agent.ts`), and each session entry (`redactValue` in `sessionEntryRecord`, `src/worker/unit/session-entries.ts`). The agent contract applies no exit redaction.
 
 6. **AC6. Refusals of the `--auth` file** ([The `--auth` file](#the---auth-file-of-run-agent), items 4, 5, 6, 7, 10). Owner: L2.
-   - Fixture: Stub, W, S, and one Auth variant per case:
+   - Fixture: Stub, W, H, P, S, and one Auth variant per case:
      1. mode `0640`;
      2. mode `0604`;
-     3. a file that a second OS user owns, in a test container;
-     4. key `$NAME`, with `NAME=K` in the parent environment;
-     5. key `${NAME}`, with `NAME=K` in the parent environment;
-     6. key `!touch <marker>`;
-     7. an OAuth entry whose `expires` is in the past;
-     8. no `openai-compatible` entry;
-     9. an `openai-compatible` entry that fails the entry schema of L2.
+     3. a file that a second OS user owns, in a test container. The file stays readable: the process runs as root, or the file has an ACL read grant to the current user;
+     4. key `$NAME`;
+     5. key `${NAME}`;
+     6. key `prefix-$NAME`;
+     7. key `prefix-${NAME}`;
+     8. a key that holds `$$`;
+     9. a key that holds `$!`;
+     10. key `!touch <marker>`;
+     11. an `openai-codex` OAuth entry whose `expires` is in the past;
+     12. an `openai-codex` OAuth entry whose `expires` is before the wall deadline of the run plus the refresh window (`PI_OAUTH_REFRESH_WINDOW_MS` in `src/llm/refresh-watch.ts`);
+     13. no entry of the selected provider;
+     14. an entry of the selected provider that fails the entry schema of L2.
+   - For cases 4 to 7, the parent environment sets `NAME` to K. For cases 11 and 12, the model selection of Run is `openai-codex`, and the network allows only loopback, or a proxy stub records each outbound connection.
    - Command: Run, once per variant.
-   - Pass: for each variant, `run agent` refuses, and the stderr line states the reason of that case. Stub receives no request. No file exists at S. For case 6, no file exists at `<marker>`.
-   - Today: `credentialOf` refuses an expiring credential (`src/worker/unit/tasks-credential.ts`; `cli.worker.tasks.credential_expiring` in `src/worker/unit/tasks-seed.ts`). pi resolves `$NAME` and `!command` keys (`dist/core/resolve-config-value.js`).
+   - Pass:
+     - For each variant, `run agent` refuses, and the stderr line states the reason of that case. Case 3 states the ownership reason. Cases 11 and 12 state the `credential_expiring` reason.
+     - Stub receives no request. No file exists at S.
+     - For case 10, no file exists at `<marker>`.
+     - For cases 11 and 12, no outbound connection occurs.
+   - Today: `credentialOf` refuses an OAuth credential that expires before the wall deadline plus the refresh window (`src/worker/unit/tasks-credential.ts:98`; `cli.worker.tasks.credential_expiring` in `src/worker/unit/tasks-seed.ts`). `openai-codex` is an OAuth platform (`Platform.OpenAICodex` in `src/llm/platforms.ts`). pi resolves `$NAME`, `${NAME}`, the escapes `$$` and `$!`, and `!command` keys (`parseConfigValueTemplate` and `resolveConfigValue` in `dist/core/resolve-config-value.js`).
 
 7. **AC7. No credential from standard input** ([The `--auth` file](#the---auth-file-of-run-agent); L1-D22). Owner: L2.
-   - Fixture: Auth, Stub, W, S. Standard input holds a credential document with a second key K2.
+   - Fixture: Auth, Stub, W, H, P, S. Standard input holds a credential document with a second key K2.
    - Command: Run, with that standard input.
    - Pass: the exit code is 0. Each request to Stub carries K and never K2. The session file, stdout and stderr hold K2 zero times.
    - Today: `--credential-stdin` of `tasks run` reads standard input (`readDescriptor` and `runAction` in `src/apps/cli/worker-tasks.ts`).
 
-8. **AC8. `run agent` holds no KanthorD credential** ([Credentials that never enter the agent](#credentials-that-never-enter-the-agent); L1-D17). Owner: L2.
-   - Fixture: Auth, Stub, W, S.
-   - Command: Run with `--token <value>`.
-   - Pass: `run agent` refuses, and the stderr line names `--token`. Stub receives no request. No file exists at S.
+8. **AC8. `run agent` refuses `--token`** ([Credentials that never enter the agent](#credentials-that-never-enter-the-agent); L1-D17). Owner: L2.
+   - Fixture: Auth, Stub, W, H, P, S. The parent environment sets `KANTHORD_TOKEN` to T1. The configuration directory holds a `cli.yaml` with the token T2 (`directories(env).config`, `src/gateway/client.ts`).
+   - Command: Run with `--token <T3>`. Then Run with no `--token`.
+   - Pass: with `--token`, `run agent` refuses, and the stderr line names `--token`. Stub receives no request, and no file exists at S. With no `--token`, the exit code is 0. No request to Stub carries T1, T2 or T3, and the session file holds none of them. AC1 covers the `KANTHORD_*` names in the child environment.
    - Today: `--token` applies only to a remote command that declares it (`docs/cli/other.md`, "Closed root names and option scope").
 
 9. **AC9. `run worker` refuses `--token`** ([E5](#e5-two-clis-fits-with-the-root-run), item 2; L1-D17). Owner: L4.
    - Fixture: a local KanthorD server, a registered worker instance and its instance configuration, one claimable execution.
-   - Command: `kanthord run worker --token <value>` with that instance.
+   - Command: `kanthord run worker --token <value>` with that instance. L4 names the read command for the claim state.
    - Pass: `run worker` refuses, and the stderr line names `--token`. The server records no claim of the instance. The execution stays claimable.
    - Today: `serve worker` refuses `--token` with `cli.serve.worker_token` (`serveWorker` in `src/apps/cli/index.ts`; `src/apps/cli/index.test.ts`).
 
 10. **AC10. A failed start precondition refuses the start** ([Setup and start preconditions](#setup-and-start-preconditions); L1-D21). Owner: L3.
-    - Fixture: Faux, a session file path, and one workspace variant per case: W with an uncommitted change of a tracked file; a directory that is no git worktree.
-    - Call: open a `swe@1` session through the agent contract with that workspace root.
-    - Pass: for each variant, the contract returns the refusal with the failed precondition and its reason. Faux receives no request. The output of `git status --porcelain` is byte-equal before and after.
+    - Fixture: Faux, the test consumer, a session file path. L3 lists the precondition variants of each profile. For a coding profile, the variants are W with an uncommitted change of a tracked file, and a directory that is no git worktree.
+    - Call: open a session of the profile through the agent contract, once per variant.
+    - Pass: for each variant, the contract returns the refusal with the failed precondition and its reason. Faux receives no request. The workspace does not change: a recursive listing with a SHA-256 digest per file is byte-equal before and after. For a git variant, the output of `git status --porcelain` is also byte-equal.
     - Today: `openSession` checks no precondition (`src/agent/agent-session.ts`).
 
-11. **AC11. The allowlist refuses an undeclared tool for every consumer** ([Tool ownership rule](#tool-ownership-rule), rules 1 and 6; L1-D8). Owner: L3.
-    - Fixture: Faux, W, a session file path. The consumer gives an implementation of a tool that `swe@1` does not declare, with a call counter. The scripted turn calls that tool.
-    - Call: open a `swe@1` session through the agent contract once per consumer: the worker, the Workbench Service, the Project Service and the agent CLI.
-    - Pass: for each consumer, the tool result is a block that names the tool. The call counter stays 0.
+11. **AC11. The allowlist refuses an undeclared tool** ([Tool ownership rule](#tool-ownership-rule), rules 1 and 6; L1-D8). Owner: L3.
+    - Fixture: Faux, the test consumer, W, a session file path. The test consumer gives an implementation of a tool that `swe@1` does not declare, with a call counter. The scripted turn calls that tool.
+    - Call: open a `swe@1` session through the agent contract and send one work prompt.
+    - Pass: the tool result is a block that names the tool. The call counter stays 0.
+    - The agent CLI gives no tool implementation, so this check has no agent CLI fixture. L3 states the session of a consumer that gives no implementation of a declared consumer tool.
     - Today: `toolAllowlist` blocks with "The tool <name> is not declared for this agent." (`src/agent/hooks/tool-allowlist.ts`). Only `agentPort` adds it (`src/agent/agent-port.ts`).
 
 12. **AC12. The line holds no client, no transport and no credential** ([Worker](#worker); L1-D2). Owner: L5.
     - Fixture: the `engine` repository at the commit under test.
     - Command: `pnpm --silent run test:files src/worker/unit/foundry-boundary.test.ts src/worker/unit/chain-runner.test.ts`.
-    - Pass: the exit code is 0. The import-closure test of the line passes. The test "a build rejects a Foundry step that reads sshAccess" passes.
-    - Today: both tests exist. `checkStep` throws `ChainRule.FoundryReadsSshAccess` (`src/worker/unit/chain.ts`).
+    - Pass: the exit code is 0. The reporter output holds both test names as passed:
+      - "no module of the Foundry imports a transport, a client, the execution run, the credential store, the custody contract, the tree pool or the host tools" (`src/worker/unit/foundry-boundary.test.ts:141`);
+      - "a build rejects a Foundry step that reads sshAccess" (`src/worker/unit/chain-runner.test.ts:583`).
+    - Today: runnable today; L5 keeps it. `checkStep` throws `ChainRule.FoundryReadsSshAccess` (`src/worker/unit/chain.ts`).
 
 13. **AC13. Each extension file has a test file next to it** ([Extension rule](#extension-rule), rule 1; L1-D18). Owner: L6.
     - Fixture: the `engine` repository at the commit under test. A variant adds one extension module with no test file next to it.
-    - Command: the gate check of L6, which runs in `pnpm run verify`.
+    - Command: the gate check of L6, which runs in `pnpm run verify`. L6 names the command.
     - Pass: with the commit under test, the exit code is 0. With the variant, the exit code is nonzero, and the output names the module.
     - Today: no gate check exists. `homeRelativeCwd`, `pinnedLayersHook` and `toolAllowlist` have no test that names them.
 
-14. **AC14. `run` is in the closed root set** ([E5](#e5-two-clis-fits-with-the-root-run), item 3; L1-D17). Owner: L2.
+14. **AC14. `run` is in the closed root set, with `agent` under it** ([E5](#e5-two-clis-fits-with-the-root-run), item 3; L1-D17). Owner: L2.
     - Fixture: the `engine` repository at the commit under test, built.
     - Command: `kanthord run --help`, then `pnpm --silent run test:files src/apps/cli/completeness.test.ts`.
-    - Pass: `kanthord run --help` exits 0 and lists `agent` and `worker`. `docs/cli/other.md` lists `run` among the global root names. The completeness test exits 0, with `run` in `TOP_LEVEL_NAMES`.
+    - Pass: `kanthord run --help` exits 0 and lists `agent`. `docs/cli/other.md` lists `run` among the global root names. The completeness test exits 0, with `run` in `TOP_LEVEL_NAMES`.
     - Today: the global root names are `config`, `upgrade`, `serve` and `auth` (`docs/cli/other.md`). `TOP_LEVEL_NAMES` holds no `run` (`src/apps/cli/completeness.test.ts`).
 
-15. **AC15. The worker commits the work of a session before the next session opens** ([Agent–worker boundary](#agentworker-boundary), rule 9; L1-D21). Owner: L5.
-    - Fixture: a local KanthorD server, a registered worker instance, Stub, and one execution whose line opens two `swe@1` sessions in the same worktree. The scripted turn of the first session writes one file.
-    - Command: `kanthord run worker` with that instance.
-    - Pass: the second session open gives no refusal. `git log` of the worktree shows one new commit between the two session opens, with the file of the first session. `git status --porcelain` is empty at the second session open.
-    - Today: one `agent.open` runs per execution (`implementWorkspaceNodes` in `src/worker/unit/chain-implement.ts`).
+15. **AC15. The agent contract reports a known secret in LLM output as a finding** ([Session file](#session-file), "LLM output" and "Finding in LLM output"; R2-H). Owner: L3.
+    - Fixture: Faux, the test consumer, W, a session file path. K is in the known-secret source. The scripted assistant text holds K twice.
+    - Call: open a `swe@1` session through the agent contract and send one work prompt.
+    - Pass: the turn ends with no refusal. The contract gives one finding and one warning to the consumer. Each names the redaction rule and the count 2, and holds K zero times. The assistant entry of the session file holds the scripted text byte for byte.
+    - Today: no finding or warning exists for LLM output. The `hook` redacts the `assistant` message (`src/agent/hooks/sensitive-text-redaction.ts`).
 
 16. **AC16. The lint rule on `modelRegistry` and `registerProvider` covers each capability and consumer hook directory** ([LLM credential](#llm-credential), "Extension reach"; L1-D15). Owner: L5.
-    - Fixture: the `engine` repository at the commit under test. A variant adds one temporary file that reads `ctx.modelRegistry`, in each directory that holds a capability or a consumer hook. L5 lists the directories.
+    - Fixture: the `engine` repository at the commit under test. L5 lists each directory that holds a capability or a consumer hook. Per directory, one variant adds a temporary file that reads `ctx.modelRegistry`, and one variant adds a temporary file that calls `pi.registerProvider(...)`.
     - Command: `pnpm run lint`, once per variant.
     - Pass: with the commit under test, the exit code is 0. With each variant, the exit code is nonzero, and the output names the temporary file.
     - Today: the rule applies only to `src/agent/capabilities/**/*.ts` (`eslint.config.js`). The consumer hook `src/agent/hooks/tool-approval.ts` is outside that glob.
+
+17. **AC17. `worker` is under the root `run`** ([E5](#e5-two-clis-fits-with-the-root-run), item 2; L1-D17). Owner: L4.
+    - Fixture: the `engine` repository at the commit under test, built.
+    - Command: `kanthord run --help`.
+    - Pass: the exit code is 0, and the output lists `worker`.
+    - Today: no root `run` exists (`docs/cli/other.md`, "Closed root names and option scope").
+
+18. **AC18. A worker session holds the allowlist and the exit redaction** ([Tool ownership rule](#tool-ownership-rule), rule 6; [Session file](#session-file), "Exit redaction"; L1-D8). Owner: L5.
+    - Fixture: a local KanthorD server, a registered worker instance, Stub. The custody of the server holds K as the `openai-compatible` credential of `swe@1`, routed to Stub. One claimable `implement` execution of `coder@1`. The scripted turn calls `probe`, which `swe@1` does not declare. The scripted assistant text then holds K.
+    - Command: `kanthord run worker` with that instance. L5 names the read command for the session entries of the execution.
+    - Pass: the tool result of the `probe` call is a block that names the tool. Each session entry that the server records for the execution holds K zero times.
+    - Today: `agentPort` adds `toolAllowlist` (`src/agent/agent-port.ts`). The worker redacts each session entry (`sessionEntryRecord` in `src/worker/unit/session-entries.ts`).
+
+19. **AC19. A Workbench session holds the allowlist and the exit redaction** ([Other consumers](#other-consumers); L1-D8). Owner: L5, with the order of L6. It runs after `feature/workbench-v2` merges into `main`.
+    - Fixture: a local KanthorD server with the Workbench. The Workbench credential is K, for `openai-compatible`, routed to Stub. The scripted turn calls a tool that `swe@1` does not declare. The scripted assistant text then holds K.
+    - Command: a Workbench `swe@1` session with one message. L5 names the operation and the read command for the session events.
+    - Pass: the tool result of the undeclared call is a block that names the tool. Each text that the Workbench Service gives out holds K zero times.
+    - Today: a Workbench session holds only `toolApproval`, and the Workbench Service reads the session events with no exit redaction (`src/workbench/service.ts`).
+
+20. **AC20. A Project Service session of `env@1` holds the allowlist and the exit redaction** ([Other consumers](#other-consumers); L1-D8). Owner: L5, with the order of L6.
+    - Fixture: a local KanthorD server, a repository binding, Stub. The server agent credential is K, for `openai-compatible`, routed to Stub. The scripted turn calls `bash` with `touch <marker>`; `env@1` does not declare `bash`. The scripted assistant text then holds K.
+    - Command: the environment setup of the binding. L5 names the operation and the read command for its output.
+    - Pass: the tool result of the `bash` call is a block that names the tool. No file exists at `<marker>`. Each text that the Project Service gives out holds K zero times.
+    - Today: an `env@1` session holds only `checkoutConfinement` (`src/project/environment-agent.ts`).
+
+21. **AC21. The default `--auth` path is in the home directory of the OS user** ([The `--auth` file](#the---auth-file-of-run-agent), item 1). Owner: L2.
+    - Fixture: Stub, W, P, S, in a test container. The home directory of the OS user is H, and `HOME` is H. `H/.pi/agent/auth.json` is Auth. The parent environment sets `PI_CODING_AGENT_DIR` to a directory D2 that holds an `auth.json` with mode `0600` and the key K2.
+    - Command: Run with no `--auth`.
+    - Pass: the exit code is 0. Each request to Stub carries K and never K2.
+    - Today: the engine sets `PI_CODING_AGENT_DIR` to its own pi directory (`loadPi` in `src/agent/pi.ts`).
+
+22. **AC22. An `auth.json` in the pi directory is refused** ([The `--auth` file](#the---auth-file-of-run-agent), item 9). Owner: L2.
+    - Fixture: Auth, Stub, W, H, S. P holds an `auth.json` with mode `0600`.
+    - Command: Run.
+    - Pass: `run agent` refuses, and the stderr line names `auth.json`. Stub receives no request. No file exists at S.
+    - Today: `bindPiDirectory` refuses a pi directory that holds `auth.json` (`src/worker/unit/tasks-run.ts`).
+
+23. **AC23. No ambient credential reaches the LLM or a child process** ([Rules of today](#rules-of-today-and-their-strength-in-the-model), ambient credential removal). Owner: L2.
+    - Fixture: Auth, Stub, W, H, P, S. The parent environment sets `ANTHROPIC_API_KEY` to M3, `AWS_ACCESS_KEY_ID` to M4 and `AWS_SECRET_ACCESS_KEY` to M5. The scripted turn calls `bash` with `env`.
+    - Command: Run.
+    - Pass: the exit code is 0. No request to Stub holds M3, M4 or M5, in a header or the body. The `bash` tool result holds none of them. The session file holds none of them.
+    - Today: `childEnvironment` removes `ANTHROPIC_API_KEY` (`src/agent/environment.ts`). `withoutAmbientCredentials` removes the names of `AMBIENT_CREDENTIAL_NAMES` (`src/worker/unit/tasks-credential.ts`; `src/worker/unit/tasks-seed.ts`).
+
+24. **AC24. No environment variable names an endpoint** ([LLM credential](#llm-credential), "Endpoint"). Owner: L2.
+    - Fixture: Auth, Stub, W, H, P, S. A second stub Stub2 records each connection. The parent environment sets `KANTHORD_ENDPOINT` and `AZURE_OPENAI_BASE_URL` to the address of Stub2.
+    - Command: Run.
+    - Pass: the exit code is 0. Stub2 records no connection. Stub receives each request.
+    - Today: pi reads `AZURE_OPENAI_BASE_URL` (`@earendil-works/pi-ai`, `dist/api/azure-openai-config.js`).
+
+25. **AC25. The agent runtime imports no worker, project, mission or scheduler module** ([Agent runtime and server part](#agent-runtime-and-server-part-of-the-agent-component); L1-D5). Owner: L6.
+    - Fixture: the `engine` repository at the commit under test. A variant adds an import of `src/worker/contract.ts` to `src/agent/agent-session.ts`.
+    - Command: the import check of L6. L6 names the command.
+    - Pass: with the commit under test, the exit code is 0. With the variant, the exit code is nonzero, and the output names the file and the import.
+    - Today: the check fails, because `src/agent/catalog.ts` imports `src/worker/contract.ts`.
+
+### Rules with no check, and the reason
+
+- **Statelessness check 4, resume.** L1 names no resume input of `run agent`. L2 adds the check with the input.
+- **Statelessness check 6, reads.** A read trace needs an OS file-access tracer. The gate holds no portable tracer.
+- **Statelessness check 8, network.** The check needs a network sandbox. The OS containment is an open item of [HANDOFF.md](../HANDOFF.md), Worker Service.
+- **Statelessness check 9, no model choice.** The input holds one model selection, so no public output shows a choice. AC25 blocks the imports that a choice needs.
+- **Confinement of `re@1` and `env@1` for each consumer.** L3 and L5 define the roots input of each consumer. The Workbench `re@1` session exists only after the merge of `feature/workbench-v2`.
+- **Boundary rule 8, no consumer removes a guard.** The rule is an absence in the code. AC11 and AC18 to AC20 show the allowlist for each consumer.
+- **Boundary rule 9, commit before the next session.** This round runs one `agent.open` per execution (`implementWorkspaceNodes` in `src/worker/unit/chain-implement.ts`). A second session ships with layer 2 of [E1](#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule). Later owner: L5 of that round.
+- **Extension rules 1 and 3, one factory per module and no load from a file path.** The rules are code structure. AC13 covers the test file of rule 1.
+- **L1-D10, one composition function.** The rule is code structure. The composed text depends on the prompt texts that L3 writes.
+- **Reach of an unconfined session.** The table states a risk, not a behavior.
+- **"Never passed in" of the LLM credential.** The list has no closed set of outputs. AC4, AC5, AC7, AC8 and AC23 cover the closed outputs.
+- **L1-D16, a role profile does better than `swe@1`.** The evaluation is a judgement with no fixed pass value.
 
 ## Handoffs to later layers
 
@@ -587,10 +694,10 @@ A refusal in these checks means: a nonzero exit code, and one line on stderr tha
 19. **L1-D19.** The pi session file is the single record of a session, and the consumer owns it. Constraint: a session file holds no credential value that the LLM did not see, and it lies in a private place. KanthorD does not modify LLM output. L6 orders the build change and the check of [Session file](#session-file) before the step that makes `run agent` write a session file.
 20. **L1-D20.** Evaluation replaces the replay. `kanthord run agent` compares a role profile with `swe@1` on prepared workspaces with fixed inputs, and the pi session file is the record. Worker-level checks run against a local KanthorD server. Constraint: the offline mode, `kanthord worker tasks` and the replay leave the model.
 21. **L1-D21.** The agent does no workspace setup. A layer above it prepares the workspace. Each profile declares its start preconditions, and the agent checks them at session open. Constraint: a failed precondition refuses the start with a stated reason. The worker commits the work of a session before it opens the next session of the same execution.
-22. **L1-D22.** `run agent` takes the LLM credential only from a pi `auth.json` file named by `--auth <path>`, with the default `~/.pi/agent/auth.json`. It reads no credential from standard input (Ulrich, 2026-11-22). The worker path takes the LLM credential from the handover of the server. Constraint: [The `--auth` file](#the---auth-file-of-run-agent) holds the rules. `run agent` reads the entry with the exported pi function `readStoredCredential` and an explicit path. It refuses a key with a variable reference or a `!` command, so it runs no shell code for a credential. The three changed credential rows are weaker for `run agent` (Q8, ruled 2026-11-21). Ulrich re-confirmed this full effect, with its conditions, on 2026-11-21 (R2-I).
+22. **L1-D22.** `run agent` takes the LLM credential only from a pi `auth.json` file named by `--auth <path>`, with the default `~/.pi/agent/auth.json`. It reads no credential from standard input (Ulrich, 2026-11-22). The worker path takes the LLM credential from the handover of the server. Constraint: [The `--auth` file](#the---auth-file-of-run-agent) holds the rules. `run agent` reads the entry with the exported pi function `readStoredCredential` and an explicit path. It refuses a key that holds `$` or that starts with `!`, so it resolves no variable and runs no shell code for a credential. The three changed credential rows are weaker for `run agent` (Q8, ruled 2026-11-21). Ulrich re-confirmed this full effect, with its conditions, on 2026-11-21 (R2-I).
 23. **L1-D23.** The server operation `worker.execution.seed.get` leaves with `kanthord worker tasks seed`, because no reader remains. Ulrich accepted this breaking change on 2026-11-21 (R2-I). No server runs the latest code, so the change breaks no deployed client. Constraint: L6 can remove it early, in the step that deletes the `tasks-*` files.
 24. **L1-D24.** The pi packages (`@earendil-works/pi-*`) are the official implementation of the agent runtime. When pi gives a mechanism, KanthorD uses it and builds no second one: the credential file `auth.json`, the session file and the extension factories. Constraint: KanthorD calls only the exported pi API. A KanthorD check can refuse more than pi (for example the `!` and `$NAME` keys of [The `--auth` file](#the---auth-file-of-run-agent)), but it never accepts what pi refuses.
-25. **L1-D25.** L1 states its public behavior as acceptance checks AC1..AC16. Constraint: each owner layer turns its checks into runnable commands; an implementation passes the checks of its layer and of every upper layer.
+25. **L1-D25.** L1 states its public behavior as the acceptance checks of [Acceptance checks](#acceptance-checks). Constraint: each owner layer turns each of its checks into a runnable command or test. An implementation passes the checks of its layer and of every upper layer.
 
 ## Open questions for Ulrich
 
