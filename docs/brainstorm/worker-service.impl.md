@@ -1771,21 +1771,25 @@ Gate G is the worker step after every agent turn. `src/worker/unit/turn-gate.ts`
 
 The steps for each checkout:
 
-| #   | Mode       | Check or act                                                                                                                                                                          |
-| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| G0  | checkpoint | When `MERGE_HEAD` exists, run `git merge --abort`.                                                                                                                                    |
-| G1  | all        | `git symbolic-ref -q HEAD` is `refs/heads/<node branch>`. Else `worker.turn.branch_changed`.                                                                                          |
-| G2  | all        | `before` is an ancestor of `HEAD`. Else `worker.turn.history_rewritten`.                                                                                                              |
-| G3  | conflict   | `MERGE_HEAD` is the commit that step M merged. Else `worker.turn.merge_missing`.                                                                                                      |
-| G3  | all        | No `rebase-merge`, `rebase-apply`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, and no `MERGE_HEAD` outside conflict mode. Else `worker.turn.git_in_progress`.                                |
-| G4  | all        | When `HEAD` is not `before`, run `git reset --soft <before>`.                                                                                                                         |
-| G5  | all        | Stage with `git add --all`. A path whose only change is a line-ending conversion is unstaged. `changed` is true when the stage differs from `HEAD`, and always true in conflict mode. |
-| G6  | conflict   | Scan only the unmerged paths of step M with `git grep --no-index -l -E '^(<{7}\|>{7})( \|$)'`. A match aborts the merge and stops with `worker.merge.markers_left`.                   |
-| G7  | all        | Commit when `changed` is true, with the message of the unit. In conflict mode, commit to conclude the merge. Make no empty commit outside conflict mode.                              |
-| G8  | all        | Read `HEAD` into `checkout.head`. Assert invariant I.                                                                                                                                 |
-| G9  | all        | With two or more checkouts, remove each entry of the agent root that is not a checkout or `.kanthord-scratch`. Log `root entries removed` with the names.                             |
+| #   | Mode       | Check or act                                                                                                                                                                                                                   |
+| --- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| G0  | checkpoint | When `MERGE_HEAD` exists, run `git merge --abort`.                                                                                                                                                                             |
+| G1  | all        | `git symbolic-ref -q HEAD` is `refs/heads/<node branch>`. Else `worker.turn.branch_changed`.                                                                                                                                   |
+| G2  | all        | `before` is an ancestor of `HEAD`. Else `worker.turn.history_rewritten`.                                                                                                                                                       |
+| G3  | conflict   | `MERGE_HEAD` is the commit that step M merged. Else `worker.turn.merge_missing`.                                                                                                                                               |
+| G3  | all        | No `rebase-merge`, `rebase-apply`, `CHERRY_PICK_HEAD` or `REVERT_HEAD`, and no `MERGE_HEAD` outside conflict mode. Else `worker.turn.git_in_progress`.                                                                         |
+| G4  | all        | When `HEAD` is not `before`, run `git reset --soft <before>`.                                                                                                                                                                  |
+| G5  | all        | Stage with `git add --all`. Then apply the turn staging rules below. A path whose only change is a line-ending conversion is unstaged. `changed` is true when the stage differs from `HEAD`, and always true in conflict mode. |
+| G6  | conflict   | Scan only the unmerged paths of step M with `git grep --no-index -l -E '^(<{7}\|>{7})( \|$)'`. A match aborts the merge and stops with `worker.merge.markers_left`.                                                            |
+| G7  | all        | Commit when `changed` is true, with the message of the unit. In conflict mode, commit to conclude the merge. Make no empty commit outside conflict mode.                                                                       |
+| G8  | all        | Read `HEAD` into `checkout.head`. Assert invariant I.                                                                                                                                                                          |
+| G9  | all        | With two or more checkouts, remove each entry of the agent root that is not a checkout or `.kanthord-scratch`. Log `root entries removed` with the names.                                                                      |
 
-- Invariant I: the checkout is on `refs/heads/<node branch>`, `HEAD` equals `checkout.head`, the index matches `HEAD`, no untracked file exists apart from ignored files, and no git operation is in progress.
+- The turn staging rules of G5 run in `trimTurnStaging` of `src/worker/unit/local-git.ts` after `git add --all`, in a turn commit only. `concludeMerge` runs none of them, so the merge of the base keeps the gitlinks of the merge.
+  - A path that the ignore rules of the checkout match (`git ls-files --cached --ignored --exclude-standard`) and that the turn adds (`--diff-filter=A`) leaves the index with `git update-index --force-remove`. It stays in the work tree. This holds also after `git add -f` and after an agent commit. A tracked file of `HEAD` that an ignore rule matches stays staged.
+  - A new path that a verification run wrote leaves the index the same way, under [the verification writes](#the-verification-writes).
+  - A gitlink that moves from one commit to another stays in the commit only when `namedPointers` of `src/worker/unit/turn-gate.ts` finds its path as a code span of the `requirement` of the revision. The span is exact, so `` `engine` `` names the gitlink `engine` and `` `engine/src` `` names no gitlink. For each other moved gitlink, `unstageGitlinkMoves` runs `git update-index --cacheinfo 160000,<commit of HEAD>,<path>` and `restoreGitlink` puts the submodule back at that commit with `git checkout --detach <commit> --`, with no `--force`. An uncommitted edit in a file that differs between the two commits makes git refuse, and the turn stops with the git failure. The edit stays until the next prepare, which restores the gitlink with `--force`.
+- Invariant I: the checkout is on `refs/heads/<node branch>`, `HEAD` equals `checkout.head`, the index matches `HEAD`, no untracked file exists apart from ignored files and the verification writes, and no git operation is in progress. `isCommitted` of `src/worker/unit/local-git.ts` takes the verification writes as `--exclude` patterns.
 - A turn with `changed` true sets the unchanged-turn counter to zero.
 - The gated agent keeps the set of commits that its gate made. [The done record](#the-done-record) reads it.
 
@@ -1801,10 +1805,18 @@ The restore sequence brings a checkout back to invariant I from any state. `rest
 
 1. For each operation whose state exists, run `git rebase --quit`, `git am --quit`, `git cherry-pick --quit`, `git revert --quit` or `git merge --abort`.
 2. Run `git checkout --force -B <node branch> <target> --`.
-3. Run `git reset --hard HEAD` and `git clean -ffd`.
+3. Run `git reset --hard HEAD`. `restoreGitlinks` of `src/worker/unit/local-git.ts` then runs `git checkout --detach --force <commit> --` in each initialized submodule whose commit differs from the gitlink of `HEAD`. A gitlink with no initialized submodule directory stays as it is. Then run `git clean -ffd`.
 4. Assert invariant I.
 
-The target is `before` in the violation path, the head of the checkout step in prepare, and `checkout.head` after each live verification. Prepare keeps its `git clean -ffdx` on a branch switch under [Workspace](#workspace).
+The target is `before` in the violation path, the head of the checkout step in prepare, and `checkout.head` after each live verification. Prepare keeps its `git clean -ffdx` on a branch switch under [Workspace](#workspace). Because step 3 restores the gitlinks, a verification that moves a submodule leaves it at the gitlink commit, and the next turn commit records no gitlink move.
+
+### The verification writes
+
+- `VerificationWrites` of `src/worker/unit/verification-writes.ts` records the new untracked paths that a verification run wrote. A verification run is a `bash` call of the working agent whose trimmed command equals one trimmed verification command of the pinned revision (`verificationCommands`). `track` of the `bash` tool in `sessionTools` of `src/worker/unit/tool-table.ts` wraps the call.
+- The record covers the checkouts of the workspace. It takes each path that `git status --porcelain=v1 -z --untracked-files=all` lists as new after the run and not before it (`untrackedPaths`). A new nested repository counts as its directory, and its gitlink stays out of the commit.
+- The record lasts for the execution. `NativeAgent.verificationWrites(directory)` gives the paths of one checkout to the turn commit and to `isCommitted`. The worker deletes no file and writes no git exclude file.
+- A `write` call or an `edit` call on a recorded path removes the path from the record (`ownership` hook). Another `bash` call removes each recorded path whose fingerprint (size, modification time and content) differs before and after the call (`guard`). The path then goes in the next turn commit.
+- In a write execution, `sessionTools` sets `executionMode` of the `bash` tool to `sequential`, so each tool call of a message that holds a `bash` call runs one at a time and the record names the writer of each path.
 
 ## The done record
 
@@ -1939,26 +1951,32 @@ A patch over `INLINE_BYTES_MAX` (5 MiB) keeps its first part and ends with the t
 `isSupportEvidence` excludes `ROUND_PATCH_SUBJECT`, as it excludes `AFFECTED_SUBJECT`, so a later round places no old patch.
 `prepareEvaluation` places only the newest evidence of the attempt with the subject `CODER_REPORT_SUBJECT`, by evidence identity. An earlier coder report describes an earlier round.
 The reviewer judges the scope of the change from `changed_files`, not from the state of the workspace. A changed file that the requirement forbids is a blocker with the ground `stated`. The exception is a change that correct work needs for a criterion, a verification or an affected test.
-`runEvaluation` checks the node state of the submit answer before the result. An answer with no outcome and a node state other than `Evaluating` ends the execution as `revoked`. A `success` answer with the node still `Evaluating` goes to `requestAndRelease`.
-Tests require a reviewer to judge the assets that the evidence still holds.
-Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
-Budget-end tests release with further work at every budget end, a budget end during a verification and during the release gate included.
-Steps tests skip each unit whose done record matches, also on a fresh clone, and run a work turn for every other unit, also when its verifications pass on the base.
-Steps tests run an `implement` node with no task as one work unit under the node identity as the done-record id. The live checkout runs no node verification, and the release gate runs each node verification once.
-Steps tests skip each node command in the live checkout of a task unit, and run each own command of that task.
-Tests copy the result of a repeated command at the release gate and at the evaluation, and assert one real run in the spans.
-Tests reuse a memo pass on an unchanged tree, and run again after a timeout, a cancellation or a live failure.
-Steps tests count zero answer turns in an `implement` execution.
-Steps tests with two repository bindings commit only the checkouts with a change.
-They merge every checkout before a release in the release gate, and route a failure of the release gate to the owner of the first failed command.
-They push every node branch before the evidence, and they submit one evidence with one asset per binding.
-Steps tests on an `examine` node check out each base-branch head, create no node branch, make no commit and push nothing.
-Restart tests check out `origin/<base branch>` for an attempt whose claim names `kanthord/<node id>-a<k>`, push that branch and leave the head of the earlier node branch unchanged.
-Tests check out `origin/kanthord/<node id>-a<k>` for a later attempt that continues it, and merge the moved base.
-Missing-branch tests delete a pushed node branch at the remote and assert `repository.node_branch.missing`, an unchanged checkout and a second refusal. They assert the same refusal for a fresh workspace with repository evidence of the attempt. They assert a start from the base branch for a first execution and for an attempt with the start point `base_branch`. One test for each rule of the push record asserts the start and the written record. A test asserts that a failed push writes `pending` and that the next execution starts from the unpushed head.
-Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
-Rework tests assert that a verdict with no task id still runs a verdict turn. They assert that an unchanged verdict with passing own commands goes to the release gate. They assert that a failure of those own commands ends with `no_progress`. They assert that a base move gives no new work under the verdict rule.
-Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
+The judgement instruction is `static/prompt/template/evaluation.md`, and the `examine` instruction `static/prompt/template/examine.md` is the report counterpart. Four rules govern the findings of the reviewer. The `evaluation` template holds the first three for an `implement` node and an `examine` node alike.
+
+- The citation rule: when the requirement or a task cites a code path or a type for a stated value, shape or code, the reviewer reads that path or type in the checkouts and compares each statement of the change with it. A statement that differs from the cited code is a blocker with the ground `stated`. A cited path that is not in the checkouts makes the statement not established.
+- The complete violation list: when a rule is violated, the reviewer checks every changed file against that rule and lists each violation as its own finding, with its file and its place. The `examine` instruction holds the same rule. A finding that reports one example and leaves the other violations out breaks it.
+- The repository code rule: the reviewer checks each code rule of a repository prompt against each changed file. A repository prompt that states "a component body holds no business logic" makes a component body with a derivation, a sequence of calls or an error mapping a violation.
+- The round limit: in a later review round, the round rule limits these checks to the lines that the patch of the round adds or changes (`patch_paths`). A prior finding that the reviewer does not list as fixed stays open.
+  `runEvaluation` checks the node state of the submit answer before the result. An answer with no outcome and a node state other than `Evaluating` ends the execution as `revoked`. A `success` answer with the node still `Evaluating` goes to `requestAndRelease`.
+  Tests require a reviewer to judge the assets that the evidence still holds.
+  Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
+  Budget-end tests release with further work at every budget end, a budget end during a verification and during the release gate included.
+  Steps tests skip each unit whose done record matches, also on a fresh clone, and run a work turn for every other unit, also when its verifications pass on the base.
+  Steps tests run an `implement` node with no task as one work unit under the node identity as the done-record id. The live checkout runs no node verification, and the release gate runs each node verification once.
+  Steps tests skip each node command in the live checkout of a task unit, and run each own command of that task.
+  Tests copy the result of a repeated command at the release gate and at the evaluation, and assert one real run in the spans.
+  Tests reuse a memo pass on an unchanged tree, and run again after a timeout, a cancellation or a live failure.
+  Steps tests count zero answer turns in an `implement` execution.
+  Steps tests with two repository bindings commit only the checkouts with a change.
+  They merge every checkout before a release in the release gate, and route a failure of the release gate to the owner of the first failed command.
+  They push every node branch before the evidence, and they submit one evidence with one asset per binding.
+  Steps tests on an `examine` node check out each base-branch head, create no node branch, make no commit and push nothing.
+  Restart tests check out `origin/<base branch>` for an attempt whose claim names `kanthord/<node id>-a<k>`, push that branch and leave the head of the earlier node branch unchanged.
+  Tests check out `origin/kanthord/<node id>-a<k>` for a later attempt that continues it, and merge the moved base.
+  Missing-branch tests delete a pushed node branch at the remote and assert `repository.node_branch.missing`, an unchanged checkout and a second refusal. They assert the same refusal for a fresh workspace with repository evidence of the attempt. They assert a start from the base branch for a first execution and for an attempt with the start point `base_branch`. One test for each rule of the push record asserts the start and the written record. A test asserts that a failed push writes `pending` and that the next execution starts from the unpushed head.
+  Tests assert that a branch switch removes `.kanthord-scratch/` and an ignored file, and that a checkout of the same branch keeps them.
+  Rework tests assert that a verdict with no task id still runs a verdict turn. They assert that an unchanged verdict with passing own commands goes to the release gate. They assert that a failure of those own commands ends with `no_progress`. They assert that a base move gives no new work under the verdict rule.
+  Tests assert that the action performer does not reuse an open pull request of the earlier node branch, and that an attempt that continues its branch reuses its own pull request.
 
 ### The result copy
 
@@ -2079,11 +2097,13 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 - `failed` and `flaky` list test ids. A test id is `{ file, name }`. `name` is the full name of the test: the names of its suites and its own name, joined with a space, `>` and a space. A file that fails to load gives one id with the file path as its name.
 - Each `file` of `failed` and `flaky` is in `tests`. `failed` and `flaky` hold no common id.
 - The selector retries a failed test file once. A test that fails and then passes is flaky.
+- An entry of `flaky` is `{ file, name }` and in a version 3 report may also hold `lines` and `imports`. `lines` is `{ start, end }`, the first and the last line of the top-level test call that holds the first part of `name`, and `end` is not below `start`. `imports` lists the paths of the import closure of `file`, without `file`. An entry holds both keys or neither. A report of another version with `lines` is invalid. `flakyEntry` of `scripts/affected-tests.mjs` writes both keys only when exactly one top-level call of the file holds that first part of `name`, and writes the plain id otherwise.
+- When the report is above its size bound, `fitReport` first drops `lines` and `imports` from every `flaky` entry. It cuts the longest list only after that.
 - The KanthorD selectors rerun the failed test files only when 8 or fewer files hold a failed id, the limit `RERUN_FILE_LIMIT`. With more files, the report lists every failed id in `failed` and an empty `flaky`.
 - `excluded_e2e` lists each e2e test file that the selection reached and left out.
 - The report is at most 1 MiB. Each list holds at most 10000 entries, and each text is at most 1024 bytes.
 - KanthorD parses the report with a strict schema. A missing report, an invalid report, or an exit code that does not match `failed`, is an invalid report.
-- `version` is 1 or 2. Version 2 adds the optional object `floor`. Every other key keeps its version 1 rule, and a version 1 report stays valid.
+- `version` is 1, 2 or 3 (`affectedReportSchema` of `src/worker/unit/affected.ts`). Version 2 adds the optional object `floor`. Version 3 adds the optional keys `lines` and `imports` of a `flaky` entry. Every other key keeps its version 1 rule, and a version 1 and a version 2 report stay valid. `scripts/affected-tests.mjs` writes version 3 (`REPORT_VERSION`).
 - The floor is the set of test files whose import closure holds every production file of the repository. The selector computes it from its import graph.
 - A production file is a file in the import closure of the entry that the program runs. The engine entry is `src/main.ts`.
 - `floor` holds `tests`, `seconds` and `total_seconds`. `tests` is the count of floor test files. `seconds` is the test time of the floor test files that ran. `total_seconds` is the test time of every test file, or null unless `selection` is `all`.
@@ -2124,12 +2144,13 @@ The worker enforces the verdict. The admission of the Mission Service does not c
 
 ### The verdict of one repository
 
-- KanthorD counts a flaky test as failed when its file is in the change set, and lists it in `promoted_flaky`. A flaky test in another file passes, and the report, the evidence and the span name it.
+- KanthorD counts a flaky test as failed under the flaky rule (`flakyTouched` of `src/worker/unit/affected.ts`), and lists it in `promoted_flaky` as a plain `{ file, name }`. A flaky test that the rule does not count passes, and the report, the evidence and the span name it.
+- An entry with `lines` and `imports` counts when the change set holds a path of `imports`, or when a changed line range of its file overlaps `lines`. `changedLineRanges` of `src/worker/unit/local-git.ts` reads the ranges with `git diff --unified=0 <merge base> <head> -- <path>` and takes the new-side range of each hunk, and a pure deletion counts as its line. A plain entry counts when its file is in the change set.
 
 | Verdict    | Condition                                                                                                                                                                                               |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `absent`   | The repository holds no declaration.                                                                                                                                                                    |
-| `passed`   | Exit 0, a valid report, and no flaky test in a file of the change set.                                                                                                                                  |
+| `passed`   | Exit 0, a valid report, and no flaky test that the flaky rule counts.                                                                                                                                   |
 | `failed`   | A valid report with a failed test id after the flaky rule, and no `base_red`. Also exit 127 at the head with a valid base report. Also an invalid report at the head, with a valid base result in time. |
 | `base_red` | Valid reports at the head and at the base, and each failed test id of the head is a failed test id of the base.                                                                                         |
 
@@ -2353,6 +2374,7 @@ The request key is `<node id>/<attempt>/<FrozenAction.key>/merge/<tested commit>
 A failed call changes no return item and logs a warning with the evidence identity.
 `gate_files` of an action context entry holds the changed gate files of the binding in the current assessment of the attempt.
 When a nonempty `gate_files` skips a merge, the action performer logs the warning "merge skipped: gate files changed" with `evidence_id` and `gate_files`. The pull request then waits for a human.
+A `push` action with a nonempty `gate_files` gets no push. After the action performer records the `branch_push` request, `warnHumanLanding` of `src/worker/action-performer.ts` logs the warning "human landing: merge the node branch into the base branch with a merge commit" with `evidence_id`, `gate_files`, `base_branch` and `tested_commit`. A human lands that branch with a merge commit, because the check completes the node when the base branch contains the tested commit, and a squash or a rebase never contains it.
 
 The operation and the tool answer `{ tool_name: "repository-action-request", items: ActionResultItem[] }`.
 `ActionResultItem` is discriminated on `kind`, with one value per return class.
@@ -2429,7 +2451,7 @@ The tool of the action performer takes the execution identity only.
 - `src/kernel/commit-message.ts` builds every worker commit message and the pull request title of `src/intake/action-perform.ts`.
 - `commit_type` is an optional closed enum on the node content: `feat`, `fix`, `docs`, `style`, `refactor`, `test` or `chore`. `commitTypeOf` gives `feat` when it is absent. The Mission Service validates it before the write, and the store keeps `null` when it is absent.
 - The header is `<commit_type>: <subject>` with no scope. The subject of a task commit is the task `name`. The subject of a node unit commit and of a verdict commit is the node `name`. The subject of a merge commit is `merge <base_branch>`. The subject of a checkpoint commit is the `name` of the current unit. The pull request title uses the node `name`.
-- The builder replaces each run of whitespace with one space, writes the first letter in lowercase, cuts the subject so that the header holds at most `COMMIT_HEADER_MAX_LENGTH` (100) characters, keeps a surrogate pair whole, and removes every final full stop and space.
+- The builder replaces each run of whitespace with one space and removes a leading header prefix of the subject, `<type>: ` or `<type>(<scope>): ` with a type of the closed enum (`COMMIT_HEADER_PREFIX` of `src/kernel/commit-message.ts`), so the header holds the `commit_type` only. It writes the first letter in lowercase, cuts the subject so that the header holds at most `COMMIT_HEADER_MAX_LENGTH` (100) characters, keeps a surrogate pair whole, and removes every final full stop and space.
 - `isCommitHeader` checks `^(<type>)(\(<scope>\))?: \S.*$`, the length and the final full stop before each commit. A node or task `name` that gives no valid subject for some type fails the write with `mission.node.content_invalid` and `details.field` `name`.
 - The body holds the unit id on its own line. The done record follows after a blank line. The worker writes no other trailer.
 - Today the body names the unit and no attempt. The evidence of the attempt names the head commit.

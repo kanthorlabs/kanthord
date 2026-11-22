@@ -389,6 +389,7 @@ The Agent component owns these keys of the section `agent`.
 - A render answers 409 `agent.prompt.template_invalid` with `reason` `render` when the template names a value that the caller does not supply.
 - The renderer escapes no value, and it permits no helper other than the built-in block helpers and `json`. `json` writes its argument as JSON.
 - The renderer removes the trailing whitespace of the rendered text.
+- The shipped `evaluation` template holds the citation rule, the complete violation list, the repository code rule and the round limit of [the judgement instruction](worker-service.impl.md#the-verifications). The shipped `examine` template holds the complete violation list. `src/agent/prompt-resolve.test.ts` asserts each rule in the rendered text of the shipped template set. `assets/prompt/template/` holds no copy of these two templates.
 - The execution setup carries the resolved template set, so the worker application reads no template file.
 - The values of each template:
 
@@ -1161,7 +1162,8 @@ This section records the eval harness of the engine node `l2-engine`.
 - The case key `project_ids` lists fixture keys. The harness resolves each key to the project of that fixture and creates the invite of the guest with those projects.
 - A key of `project_ids` that is no fixture key fails the parse. A case with a guest turn names at least one key.
 - The case key `auto_mode` is `on` or `off`, and the default is `on`. With `off`, the harness turns auto mode off through `workbench.session.autoMode.set` after the session create and before the first message.
-- `unexpected_approval` is the harness check. It runs for every case and fails when a pending approval has no entry in `approvals`.
+- `unexpected_approval` is the harness check. It runs for every case and fails when a pending approval has no entry in `approvals`. `Observation.unexpected_approval` of `src/eval/score.ts` is a list of strings, the `operation_id` of each such approval in order, and `scoreRun` writes one failure `an unexpected approval appeared: <operation_id>` for each item. `runTurns` of `src/eval/sandbox.ts` fills the list.
+- The test `every case file under eval names an operation and holds the fields of the final_state output` of `src/eval/case.test.ts` checks the case files of every suite, the guard cases included. It collects the operations of the contracts into one map by id. It fails for an `operation_id` of `expect_offer` or `final_state` that is not in the map, for a key of `approvals` that is not in the map, and for a `final_state` `expect` key that no field of the output schema of the operation holds (the walk reads unions, intersections, optional and nullable wrappers, arrays and records, and accepts any key below an `any`, `unknown` or custom schema). The failure text names the case and the path, for example `checks.final_state[0].expect.items[0].name names no field of the operation output`.
 
 ### The L3a cases
 

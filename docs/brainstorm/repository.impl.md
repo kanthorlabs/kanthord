@@ -111,6 +111,7 @@ The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 20
 - A rate limit refusal answers the wait that GitHub names. `Retry-After` wins over `x-ratelimit-reset`. Both headers take integer seconds only, and an HTTP date names no wait.
 - `x-ratelimit-reset` counts only when `x-ratelimit-remaining` is `0`. Its wait is the reset minus the current time, and a reset in the past gives a wait of 0. A refusal with no usable header names no wait.
 - The Events API lists an event 30 seconds to 6 hours after it occurs, as GitHub documents. The merge-poll-1 run measured a merge event 15.6 to 32 minutes late, and no `PushEvent` of a base merge within one hour. The events read bounds no detection delay.
+- `GitHubPlatform.commitTreeOf` calls `GET /repos/{owner}/{repo}/commits/{ref}` and answers `{ sha, tree }`, the commit and its tree. A body without both values fails with the unreadable-body result class. The Intake Service compares the trees of the base branch and of the tested commit with it, after a 502 merge answer and in the check of an open pull request.
 - Only the pull request check of the Intake Service reads the pull request again. `getChangeRequests` and the action read read once.
 - The check reads again only an open, unmerged pull request whose `mergeable` is null, at most 3 reads 2 seconds apart. It stops when the remaining deadline of the call is at most the delay, and it returns the last read. A failed read again fails the check.
 - A null `mergeable` in the last read folds to `none`.

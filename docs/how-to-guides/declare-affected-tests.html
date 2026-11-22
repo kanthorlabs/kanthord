@@ -291,8 +291,10 @@
                 <tr>
                   <td><code>version</code></td>
                   <td>
-                    <code>1</code> or <code>2</code>. Version 2 adds the
-                    optional <code>floor</code>.
+                    <code>1</code>, <code>2</code> or <code>3</code>. Version 2
+                    adds the optional <code>floor</code>. Version 3 adds the
+                    optional <code>lines</code> and <code>imports</code> of a
+                    <code>flaky</code> entry.
                   </td>
                 </tr>
                 <tr>
@@ -326,7 +328,10 @@
                   <td><code>flaky</code></td>
                   <td>
                     The test id of each test that failed and then passed in the
-                    second run of its file.
+                    second run of its file. In a version 3 report, an entry can
+                    also hold <code>lines</code>, the first and last line of the
+                    test, and <code>imports</code>, the files that the test file
+                    imports. An entry holds both keys or neither.
                   </td>
                 </tr>
                 <tr>
@@ -516,7 +521,9 @@ echo "exit $?"</code></pre>
             base head. When each failed test of the node head also fails on the
             base head, the verdict is <code>base_red</code>, and the node
             passes. Otherwise the node fails. A flaky test counts as failed only
-            when its file is in the change set.
+            when the change set touches the test or a file that the test file
+            imports. An entry with no <code>lines</code> and
+            <code>imports</code> counts when its file is in the change set.
           </p>
           <p>
             When the change set of a node changes a gate file, a human merges

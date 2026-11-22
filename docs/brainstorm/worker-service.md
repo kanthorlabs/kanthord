@@ -429,6 +429,11 @@ The agent runs only coding turns: a work turn, a revision turn and a merge confl
 For each work unit the agent performs the steps in the workspace.
 After every agent turn, the execution runs gate G: it checks that each checkout is on its node branch, holds the head before the turn in its history and has no git operation in progress, and then commits every change of the turn.
 A violation of the git state restores the head before the turn and stops the execution with `operation_failed` and a code that names the violation.
+The turn commit follows three staging rules.
+A new path that the ignore rules of the checkout match stays out of the commit, also when the agent adds it with `git add -f`. The file stays in the work tree.
+A new untracked path that a verification run of the agent wrote stays out of the commit until the agent changes it. A verification run is a `bash` call whose command equals a verification command of the pinned revision.
+A moved gitlink of a submodule is in the commit only when the `requirement` of the node names its path in a code span. For each other moved gitlink, the gate keeps the gitlink of `HEAD` and puts the submodule back at that commit.
+After a verification that the execution runs and after a violation, the execution also puts each initialized submodule back at the gitlink commit of `HEAD`.
 The execution is the only author of the commits on the node branch, and a commit of the agent becomes part of the commit of the execution.
 A checkout with no change keeps its head, and a revision that changes no checkout counts as no progress.
 Two revision turns in a row with no progress stop the execution with `no_progress`.
@@ -737,6 +742,10 @@ After the dispatch loop, the action performer also requests the merge for every 
 This request uses the current tested commit, so a rework or a restart gets its merge.
 A failed merge changes no return item of the action performer and logs a warning with the evidence identity.
 With a changed gate file, the action performer requests no merge, and a human merges the pull request.
+A `push` action with a changed gate file records a `branch_push` request and pushes nothing. The action performer logs a warning that tells the human to land the node branch with a merge commit. A squash or a rebase of that branch never contains the tested commit, so it never completes the node.
+The pull request that the action performer opens has the title `<commit_type>: <node name>` with one commit type. Its body holds the newest coder report of the attempt, then the gate file text when gate files exist.
+After a 502 answer to a merge request, the Intake Service compares the tree of the base branch with the tree of the tested commit before any retry. Equal trees count as a merge, because a squash landed. Different trees keep the answer `unknown_outcome`.
+The check of an open pull request whose head is the tested commit completes the node when the tree of the base branch equals the tree of the tested commit.
 
 For a reviewer execution of kanthord's own harness, the evaluation method invokes the action performer through `worker.action.request`.
 An external harness invokes the tool of the action performer through the MCP server for its reviewer execution.
