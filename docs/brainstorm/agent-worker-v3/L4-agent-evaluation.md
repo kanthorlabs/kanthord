@@ -125,7 +125,7 @@ Ulrich ruled on 2026-11-22: the evaluation uses the KanthorD XDG directories. `d
 | `repeats`     | An integer of at least 2. The start value is `2`                                           | How many runs does each case get in one evaluation? |
 | `gate_share`  | A number above 0 and at most 1. The start value is `0.6`                                   | Which share of held-out runs must pass at the gate? |
 
-- `cap_usd`, `judge_usd` and `gate_share` are hypotheses. Ulrich sets `cap_usd` and `judge_usd` again from the measured results of the report ([`report.sh`](#reportsh)). Ulrich approves `cap_usd` and `gate_share` before the first live run.
+- `cap_usd`, `judge_usd` and `gate_share` are hypotheses. Ulrich sets `cap_usd` and `judge_usd` again from the measured results of the report ([`report.sh`](#reportsh)). Ulrich approved the start values `cap_usd` 15, `gate_share` 0.6 and `judge_usd` `0.1usd` on 2026-11-22.
 - `run.sh` and `report.sh` read the file at the start of each call. A resumed evaluation reads `cap_usd` and `judge_usd` of that time, and `calls.jsonl` keeps the cap of each call.
 - `run.sh` copies `repeats` into `iteration.json` at the first call of an evaluation. The evaluation keeps that value.
 - **Fixed gate share.** `run.sh` copies `gate_share` into `iteration.json` at the first call of a held-out evaluation. When an earlier held-out evaluation of the same stage exists under `<state>/evaluation/runs/`, `run.sh` refuses a different `gate_share` in `config.json` with exit `1`. So Ulrich can change `gate_share` only before the first held-out evaluation of a stage. `report.sh` uses the copied values.

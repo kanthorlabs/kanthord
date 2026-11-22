@@ -34,7 +34,7 @@ LA and LB are build plans. They hold build steps and a gate, and no acceptance c
 Ulrich set this order on 2026-11-22, and renumbered the layer chain on the same day: L1, L2, L3, L4, LA, L5, L6, L7, LB. The worker work starts only after the agent gate passes.
 
 1. L1, the model. Status `accepted`.
-2. L2, the agent CLI. Then L3, the agent. Then L4, the agent evaluation (Ulrich, 2026-11-22).
+2. L2, the agent CLI. Then L3, the agent. Then L4, the agent evaluation (Ulrich, 2026-11-22). Status of L2, L3 and L4: `accepted`. Ulrich accepted L3 and L4, and the L1 changes of L4, on 2026-11-22.
 3. LA: the build plan of the agent and its evaluation. It holds the build steps from the code of today to L1, L2, L3 and L4. It also holds the runner and the evaluation set of L4, and the agent gate.
 4. The agent gate, in this order:
    1. The acceptance checks and the unit-level rules of L1, L2, L3 and L4 that their owner layers make runnable pass.
@@ -52,8 +52,8 @@ The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A
 | ----- | -------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------- |
 | L1    | [L1-model.md](L1-model.md)                         | The model and its boundaries | Fix the actors, the boundary, tool ownership, statelessness, the credential flow and the mapping of today                                | R3, R4, R6, R8 | `accepted` |
 | L2    | [L2-agent-cli.md](L2-agent-cli.md)                 | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                                                     | R1, R6, R8     | `accepted` |
-| L3    | [L3-agent.md](L3-agent.md)                         | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract                                         | R1, R2, R6, R8 | `draft`    |
-| L4    | [L4-agent-evaluation.md](L4-agent-evaluation.md)   | The agent evaluation         | Specify the goals, the evaluation set, the grading, the diagnosis, the iterations, the stage gate and the runner of the agent evaluation | R6, R8, R9     | `draft`    |
+| L3    | [L3-agent.md](L3-agent.md)                         | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract                                         | R1, R2, R6, R8 | `accepted` |
+| L4    | [L4-agent-evaluation.md](L4-agent-evaluation.md)   | The agent evaluation         | Specify the goals, the evaluation set, the grading, the diagnosis, the iterations, the stage gate and the runner of the agent evaluation | R6, R8, R9     | `accepted` |
 | LA    | [LA-agent-build.md](LA-agent-build.md)             | The agent build plan         | Specify the build steps of the agent and its evaluation from the code of today, and the agent gate with the evaluation run of L4         | R7             | `planned`  |
 | L5    | [L5-worker-cli.md](L5-worker-cli.md)               | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                                                             | R5, R6, R8     | `planned`  |
 | L6    | [L6-worker.md](L6-worker.md)                       | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                                                 | R3, R4, R6, R8 | `planned`  |
