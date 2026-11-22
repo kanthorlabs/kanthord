@@ -395,7 +395,8 @@ This section realizes [Shared conversation](workbench-service.md#shared-conversa
 
 ### Join and the guest identity
 
-- `JoinScreen` serves the route `join/:token`. It reads the name from the fragment and prefills the field "Your name (prefilled from the invite, you can change it)". The guest can change it.
+- `JoinScreen` serves the route `join/:token`. It reads the name from the fragment and prefills the field. The guest can change it.
+- `useJoin` of `apps/src/features/guest/use-join.ts` sets the label. When the fragment holds a name, the label is "Your name (prefilled from the invite, you can change it)". With no name, the label is "Your name".
 - Before any request, `useJoin` calls `history.replaceState` and replaces the address with `<base>/guest`. The token and the fragment leave the address bar.
 - Join sends the trimmed name and the token to `workbench.invite.join`. The route `/guest` shows the guest chat.
 - `invite.join` is no mutation, so the server never stores the guest JWT. The client keeps it in `sessionStorage` under `kanthord.guest`.
@@ -419,6 +420,8 @@ This section realizes [Shared conversation](workbench-service.md#shared-conversa
 - A run of whitespace in the name and a line break in the text become one space.
 - The relay of a member holds the notes of the host file, its own file included.
 - After the last invite ends, an untagged message goes to the member that answered last (D8), and no note is written.
+- The guest composer refuses a leading `@name` that `mention_names` does not hold. `guestMentionRefusalOf` of `apps/src/lib/workbench-mention.ts` applies the match rule of `leadingMention` of `engine/src/workbench/conversation.ts`. The composer sends nothing, keeps the draft and shows "A guest can ask only <names> in this conversation." The names read "A", "A or B" or "A, B or C". With no name in `mention_names`, the line reads "A guest can ask no agent in this conversation."
+- The owner session view shows the connection line "The connection to the session failed: <message> Trying again." from the second failed events read in a row. A failure of `unauthorized`, `forbidden` or `not_found` shows at once. `useSessionEvents` of `apps/src/features/workbench/chat/use-session-events.ts` counts the reads.
 
 ### Guest-started run
 
@@ -961,6 +964,7 @@ Every operation has `human` access, except `workbench.invite.join` (`public`) an
 - The card look follows the design "Yumi Workbench Preview", scenario `a1-offer`.
 - The card shows the "Action" pill and the operation id.
 - The card shows two fact bullets. For a node target they are "node: <name> (<id>)" and "state: <state> · attempt <n>". For a project target they are "project: <name> (<id>)" and "state: paused" or "state: active".
+- `actionFactsOf` of `apps/src/lib/workbench-action.ts` builds the facts of a setup card. The credential card (`llm.credential.rotate`) shows one fact, "credential: <name>, revision <n>". An older offer with no name shows "revision <n>". The agent setup card keeps "Offered at revision <n>". The binding set card keeps "Offered at binding set version <n>".
 - The card shows one primary button. For `mission.node.discard` and `mission.node.override` the button is a filled danger button.
 
 ### Card states
@@ -977,7 +981,7 @@ Every operation has `human` access, except `workbench.invite.join` (`public`) an
 - A click on the button reads the target again. When the target differs from `seen`, the card runs no act and shows a change line.
 - A setup card opens the existing dashboard dialog with the target id only:
   - `llm.credential.rotate`: `BoardRotateSheet` through the core hook `useNamedRotate`. One save rotates the server copy and each ticked holder copy. The card reports `done` only when the server copy rotates.
-  - `project.bindingSet.write`: `BindingsPanel` in a right `Sheet`. `onWritten` reports `done`.
+  - `project.bindingSet.write`: `BindingsPanel` in a right `Sheet`. `onWritten` closes the sheet and reports `done`.
   - `agent.enablement.put`: `DefaultConfigurationSheet`. `onSaved` reports `done`.
 - A credential with no live server copy or no platform entry shows "Not available".
 - A read whose revision or version differs from `seen` shows the change line and opens no dialog.

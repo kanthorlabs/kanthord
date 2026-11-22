@@ -1789,6 +1789,7 @@ The deck rules follow.
 - The workforce fact and the cooling lines follow the summary.
 - Primary: the card at the cursor. It holds the rank pill "#k", the tab label and the project pills. It also holds "Waiting <age> · since <hh:mm>". It holds "<n> nodes wait on this" when one node or more waits.
 - The primary card also holds the title, the cause, the lead act and More. A tool approval card adds the "Change asked" rows.
+- An agent answer renders GitHub Markdown, tables included (`remark-gfm` in `apps/src/features/workbench/chat/components/agent-text.tsx`).
 - An Inbox card adds the message as plain text. It never renders Markdown or HTML, because an untrusted actor can write the text. A card of an untrusted actor adds the label "not trusted".
 - The "Change asked" rows hold the operation. They add one "<field> becomes" row for each input field of the call that waits, from the session read.
 - Secondary: the first tilted card shows the plain text "Next #k <subject>". It is not a button.
@@ -1797,7 +1798,10 @@ The deck rules follow.
 - The Left and Right arrow keys move the cursor in the deck. A key press in a text field or in the tab filter does nothing.
 - A touch swipe of at least 40 px on the primary card moves the cursor at 390 px. A swipe never runs an act.
 - Cursor: it is a client-only id. A reload resets it to #1. The engine holds no cursor field, and no setting stores it.
+- The cursor follows item #1 until the first complete read of the overview (`loaded` of `useOverview`), unless the person moves it. After that read, it stays at its item. `following` of `DeckState` in `apps/src/features/home/use-home-deck.ts` holds this. A move of the cursor, a click on a row and an exit after an act set `following` to false.
 - A new item never replaces the primary.
+- The deck identity of a tool approval item is `tool_approval:<session id>:<tool call id>` (`approvalItemsOf` of `apps/src/lib/approval-attention.ts`). A new pending approval of a session shows as its own item. `queueEntryOf` of `apps/src/lib/home-deck.ts` finds the approval of the open conversation by its kind and its session id.
+- The deck tool card of a run that a guest started shows the line "Requested in a run started by <name> (guest)" above "Change asked". `requestLineOf` of `apps/src/lib/board-change.ts` builds it from `guestRequestLineOf` of `apps/src/lib/guard-line.ts`.
 - Count line: it reads "<k> of <N> waiting · <acts> · <nodes>". It holds the button "Expand (<N>)".
 - Inline list: the list opens directly under the count line. It holds a search on subject, cause, author and project, and tab filter chips.
 - Each row of the inline list holds a rank pill. The list shows 50 rows per page, with "Show 50 more".
@@ -1819,6 +1823,7 @@ The deck rules follow.
 - Settled elsewhere: the item leaves with no act of this client, or after the client cancels the act dialog. The card then shows "The selected item no longer waits." for 1.5 s. Then the same exit follows.
 - Queue line: the pending approval of the open Home conversation renders in the stream as one line. It reads "<subject> is #k in your queue."
 - The "#k" link of the queue line moves the cursor.
+- When the snapshot of the open Home conversation holds a pending approval that the deck does not hold, Home reads the overview once at once. The queue line then replaces the approval card. `useApprovalQueueRefresh` of `apps/src/features/home/use-approval-queue-refresh.ts` reads once for each tool call id, after the first complete read.
 - In the Home chat, an action card whose target holds a node or project deck item renders as the queue line "<subject> is #k in your queue." with no card. The "#k" link moves the cursor to that item. A card whose target holds no deck item renders as in the Workbench chat.
 - Yumi off: the deck and every board act work. Ask Yumi leaves every card, and `environment_failed` leads with "Open project".
 - With Yumi off, the composer is disabled and shows no command list.
