@@ -562,7 +562,7 @@ L2 needs these items from the agent contract. [L3](L3-agent.md#input-and-output-
 - [LA](LA-agent-build.md): in `docs/cli/other.md`, section "Output and exit behavior", add the exits `2`, `4`, `5` and `75` of `run agent`, the stderr warning line and the stderr notice line. With `run`, the global root names are five. Fix the text that names three: `docs/cli/other.md:1155`, `docs/cli/README.md:71` and `docs/cli/project.md:36`.
 - [LA](LA-agent-build.md): assign the file of each module of [Unit-level rules](#unit-level-rules).
 - [LA](LA-agent-build.md): move `ProviderFailure` from the scheduler contract (`src/scheduler/contract.ts:67-73`) to `src/llm/`, next to `providerFailureOf`, so the agent runtime imports no scheduler module.
-- [LA](LA-agent-build.md): the Linux test container. L2-AC2 runs in the network namespace N. L2-AC6 needs a user database entry whose home is H.
+- [LA](LA-agent-build.md): the Linux test job. L2-AC2 runs in the network namespace N. L2-AC6 runs as a test user whose user database entry gives the home H.
 
 ## Acceptance checks
 
@@ -620,7 +620,7 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
    - Assert: refused with `cli.run.agent.auth_key_command`, with the row `field: key`. No file exists at `<marker>`. Stub receives no request. No file exists at S. O does not exist. T holds no file.
 
 6. **L2-AC6. The credential comes only from the `--auth` file.** Covers L1 AC7, AC8 and AC21.
-   - Fixture: Stub, W, X, T, D, in the test container. The user database gives H as the home of the OS user. `H/.config/kanthord/auth.json` is Auth, with the key K. `PI_CODING_AGENT_DIR` is D2, with an `auth.json` that holds K2. `H/.pi/agent/auth.json` holds K5. The parent environment sets `KANTHORD_TOKEN` to T1, and `H/.config/kanthord/cli.yaml` holds `token: T2`. Standard input holds `{"provider_id":"openai-compatible","credential":{"type":"api_key","key":"<K6>"}}`. Each file has mode `0600`.
+   - Fixture: Stub, W, X, T, D, as the test user of the Linux job. The user database gives H as the home of the OS user. `H/.config/kanthord/auth.json` is Auth, with the key K. `PI_CODING_AGENT_DIR` is D2, with an `auth.json` that holds K2. `H/.pi/agent/auth.json` holds K5. The parent environment sets `KANTHORD_TOKEN` to T1, and `H/.config/kanthord/cli.yaml` holds `token: T2`. Standard input holds `{"provider_id":"openai-compatible","credential":{"type":"api_key","key":"<K6>"}}`. Each file has mode `0600`.
    - Command: variant 1: Run with `--auth` removed and `HOME="$H"`. Variant 2: the same with `HOME` set to H2, where `H2/.config/kanthord/auth.json` holds K3. Variant 3: the same as variant 1 with `XDG_CONFIG_HOME` set to X2, where `X2/kanthord/auth.json` holds K4.
    - Assert: each variant exits `0`. Each request to Stub carries K, and never K2, K3, K4, K5 or K6. No request and no session file holds T1 or T2.
 
@@ -692,7 +692,7 @@ These rules hold with no process, no file system flow and no LLM stub, so their 
 - **The real-credential run.** It needs the credential of Ulrich. [Gate procedure](#gate-procedure-the-real-credential-run) states it with its pass conditions.
 - **A request to a cloud provider other than `openai-compatible`.** It needs that endpoint. The unit tests of the `--auth` reader cover each mapped entry. The gate run covers the provider of Ulrich.
 - **The cost limit end to end.** Each provider with a price has a fixed public host, so the LLM stub cannot serve it. The stub provider `openai-compatible` has no price (`src/llm/model-connector.ts:100`). The unit test of the budget covers the limit with a priced model. [HANDOFF.md](../HANDOFF.md#llm-component) holds the change that gives an `openai-compatible` model a price.
-- **The text of `docs/cli/run.md` for the developer.** It is page text, not a behavior. The review of the LA step checks it.
+- **The text of `docs/cli/run.md` for the developer.** It is page text, not a behavior. The review of the LA pull request checks it.
 
 ## Decisions
 

@@ -27,7 +27,7 @@ The layers go from the overall to the details. Each CLI layer comes before the c
 
 Each layer file, LA and LB included, starts with its goals `G1`, `G2`, ..., ends with its decisions and its open questions for Ulrich, and names the goals that each section serves.
 
-LA and LB are build plans. They hold build steps and a gate, and no acceptance check of their own. Each other layer file has a section "Acceptance checks". Each check states one public behavior of the layer: the fixture, the command or call, and the exact observable result (output, exit code, file, state or refusal). An agent runs each check end to end with no human step. Each check is an end-to-end test: it runs the shipped command or service as a process, with a real file system, real git and the real pi runtime, and a stub only at the outside edge (the LLM stub). It asserts an outcome that crosses components. A rule that a schema, a validator or one function proves alone is a unit test, not an acceptance check; the layer lists it with the module that owns its unit tests. Each check of L1 names the owner layer that makes it runnable. The implementation of a layer passes the checks of that layer and of every upper layer. A change to a check of an upper layer goes to that layer first. Each build step of LA and LB names the checks that it makes pass.
+LA and LB are build plans. They hold build steps and a gate, and no acceptance check of their own. Each other layer file has a section "Acceptance checks". Each check states one public behavior of the layer: the fixture, the command or call, and the exact observable result (output, exit code, file, state or refusal). An agent runs each check end to end with no human step. Each check is an end-to-end test: it runs the shipped command or service as a process, with a real file system, real git and the real pi runtime, and a stub only at the outside edge (the LLM stub; L1 AC20 also has the test `sshd` and a fake `podman` executable). It asserts an outcome that crosses components. A rule that a schema, a validator or one function proves alone is a unit test, not an acceptance check; the layer lists it with the module that owns its unit tests. Each check of L1 names the owner layer that makes it runnable. The implementation of a layer passes the checks of that layer and of every upper layer. A change to a check of an upper layer goes to that layer first. Each pull request of LA and LB names the checks that it makes pass.
 
 ## Round order
 
@@ -54,9 +54,9 @@ The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A
 | L2    | [L2-agent-cli.md](L2-agent-cli.md)                       | The agent CLI                | Specify the CLI that runs one agent with no KanthorD                                                                                     | R1, R6, R8     | `accepted` |
 | L3    | [L3-agent.md](L3-agent.md)                               | The agent                    | Specify the agent profiles, their prompts, the coding tool set and the input and output contract                                         | R1, R2, R6, R8 | `accepted` |
 | L4    | [L4-agent-evaluation.md](L4-agent-evaluation.md)         | The agent evaluation         | Specify the goals, the evaluation set, the grading, the diagnosis, the iterations, the stage gate and the runner of the agent evaluation | R6, R8, R9     | `accepted` |
-| LA    | [LA-agent-build.md](LA-agent-build.md)                   | The agent build plan         | Specify the build steps of the agent and its evaluation from the code of today, and the agent gate with the evaluation run of L4         | R7             | `draft`    |
-| LA1   | [LA1-run-skeleton.md](LA1-run-skeleton.md)               | The run skeleton             | Build `run agent` on the agent contract, with the credential checks of `tasks run` at their strength of today or stricter                | R7             | `draft`    |
-| LA2   | [LA2-credential-boundary.md](LA2-credential-boundary.md) | The credential boundary      | Build the Linux test job, the proxy-name removal and the `env_proxy` refusal, and prove the credential boundary end to end               | R7             | `draft`    |
+| LA    | [LA-agent-build.md](LA-agent-build.md)                   | The agent build plan         | Specify the sub-layers of the agent build from the code of today, and the agent gate with the evaluation run of L4                       | R7             | `draft`    |
+| LA1   | [LA1-run-skeleton.md](LA1-run-skeleton.md)               | The run skeleton             | Build `run agent` on the agent contract, with each credential rule of L2 that needs no Linux job                                         | R7             | `draft`    |
+| LA2   | [LA2-credential-boundary.md](LA2-credential-boundary.md) | The credential boundary      | Build the Linux test job, and prove the credential source and the hostile environment end to end                                         | R7             | `draft`    |
 | LA3   | [LA3-run-ends.md](LA3-run-ends.md)                       | The run ends                 | Build the start preconditions, the cost budget, the retryable class and the signal handler                                               | R7             | `draft`    |
 | LA4   | [LA4-consumer-migration.md](LA4-consumer-migration.md)   | The consumer migration       | Move the Project Service onto the agent contract and delete `tasks run`                                                                  | R7             | `draft`    |
 | LA5   | [LA5-evaluation-runner.md](LA5-evaluation-runner.md)     | The evaluation runner        | Build the runner of L4                                                                                                                   | R7             | `draft`    |
@@ -70,13 +70,11 @@ L1 links these anchors of later files. Each later file keeps the heading of each
 - `L3-agent.md#coding-tools`, `#profile-prompts`, `#input-and-output-contract`, `#constraints-on-the-workbench-branch-at-rebase`
 - `L4-agent-evaluation.md#stage-gate`, `#unit-level-rules`
 - `L6-worker.md#worker-instructions`, `#worker-capabilities`, `#worker-tools`
-- `LA-agent-build.md#step-12-the-project-service-on-the-contract`
-- `LA4-consumer-migration.md#acceptance-checks`, `#unit-level-rules`
+- `LA4-consumer-migration.md#acceptance-checks`, `#unit-level-rules`, `#pr-1-the-project-service-on-the-contract`
 
 L3 links these anchors of later files.
 
-- `LA-agent-build.md#step-12-the-project-service-on-the-contract`
-- `LA4-consumer-migration.md`
+- `LA4-consumer-migration.md#pr-1-the-project-service-on-the-contract`
 
 L4 links this file of a later layer.
 

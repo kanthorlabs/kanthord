@@ -4,7 +4,7 @@ Status: `draft`. Base: engine `c864130e`. Parent: [LA](LA-agent-build.md#sub-lay
 
 ## Goal
 
-LA5 adds the runner of [L4](L4-agent-evaluation.md#runner) to the engine: `run.sh`, `report.sh`, `evaluation.mjs`, `judge.md` and `judge-task.md` in `scripts/evaluation/agent/`. The runner runs `swe@1` through the built `kanthord run agent` on each case of a set, grades each diff in a new clone with the hidden tests, runs the `re@1` diagnosis on the dev set, applies the breach rules, and writes the report with the iteration verdict, the A/A line or the gate verdict. LA5 ends when the ten checks [L4-AC1 to L4-AC10](L4-agent-evaluation.md#checks) pass in the Linux job `agent-e2e`, and the unit-level rules 1 to 20 of [L4](L4-agent-evaluation.md#unit-level-rules) pass in `pnpm run verify`.
+LA5 adds the runner of [L4](L4-agent-evaluation.md#runner) to the engine: `run.sh`, `report.sh`, `evaluation.mjs`, `judge.md` and `judge-task.md` in `scripts/evaluation/agent/`. The runner runs `swe@1` through the built `kanthord run agent` on each case of a set, grades each diff in a new clone with the hidden tests, runs the `re@1` diagnosis on the dev set, applies the breach rules, and writes the report with the iteration verdict, the A/A line or the gate verdict. LA5 ends when the ten checks [L4-AC1 to L4-AC10](L4-agent-evaluation.md#checks) pass in the CI job `agent-e2e`, and the unit-level rules 1 to 20 of [L4](L4-agent-evaluation.md#unit-level-rules) pass in `pnpm run verify`.
 
 ### Entry state
 
@@ -21,8 +21,6 @@ LA5 adds the runner of [L4](L4-agent-evaluation.md#runner) to the engine: `run.s
 - The [evaluation set build](LA-agent-build.md#evaluation-set-build) and the [agent gate](LA-agent-build.md#agent-gate) can start.
 
 ## Scope
-
-(LA step 13)
 
 ### Files added
 
@@ -53,7 +51,7 @@ LA5 adds the runner of [L4](L4-agent-evaluation.md#runner) to the engine: `run.s
 
 ## Pull requests
 
-Each PR is one engine pull request and one root pointer pull request ([LA How each step ships](LA-agent-build.md#how-each-step-ships)). Each PR passes `pnpm run verify` in `engine` and the CI jobs `check`, `e2e` and `agent-e2e`.
+Each PR is one engine pull request and one root pointer pull request ([LA How each pull request ships](LA-agent-build.md#how-each-pull-request-ships)). Each PR passes `pnpm run verify` in `engine` and the CI jobs `check`, `e2e` and `agent-e2e`.
 
 ### PR 1. One held-out evaluation with the credential rules
 
@@ -66,7 +64,7 @@ Each PR is one engine pull request and one root pointer pull request ([LA How ea
   - the run action of [L4 Exit codes of a run](L4-agent-evaluation.md#exit-codes-of-a-run) for the exits `0`, `4` and `5`, and the stop for each other exit, `75` included;
   - `report.sh` with the key checks of the `swe@1` lines, the goal table, the cost block and the gate line.
 - `run.sh --set dev` exits `1`, and stderr names `--set`. PR 2 removes this refusal.
-- Makes pass: L4 unit-level rules 1 to 4, 8 to 10, 13 to 16 and 20; rule 5 for `credential` and `auth_file`; rule 11 for the keys of the `swe@1` lines and the held-out report; rule 12 for the exits `0`, `1`, `2`, `4` and `5`.
+- Makes pass: L4 unit-level rules 1 to 4, 8, 10, 14 to 16 and 20; rule 9 less the `judge_usd` reserve; rule 13 less the rules of `--parent`, `--aspect`, `--hypothesis` and `--replicate`; rule 5 for `credential` and `auth_file`; rule 11 for the keys of the `swe@1` lines and the held-out report; rule 12 for the exits `0`, `1`, `2`, `4` and `5`.
 - Makes pass: [L4-AC4](L4-agent-evaluation.md#checks).
 - Verify: `pnpm run verify` on macOS; the job `agent-e2e` on the PR.
 - `main` works: the runner is a script of the repository, and no shipped command calls it. Each credential rule that a run needs holds from this PR, because this PR is the first that calls `run agent` from the runner.
@@ -76,7 +74,7 @@ Each PR is one engine pull request and one root pointer pull request ([LA How ea
 - Files: `evaluation.mjs`, `evaluation.test.mjs`, `judge.md`, `judge-task.md`, `e2e-evaluation.linux-test.ts`.
 - `evaluation.mjs` builds step 8 of the run: the judge workspace `j` in the grading root, `transcript.md`, the `re@1` call, the credential rules of the diagnosis run, the parse, `diagnoses.jsonl`, the attempt number `judge-<n>.jsonl`, the reserve `judge_usd` of the cap. `report.sh` gets the dev lines: the line for each case, the set-difficulty line, the count of invalid diagnoses, the findings for each aspect and severity, and the verdict `complete`. Stage 2 passes the kind prompt with `--system-prompt`.
 - `run.sh --set dev` runs.
-- Makes pass: L4 unit-level rules 6 and 19; rule 11 for the `re@1` keys and the set-difficulty line; rule 12 for the join of the last `re@1` line.
+- Makes pass: L4 unit-level rules 6 and 19; the `judge_usd` reserve of rule 9; rule 11 for the `re@1` keys and the set-difficulty line; rule 12 for the join of the last `re@1` line.
 - Makes pass: [L4-AC1, L4-AC2, L4-AC3 and L4-AC9](L4-agent-evaluation.md#checks).
 - Verify: as PR 1.
 - `main` works: the dev evaluation adds the diagnosis, and the held-out evaluation of PR 1 is unchanged.
@@ -103,7 +101,7 @@ Each PR is one engine pull request and one root pointer pull request ([LA How ea
 
 - Files: `evaluation.mjs`, `evaluation.test.mjs`, `e2e-evaluation.linux-test.ts`.
 - `evaluation.mjs` builds `--parent`, `--aspect`, `--hypothesis` and `--replicate`; the comparability check and the one-change check of [L4 Iteration](L4-agent-evaluation.md#iteration), rules 1 and 4; the parent `re@1` digest check; the noise rule; the iteration line; the A/A line; the subcommands `scan` and `validate`.
-- Makes pass: L4 unit-level rules 7, 17 and 18; rule 11 in full.
+- Makes pass: L4 unit-level rules 7, 17 and 18; rule 11 in full; the rules of `--parent`, `--aspect`, `--hypothesis` and `--replicate` of rule 13.
 - Makes pass: [L4-AC8 and L4-AC10](L4-agent-evaluation.md#checks).
 - Verify: as PR 1.
 - `main` works: an evaluation with no parent and no replicate runs as in PR 4.
@@ -114,7 +112,7 @@ Each PR is one engine pull request and one root pointer pull request ([LA How ea
 
 ### Harness
 
-- **Place.** The checks live in `src/apps/cli/e2e-evaluation.linux-test.ts`. Only `test:agent-e2e` runs them, in the job `agent-e2e` ([LA2-D2](LA2-credential-boundary.md#decisions)). Reason: each check reads the default `--auth` path, which `run agent` and the refresh take from the home of the user database, and the digest check of the `auth.json` file. On the machine of a developer, that path holds the real credential.
+- **Place.** The checks live in `src/apps/cli/e2e-evaluation.linux-test.ts`. Only `test:agent-e2e` runs them, in the job `agent-e2e` ([LA2-D2](LA2-credential-boundary.md#decisions)). Each check writes and reads the `auth.json` file at the default `--auth` path. `run agent` and the refresh take that path from the home that the user database gives. On the machine of a developer, that path holds the real credential.
 - **Process.** The test starts `scripts/evaluation/agent/run.sh` and `report.sh` as the test user, with `sudo -n -u kanthord-e2e` and an explicit environment: `PATH`, `XDG_DATA_HOME="$XD"` and `XDG_STATE_HOME="$XS"`. The runner calls the built CLI `bin/kanthord.mjs` of the same checkout ([LA5-D3](#decisions)). The job runs `pnpm run build` before the tests.
 - **Stub.** The stub of LA1 with the responder of the [L4 fixtures](L4-agent-evaluation.md#l4-fixtures): the Role heading of `swe@1` or `re@1` in the system prompt, and the text `task d1`, `task d2` or `task h1` in the user message, select the scripted turns. Each turn reports a `usage` of 1000 input and 100 output tokens. The stub records each request with the selected role and task.
 - **Set.** `src/apps/cli/e2e-evaluation-test-support.ts` builds E, `config.json`, the binding prompts and the cases `d1`, `d2` and `h1` of the L4 fixtures. It runs each command as the test user, so E, `$XD` and `$XS` belong to that user. It makes `repo.bundle` with `git bundle create` of C only, with the author of [L4 content rule 2](L4-agent-evaluation.md#content-rules).
@@ -163,11 +161,11 @@ The owning module of each rule is `scripts/evaluation/agent/evaluation.mjs`, wit
 | 6. The diagnosis parse                    | 2          |
 | 7. The noise rule and the A/A line        | 5          |
 | 8. The stage gate                         | 1          |
-| 9. The cap                                | 1          |
+| 9. The cap                                | 1 and 2    |
 | 10. The price ratio                       | 1          |
 | 11. The report keys                       | 1, 2 and 5 |
 | 12. The run action                        | 1, 2 and 4 |
-| 13. The start checks                      | 1          |
+| 13. The start checks                      | 1 and 5    |
 | 14. The credential state                  | 1          |
 | 15. The refresh                           | 1          |
 | 16. The price read                        | 1          |
@@ -176,7 +174,7 @@ The owning module of each rule is `scripts/evaluation/agent/evaluation.mjs`, wit
 | 19. The transcript                        | 2          |
 | 20. The diff steps                        | 1          |
 
-- `evaluation.mjs` imports the engine modules from the build: `findPatternText` from `dist/agent/sensitive-text.js`, `isolatedGitEnvironment` from `dist/kernel/git-environment.js` and `directories` from `dist/kernel/xdg.js`. `pnpm run verify` runs `build` before `test`, so the unit tests read the same build.
+- `evaluation.mjs` imports the engine modules from the build: `findPatternText` from `dist/agent/sensitive-text.js`, `isolatedGitEnvironment` from `dist/kernel/git-environment.js` and `directories` from `dist/kernel/xdg.js` ([L4 Runner](L4-agent-evaluation.md#runner)). `pnpm run verify` runs `build` before `test`, so the unit tests read the same build. `evaluation.test.mjs` fails at once when `dist/` is absent.
 - Unit-level rule 15 uses an `oauth` entry that expires far in the future, so `getAuth` sends no request.
 
 ## Credential statement
@@ -204,20 +202,14 @@ Each credential rule of [L4 Credential](L4-agent-evaluation.md#credential) is ne
 
 ### To the agent gate
 
-- Gate step 4.1 reads the job `agent-e2e` of the PR 5 pull request, with each check L4-AC1 to L4-AC10 by id ([LA Agent gate](LA-agent-build.md#agent-gate)).
+- Gate step 4.1 reads the job `agent-e2e` of the scheduled CI run of `main` after PR 5, with each check L4-AC1 to L4-AC10 by id ([LA Agent gate](LA-agent-build.md#agent-gate)).
 - Gate step 4.3 runs `run.sh` and `report.sh` from the engine checkout after `pnpm run build`.
-
-### Items that the split puts in another place
-
-1. All ten L4 checks need the test user, not only some of them. [LA-D6](LA-agent-build.md#decisions) names "the L4 checks that need them". On macOS, `pnpm run verify` runs only the unit-level rules of L4.
-2. [L4 Handoffs](L4-agent-evaluation.md#handoffs-to-later-layers) asks for "a container where the user database gives the home of the test user". LA2 gives a test user on the CI machine and no container (LA2-D4). L4 needs the text "the test user of the Linux job" in place of "a container".
-3. The stub of LA1 serves its turns in order. The L4 fixtures select the answer by the request. LA5 adds the responder to the stub file of LA1.
 
 ## Decisions
 
 1. **LA5-D1.** The L4 checks run only in the Linux job `agent-e2e`, in `src/apps/cli/e2e-evaluation.linux-test.ts`, as the test user `kanthord-e2e`. Constraint: no L4 check writes into the home of the user that starts the tests.
 2. **LA5-D2.** `evaluation.mjs` owns each unit-level rule of L4 in one module, as L4-D15 states. Constraint: the tests of the twenty rules live in `evaluation.test.mjs`; `pnpm test` runs it.
 3. **LA5-D3.** The runner calls `process.execPath` with `bin/kanthord.mjs` of the checkout that holds the runner. Constraint: the runner and the CLI come from one engine commit, the `engine_commit` of `iteration.json`; the operator runs `pnpm run build` first.
-4. **LA5-D4.** `evaluation.mjs` imports `findPatternText`, `isolatedGitEnvironment` and `directories` from `dist/`. Constraint: the runner adds no second copy of the secret patterns, the git isolation or the XDG rule.
+4. **LA5-D4.** `evaluation.mjs` imports `findPatternText`, `isolatedGitEnvironment` and `directories` from `dist/`. Constraint: the runner adds no second copy of the secret patterns, the git isolation or the XDG rule; `evaluation.test.mjs` fails at once when `dist/` is absent.
 5. **LA5-D5.** LA5 has 5 PRs in this order: the held-out evaluation with the credential rules, the diagnosis, the breach rules, stop and resume with the cap, the iteration with the set tools. Constraint: PR 1 holds each credential rule of a `swe@1` run; PR 1 refuses `--set dev` until PR 2.
 6. **LA5-D6.** The job `agent-e2e` makes the test user the owner of the checkout root and of its `.git` directory, with no recursion, and gives the job user an access entry with write. Constraint: the runner keeps `isolatedGitEnvironment` on the engine checkout, with no `safe.directory` entry; Git accepts the engine checkout for the test user.

@@ -4,18 +4,18 @@ Status: `draft`. Parent: [LA](LA-agent-build.md). Base: engine `c864130e`.
 
 ## Goal
 
-LA3 gives `kanthord run agent` each end of [L2](L2-agent-cli.md) with its exit code and class. A failed start precondition refuses the start before any model request. A provider error that pi retries ends with exit `75`, and each other provider error ends with exit `5`. A cost budget is a list-price limit. A SIGINT or a SIGTERM stops the run with the full record, within 10 seconds. LA3 holds [LA](LA-agent-build.md) step 7 and the parts of step 10 that own the start, the budget and the signal. Each acceptance check of LA3 runs the shipped `kanthord` process against the LLM stub.
+LA3 gives `kanthord run agent` each end of [L2](L2-agent-cli.md) with its exit code and class. A failed start precondition refuses the start before any model request. A provider error that pi retries ends with exit `75`, and each other provider error ends with exit `5`. A cost budget is a list-price limit. A SIGINT or a SIGTERM stops the run with the full record, within 10 seconds. Each acceptance check of LA3 runs the shipped `kanthord` process against the LLM stub.
 
 ## Entry state
 
-LA3 starts after [LA1](LA-agent-build.md#build-steps) and LA2. LA3 requires this end behavior from LA1. The behavior keeps the strength of `tasks run` of today (`TasksExit` in `src/worker/unit/tasks-run.ts:105-111`; `stopOnSignal` in `src/apps/cli/worker-tasks.ts:287-292`).
+LA3 starts after [LA1](LA1-run-skeleton.md) and [LA2](LA2-credential-boundary.md). LA3 requires this end behavior from LA1. The behavior keeps the strength of `tasks run` of today (`TasksExit` in `src/worker/unit/tasks-run.ts:105-111`; `stopOnSignal` in `src/apps/cli/worker-tasks.ts:287-292`).
 
-1. **Contract.** `openAgent` of `src/agent/agent-contract.ts` takes `RunBudget { deadline, usd }`. It checks no start precondition. `forceStop`, `close` and `ToolProcesses.killAll` exist ([LA](LA-agent-build.md#step-8-the-agent-contract) step 8).
+1. **Contract.** `openAgent` of `src/agent/agent-contract.ts` takes `RunBudget { deadline, usd }`. It checks no start precondition. `forceStop`, `close` and `ToolProcesses.killAll` exist ([LA1 PR8](LA1-run-skeleton.md#pull-requests)).
 2. **Wall budget.** `src/agent/run-budget.ts` holds the wall limit only. A timer at `deadline` aborts the session, and the end is `budget_end` with `budgetReached` `wall`. `run agent` parses the wall form of `--budget` with `DURATION_PATTERN` and passes the default `2h` ([L2 Budget](L2-agent-cli.md#budget), rules 1 and 7). Reason: no run of `main` is unbounded, and the `budget` field of the result is true.
 3. **Cost budget.** `run agent` refuses each `usd` value of `--budget` with `cli.run.agent.option_invalid`, `option: --budget`, and passes `usd` `null`.
-4. **Outcome.** `src/agent/run-outcome.ts` gives the ends `completed`, `budget_end`, `stopped` and `failed`, the totals and the failure kind of `providerFailureOf`. Each failure has the class `terminal`. `run agent` exits `0`, `4`, `2` or `5`, and the end `failed` writes `cli.run.agent.provider_failed` or `cli.run.agent.internal_error`.
+4. **Outcome.** `src/agent/run-outcome.ts` gives the ends `completed`, `budget_end`, `stopped` and `failed`, the totals and the failure kind of `providerFailureOf`. Each failure has the class `terminal`. `src/apps/cli/run-agent-exit.ts` maps each end to the exit `0`, `4`, `2` or `5`, and the end `failed` writes `cli.run.agent.provider_failed` or `cli.run.agent.internal_error`.
 5. **Signal.** `src/apps/cli/run-agent-signal.ts` holds the behavior of `stopOnSignal` of today: one SIGINT aborts the session through `input.signal`, with no time limit. The run writes the result with the end `stopped` and the class `terminal`, removes R and exits `2`.
-6. **Harness.** The e2e support of LA1 builds `kanthord`, starts the LLM stub on loopback and runs the [L2 fixtures](L2-agent-cli.md#l2-fixtures). The Linux job `test:agent-e2e` of LA2 runs it.
+6. **Harness.** The e2e support of LA1 starts the built `bin/kanthord.mjs` ([LA-D10](LA-agent-build.md#decisions)), starts the LLM stub on loopback and builds the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
 
 ## Exit state
 
@@ -27,7 +27,8 @@ After LA3, a user can run each command line of [L2 Run order](L2-agent-cli.md#ru
 | ------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Added   | `src/agent/start-preconditions.ts` and its test | The checks of [L3 Start preconditions](L3-agent.md#start-preconditions)                                        |
 | Changed | `src/agent/agent-contract.ts`                   | Open step 2 calls the preconditions and returns `AgentRefused`                                                 |
-| Changed | `src/agent/run-outcome.ts`                      | The class from `isContextOverflow` and `isRetryableAssistantError`; the end to exit code map                   |
+| Changed | `src/agent/run-outcome.ts`                      | The class from `isContextOverflow` and `isRetryableAssistantError`                                             |
+| Changed | `src/apps/cli/run-agent-exit.ts`                | Exit `75` for the class `retryable`; exit `2` and no `open_failed` line for a signal during the open           |
 | Changed | `src/agent/run-budget.ts`                       | The `usd` limit at `message_end` and the first-limit rule                                                      |
 | Changed | `src/apps/cli/run-agent-budget.ts`              | The `usd` form, the refusal `cli.run.agent.budget_unpriced` at step 9                                          |
 | Changed | `src/apps/cli/run-agent-signal.ts`              | SIGTERM, the 10-second limit, the forced stop, the second signal, step 11 and a signal before step 10          |
@@ -43,7 +44,7 @@ After LA3, a user can run each command line of [L2 Run order](L2-agent-cli.md#ru
 
 ## Pull requests
 
-Each pull request is one engine pull request and one root pull request that moves the submodule pointer ([LA How each step ships](LA-agent-build.md#how-each-step-ships)). Each one passes `pnpm run verify` in `engine` and `pnpm run test:agent-e2e` in the Linux job.
+Each pull request is one engine pull request and one root pull request that moves the submodule pointer ([LA How each pull request ships](LA-agent-build.md#how-each-pull-request-ships)). Each one passes `pnpm run verify` in `engine` and the CI jobs `check`, `e2e` and `agent-e2e`.
 
 ### PR 1. Start preconditions
 
@@ -53,25 +54,25 @@ Each pull request is one engine pull request and one root pull request that move
 
 ### PR 2. Class and the retryable exit
 
-- Files: the class in `run-outcome.ts`; exit `75` and `cli.run.agent.provider_retryable` in `run-agent.ts`; the delayed answer and the fixed status of the stub; the section "Classes" of `docs/cli/run.md`; the exit `75` row of `docs/cli/other.md`; L2-AC10 in `e2e-run-agent-ends.test.ts`.
-- Makes pass: [L3-U5](L3-agent.md#unit-level-rules); [L2 unit-level rule 10](L2-agent-cli.md#unit-level-rules); [L2-AC10](L2-agent-cli.md#checks).
+- Files: the class in `run-outcome.ts`; exit `75` in `run-agent-exit.ts`; `cli.run.agent.provider_retryable` in `run-agent.ts`; the delayed answer and the fixed status of the stub; the section "Classes" of `docs/cli/run.md`; the exit `75` row of `docs/cli/other.md`; L2-AC10 in `e2e-run-agent-ends.test.ts`.
+- Makes pass: the class cases of [L3-U5](L3-agent.md#unit-level-rules); the class and `retryable` cases of [L2 unit-level rule 10](L2-agent-cli.md#unit-level-rules); [L2-AC10](L2-agent-cli.md#checks).
 - `main` works: a terminal failure keeps exit `5`. Only a failure that pi retries changes from exit `5` to exit `75`.
 
 ### PR 3. Cost budget
 
 - Files: the `usd` limit and the first-limit rule in `run-budget.ts`; the `usd` form and `cli.run.agent.budget_unpriced` in `run-agent-budget.ts`; the section "Budget" of `docs/cli/run.md`.
-- Makes pass: [L3-U6](L3-agent.md#unit-level-rules) less the `endAfterTurn` cases; [L2 unit-level rule 9](L2-agent-cli.md#unit-level-rules); the `--budget` rows of [L2 unit-level rule 1](L2-agent-cli.md#unit-level-rules); [L2-AC15](L2-agent-cli.md#checks). L2-AC10 case 1 stays green.
+- Makes pass: the `usd` and first-limit cases of [L3-U6](L3-agent.md#unit-level-rules); [L2 unit-level rule 9](L2-agent-cli.md#unit-level-rules); the `--budget` rows of [L2 unit-level rule 1](L2-agent-cli.md#unit-level-rules); [L2-AC15](L2-agent-cli.md#checks). L2-AC10 case 1 stays green.
 - `main` works: the refusal of a `usd` value becomes an accepted limit. A run with no cost budget does not change.
 
 ### PR 4. Signal handler
 
-- Files: `run-agent-signal.ts`; the record of a closed connection in the stub; the section "Shutdown" of `docs/cli/run.md`; L2-AC11 in `e2e-run-agent-ends.test.ts`.
+- Files: `run-agent-signal.ts`; the signal during the open in `run-agent-exit.ts`; the record of a closed connection in the stub; the section "Shutdown" of `docs/cli/run.md`; L2-AC11 in `e2e-run-agent-ends.test.ts`.
 - Makes pass: [L2 unit-level rule 11](L2-agent-cli.md#unit-level-rules); the signal-during-open part of [L2 unit-level rule 10](L2-agent-cli.md#unit-level-rules); [L2-AC11](L2-agent-cli.md#checks).
 - `main` works: one SIGINT keeps the end `stopped` and exit `2`. SIGTERM gets the same handling.
 
 ## Acceptance checks
 
-Each check runs the built `kanthord run agent` as a process, with a real file system, real git and the real pi runtime. The only stub is the LLM stub on loopback. The test file is `src/apps/cli/e2e-run-agent-ends.test.ts`. It needs no network namespace and no test user, so `pnpm run verify` runs it on macOS, and `test:agent-e2e` runs it on Linux.
+Each check runs the built `kanthord run agent` as a process, with a real file system, real git and the real pi runtime. The only stub is the LLM stub on loopback. The test file is `src/apps/cli/e2e-run-agent-ends.test.ts`. It needs no network namespace and no test user, so `pnpm run verify` runs it on macOS, and the CI job `check` runs it on Linux.
 
 | Check                                   | PR  | Fixture and command                                                                     | Stub at the edge                                                                                                         | Pass condition      |
 | --------------------------------------- | --- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------- |
@@ -87,16 +88,17 @@ Each check runs the built `kanthord run agent` as a process, with a real file sy
 
 ## Unit-level rules
 
-| Rule                                                      | Module                              | Test file                                |
-| --------------------------------------------------------- | ----------------------------------- | ---------------------------------------- |
-| [L3-U4](L3-agent.md#unit-level-rules) Start preconditions | `src/agent/start-preconditions.ts`  | `src/agent/start-preconditions.test.ts`  |
-| [L3-U5](L3-agent.md#unit-level-rules) End and class       | `src/agent/run-outcome.ts`          | `src/agent/run-outcome.test.ts`          |
-| [L3-U6](L3-agent.md#unit-level-rules) Budget              | `src/agent/run-budget.ts`           | `src/agent/run-budget.test.ts`           |
-| L3-U7, the refusal bullet                                 | `src/agent/agent-contract.ts`       | `src/agent/agent-contract.test.ts`       |
-| [L2 rule 1](L2-agent-cli.md#unit-level-rules), `--budget` | `src/apps/cli/run-agent-options.ts` | `src/apps/cli/run-agent-options.test.ts` |
-| [L2 rule 9](L2-agent-cli.md#unit-level-rules) Budget      | `src/apps/cli/run-agent-budget.ts`  | `src/apps/cli/run-agent-budget.test.ts`  |
-| [L2 rule 10](L2-agent-cli.md#unit-level-rules) Class map  | `src/agent/run-outcome.ts`          | `src/agent/run-outcome.test.ts`          |
-| [L2 rule 11](L2-agent-cli.md#unit-level-rules) Signal     | `src/apps/cli/run-agent-signal.ts`  | `src/apps/cli/run-agent-signal.test.ts`  |
+| Rule                                                                            | Module                                                       | Test file                                                              |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| [L3-U4](L3-agent.md#unit-level-rules) Start preconditions                       | `src/agent/start-preconditions.ts`                           | `src/agent/start-preconditions.test.ts`                                |
+| [L3-U5](L3-agent.md#unit-level-rules), the class cases                          | `src/agent/run-outcome.ts`                                   | `src/agent/run-outcome.test.ts`                                        |
+| [L3-U6](L3-agent.md#unit-level-rules), the `usd` and first-limit cases          | `src/agent/run-budget.ts`                                    | `src/agent/run-budget.test.ts`                                         |
+| L3-U7, the refusal bullet                                                       | `src/agent/agent-contract.ts`                                | `src/agent/agent-contract.test.ts`                                     |
+| [L2 rule 1](L2-agent-cli.md#unit-level-rules), `--budget`                       | `src/apps/cli/run-agent-options.ts`                          | `src/apps/cli/run-agent-options.test.ts`                               |
+| [L2 rule 9](L2-agent-cli.md#unit-level-rules) Budget                            | `src/apps/cli/run-agent-budget.ts`                           | `src/apps/cli/run-agent-budget.test.ts`                                |
+| [L2 rule 10](L2-agent-cli.md#unit-level-rules), the class and `retryable` cases | `src/agent/run-outcome.ts`, `src/apps/cli/run-agent-exit.ts` | `src/agent/run-outcome.test.ts`, `src/apps/cli/run-agent-exit.test.ts` |
+| [L2 rule 10](L2-agent-cli.md#unit-level-rules), a signal during the open        | `src/apps/cli/run-agent-exit.ts`                             | `src/apps/cli/run-agent-exit.test.ts`                                  |
+| [L2 rule 11](L2-agent-cli.md#unit-level-rules) Signal                           | `src/apps/cli/run-agent-signal.ts`                           | `src/apps/cli/run-agent-signal.test.ts`                                |
 
 The forced stop has no e2e check ([L3 Rules with no check](L3-agent.md#rules-with-no-check-and-the-reason)). The cost limit has no e2e check, because the stub provider has no price. L2-AC15 proves the refusal of a cost budget on that provider ([L2 Rules with no check](L2-agent-cli.md#rules-with-no-check-and-the-reason)).
 
