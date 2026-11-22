@@ -84,7 +84,8 @@ One meaning per term. A term of today keeps its meaning unless its entry marks `
 - **goal aspect.** One of the aspects A1 to A9 that the agent evaluation measures for each run. Change: a new term ([L4](L4-agent-evaluation.md#goal-aspects)).
 - **dev set.** The cases that each iteration of the agent evaluation runs. Change: a new term ([L4](L4-agent-evaluation.md#dev-and-held-out-sets)).
 - **held-out set.** The cases that only the stage gate runs. Change: a new term ([L4](L4-agent-evaluation.md#dev-and-held-out-sets)).
-- **stage.** A part of the agent evaluation with one context: stage 1 with no context, stage 2 with the binding prompt of the case kind. Change: a new term ([L4](L4-agent-evaluation.md#stages)).
+- **kind prompt.** The repository prompt of the case repository of one kind (`backend` or `frontend`), with its conventions. Stage 2 of the agent evaluation gives it to simulate a repository binding prompt. Change: a new term ([L4](L4-agent-evaluation.md#stages)).
+- **stage.** A part of the agent evaluation with one context: stage 1 with no context, stage 2 with the kind prompt of the case kind. Change: a new term ([L4](L4-agent-evaluation.md#stages)).
 - **stage gate.** The held-out pass share and the A9 rule that end a stage. Change: a new term ([L4](L4-agent-evaluation.md#stage-gate)).
 - **iteration.** One evaluation of the dev set with one prompt change of `swe@1` and one hypothesis. Change: a new term ([L4](L4-agent-evaluation.md#iteration)).
 - **diagnosis.** The findings of an Opus run of `re@1` on one dev run. It decides no pass. Change: a new term ([L4](L4-agent-evaluation.md#diagnosis)).
