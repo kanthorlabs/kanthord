@@ -38,15 +38,15 @@ LA is a build plan. It holds no acceptance check of its own ([index](index.md#re
 
 A sub-layer is a group of build steps that ends with acceptance checks. Each check of a sub-layer is an end-to-end test. Build the sub-layers in this order. Do not start a sub-layer before the checks of the sub-layer above it pass.
 
-| Sub-layer                                             | Steps                                  | End-to-end checks                                       |
-| ----------------------------------------------------- | -------------------------------------- | ------------------------------------------------------- |
-| [LA1 Run skeleton](LA1-run-skeleton.md)               | 1, 2, 3, 4, 5, 6, 8 and the core of 10 | L2-AC1, AC3, AC4, AC8, AC9, AC13; L3-AC1, AC2, AC3, AC4 |
-| [LA2 Credential boundary](LA2-credential-boundary.md) | 9 and the credential part of 10        | L2-AC2, AC5, AC6, AC7, AC14                             |
-| [LA3 Run ends](LA3-run-ends.md)                       | 7 and the end part of 10               | L2-AC10, AC11, AC12; L3-AC5                             |
-| [LA4 Consumer migration](LA4-consumer-migration.md)   | 11, 12                                 | L1 AC20; the refusal of the deleted command             |
-| [LA5 Evaluation runner](LA5-evaluation-runner.md)     | 13                                     | L4-AC1 to AC10                                          |
+| Sub-layer                                             | Steps                                                                                                         | End-to-end checks                                       |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| [LA1 Run skeleton](LA1-run-skeleton.md)               | 1 to 6, 8, the base of 7 and the core of 10, with the `--auth` reader, the run directory and the pi directory | L2-AC1, AC3, AC4, AC8, AC9, AC13; L3-AC1, AC2, AC3, AC4 |
+| [LA2 Credential boundary](LA2-credential-boundary.md) | 9, the proxy-name removal and the `env_proxy` refusal                                                         | L2-AC2, AC5, AC6, AC7, AC14                             |
+| [LA3 Run ends](LA3-run-ends.md)                       | the rest of 7 and the end part of 10                                                                          | L2-AC10, AC11, AC12; L3-AC5                             |
+| [LA4 Consumer migration](LA4-consumer-migration.md)   | 11, 12                                                                                                        | L1 AC20; the refusal of the deleted command             |
+| [LA5 Evaluation runner](LA5-evaluation-runner.md)     | 13                                                                                                            | L4-AC1 to AC10                                          |
 
-- LA1 ships `run agent` with the credential checks of `tasks run` at their strength of today. LA2 makes them match L2.
+- LA1 ships `run agent` with the credential checks of `tasks run` at their strength of today or stricter. LA2 adds the Linux job, the proxy-name removal and the `env_proxy` refusal, and owns the credential checks over the code of LA1.
 - A step with no end-to-end check of its own belongs to the first sub-layer that needs it.
 - The evaluation set build and the agent gate follow LA5.
 
@@ -318,7 +318,7 @@ Only Ulrich can do these actions: give the entry of step 4.2; provision the `ant
 3. **LA-D3.** L3-AC1 runs in step 10, the first step that makes `run agent` write a session file. Constraint: step 4 makes the redaction rules pass before step 10.
 4. **LA-D4.** The Project Service moves to the contract in LA, in step 12. Constraint: it needs no worker change; it gives the Project Service the exit redaction before the worker round; the Workbench keeps `openSession` until the rebase.
 5. **LA-D5.** `DURATION_PATTERN` and `shellOf` move into the modules of `run agent` in step 10. Constraint: step 11 deletes their files of today.
-6. **LA-D6.** The checks that need Linux run in the engine CI job `test:agent-e2e` on `ubuntu-latest`. Constraint: the job makes the network namespace and the test user; macOS runs `pnpm run verify` only.
+6. **LA-D6.** The checks that need the network namespace or a test user run in the engine CI job `test:agent-e2e` on `ubuntu-latest`: L2-AC2, L2-AC6 and the L4 checks that need them. Each other end-to-end check runs in `pnpm run verify`. Constraint: the job makes the network namespace and the test user.
 7. **LA-D7.** The unit-level rules of L2 have the files of [Module files](#module-files-of-the-l2-rules).
 8. **LA-D8.** A separate sub-agent writes the held-out cases. Constraint: Aelita writes the prompt changes of the iterations and reads only the `validate` output and the gate lines of the held-out set.
 9. **LA-D9.** The iterations commit on the engine branch `eval/swe-1`. Constraint: a `revert` iteration leaves the branch; each kept change merges into `main` through a pull request.
