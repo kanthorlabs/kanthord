@@ -142,6 +142,8 @@ For a network git write, it creates a fresh clone through the repository connect
 It performs the write and removes the clone after the call.
 It checks the state of the external object of a request evidence for the Mission Service, and it answers the end state that the platform implementation folds.
 It reads a pull request and its review comments for an execution.
+It reads the check runs and the commit statuses of the head commit of a pull request, with the required contexts of the base branch rules. A check that the rules do not require counts too. The binding lists the checks that a landing does not wait for in `ignored_checks`, and the read drops them.
+A push that the platform refuses because the credential has no `workflow` scope fails as a final refusal. Its message names the `workflow` scope, so no retry follows.
 It reads the items of an external link for the Mission Service, and it stores each item as an inbound event.
 It describes a stored inbound event for the Worker Service and the Mission Service. The description holds no credential, calls no platform and passes the text through the sensitive text rule set.
 It signs a presigned PUT or GET, checks an uploaded object and deletes an object of a storage binding for the Mission Service.

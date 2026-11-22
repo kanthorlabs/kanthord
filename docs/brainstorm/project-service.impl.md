@@ -102,6 +102,8 @@ A binding identity and a project identity follow the identity convention of [arc
 - An absent project answers 404 `project.project.not_found`.
 - A pause and a resume take no expected version. The last write wins, as for a rename.
 - The resume calls the Scheduler wakeup `wake(projectId)` after its commit. The pause calls no wakeup.
+- Before the write, the resume of a paused project calls `requireProvenEnvironments` of `src/project/service.ts`. The call refuses the resume when `environmentsClaimable` of [the gate collaborations](#the-gate-collaborations) answers false for the repository bindings of the current binding set. A resume of an active project runs no check.
+- The refusal answers 409 `project.environment.not_ready` (`ProjectErrorCode.EnvironmentNotReady`) with `details: { environments }`. `environments` holds `{ binding_name, status, class }` for each repository binding whose status is neither `none` nor `ready`. `class` is the failure class of a `failed` record, else null. A binding with no record counts as `pending`, and the check starts its record. The refusal writes nothing and keeps `paused_at`.
 - The Project Service implements the Scheduler collaboration [`projectPaused(tx, projectId)`](scheduler-service.impl.md#the-claim-selection). It answers `true` when `paused_at` holds a value. An absent project throws.
 - The claim reads `projectPaused` inside its transaction, under [the claim](scheduler-service.md#claims-and-counts). A paused project answers the work pull `{ kind: "no-work" }`.
 - The pause and the resume write no record of the Tracking Service.
@@ -252,6 +254,7 @@ The write refuses a submission that changes the worker of an existing worker bin
 - The binding write reads no placement status. The create of a `container` instance reads it, under [the operations of an instance](worker-service.impl.md#the-operations-of-an-instance).
 - A strategy with more than one action refuses the write.
 - A `landing` on an action other than `pull_request` refuses the write at the `landing` path.
+- `ignored_checks` is an optional list of at most `IGNORED_CHECKS_MAX`, 32, nonblank check names of the action. An `ignored_checks` on an action other than `pull_request` refuses the write at the `ignored_checks` path (`repositoryConfigSchema` of `src/project/contract.ts`). `repositoryPolicyOf` answers the list as `ignored_checks`, `[]` when the action holds none, and the Mission Service copies it into `RequestFacts`. A landing waits for every check of the pull request head except these names, under [the outbound operations](intake-service.impl.md#outbound-operations-and-checks).
 
 ## Storage configuration
 
@@ -445,7 +448,7 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - `kanthord project environment show <project-id> <binding-id>`, `kanthord project environment set <project-id> <binding-id> --file <path>` and `kanthord project environment unset <project-id> <binding-id>` call the two routes. `set` reads JSONC.
 - `kanthord project environment export <project-id> <binding-id>` prints the `environment` of `show` as indented JSON. A user who wants one file for KanthorD and the CI commits that output. KanthorD never commits it.
 - The setup of an execution reads the environment of the current revision of each repository binding at the claim. The image of a `container` instance reads the same revision. A node that pins an earlier revision therefore runs the current environment.
-- At the `server` and the `worker` placements, only the setup commands `updateContentCommand` and `postCreateCommand` of a stored environment apply. `image`, `build`, `features`, `onCreateCommand`, `containerEnv` and `remoteEnv` have no effect there. The docs of `environment show` name them as ignored, and the answer holds no field for them. The repository devcontainer applies only at the `container` placement.
+- At the `server` and the `worker` placements, only the setup commands `updateContentCommand` and `postCreateCommand` of a stored or a `detected` environment apply. `image`, `build`, `features`, `onCreateCommand`, `containerEnv` and `remoteEnv` have no effect there. The docs of `environment show` name them as ignored, and the answer holds no field for them. The repository devcontainer and the `universal` environment apply only at the `container` placement.
 
 ## The affected test declaration
 
@@ -523,7 +526,7 @@ The Onboarding component of the Project Service lives in `src/project/onboarding
 
 - At the `image` target, the first source that exists decides: `stored`, `repository`, `detected`, `universal`.
 - At the `host` and the `remote` targets, the first source that exists decides: `stored`, `detected`, then `none`. The repository devcontainer and the universal environment never apply there, because their commands assume their image.
-- A `detected` document at the `host` and the `remote` targets contributes only its `checks`. It runs no setup in a checkout.
+- A `detected` document applies at every target. At the `host` target, the proof runs its setup commands and its `checks`. At the `remote` target, the server runs neither. The worker runs its setup commands in each checkout and each clone at every placement, under [the environment setup](worker-service.impl.md#the-environment-setup).
 - One read deadline of 30 s bounds all repository reads of one resolution, the detection read included. `binding.environment.get` has a route timeout of 36 s.
 
 ### The digest and the tag
@@ -544,11 +547,10 @@ The component computes the status of a group in this order. The first rule that 
 1. A run of the group is active: `building` or `proving`, the step of that run.
 2. No read of the inputs of the group succeeded yet, or the component holds no record of the group: `pending`.
 3. The proof file of the digest holds the outcome `failed` and the commit of the last read: `failed`. A failure at another commit does not count.
-4. At the `image` target, `<tag>-proved` exists: `ready`. At the `host` target, the proof file of the digest holds the outcome `passed`: `ready`.
-5. The source is `none`: `none`.
-6. Otherwise the component starts a run, and the status is the step of that run.
+4. The target is proved. At the `image` target with a source other than `none`, `<tag>-proved` exists. In every other case, the proof file of the digest holds the outcome `passed` (`provedTarget` of `src/project/onboarding.ts`). The status is `none` when the target is `remote` or the source is `none`, else `ready`.
+5. Otherwise the component starts a run, and the status is the step of that run.
 
-- At the `remote` target, rules 4 and 6 do not apply. The status is `failed` by rule 3, or `none`.
+- At the `remote` target and with the source `none`, the status is `none` only after the proof file of the digest holds the outcome `passed`. Until the run ends, the status is `proving`.
 - At the `image` target, the `universal` source always exists, so the status is never `none`. A `container` instance runs on `worker.container_image` only when no live binding lists it or its worker binding names no repository binding.
 - After a failed read, the group keeps its last status and digest and sets `reason`. A transient fetch failure thus never closes the gate of a `ready` environment. A failed read after a change of the target also writes the new target and clears the digest, the tag and the proof of the old target.
 - A run that waits in the queue shows the status of its first step, and its `run_started_at` stays null until it starts.
@@ -559,19 +561,20 @@ The component computes the status of a group in this order. The first rule that 
 - The proof file of a digest is `environments/<identity path>/<digest>.json` of the state directory. The component writes it to a temporary file of the same directory with mode `0600` and renames it.
 - It holds `digest`, `outcome` (`passed` or `failed`), `class`, `origin` (`onboarding` or `execution`), `execution_id`, `command`, `exit_code`, `tail`, `reproduce`, `checks`, `repairs`, `ended_at` and `commit`.
 - `commit` is the base-branch commit of the read that started the run. For the origin `execution`, it is the commit of the last read of the group.
-- `class` is null for `passed`. For `failed` it is `build_failed`, `image_invalid`, `setup_failed`, `command_absent`, `affected_invalid` or `affected_timeout`. Only the origin `execution` writes `affected_invalid` and `affected_timeout`.
+- `class` is null for `passed`. For `failed` it is `build_failed`, `image_invalid`, `setup_failed`, `command_absent`, `affected_invalid`, `affected_timeout`, `push_refused` or `disk_low` (`EnvironmentFailureClass` of `src/project/contract.ts`). Only the origin `execution` writes `affected_invalid` and `affected_timeout`. The origin `onboarding` writes `push_refused`, and both origins write `disk_low`.
 - `tail` holds the last 4096 bytes of the output of the failed step. `reproduce` holds `podman run -it --rm <tag> bash` at the `image` target, with the runtime of the server, and null elsewhere.
 - `checks` is the red baseline: each check of the proof with an exit code other than 0 and 127, as `{ command, exit_code }`. A check that exceeds its time limit joins the red baseline with `exit_code: null`.
 - `repairs` counts the repairs of [the agent `pe@1`](#the-agent-pe1) for this digest. A new file holds 0. The counter stays with the digest across commits, because a new write keeps the count of the existing file of the digest. A rebuild removes the file and resets the counter.
-- The file is a cache for display and the gate of the `host` target. A lost file costs one run.
+- The file is a cache for display and the gate of every target except `image`. A lost file costs one run.
 
 ### The run
 
 - A run onboards one group for one digest. The component runs at most one run at a time on the server, and the others wait in arrival order.
 - A trigger for a group with an active run marks the group. The component computes the group again after the run ends.
 - At the `image` target, the run reads the inputs at the base-branch head, pulls a missing base image, computes the digest, and stops when rule 3 or rule 4 of [the status](#the-status) applies.
-- It then builds `<tag>` when the tag is absent, under [the image build](#the-image-build), with the status `building`. It then proves the image, with the status `proving`.
-- At the `host` target, the run computes the digest and proves on the server host, with the status `proving`. A source `none` runs no proof.
+- The run first makes the preflight proofs of [the preflight](#the-preflight). It then builds `<tag>` when the tag is absent, under [the image build](#the-image-build), with the status `building`. It then proves the image, with the status `proving`.
+- At the `host` target, the run computes the digest, makes the preflight proofs and proves on the server host, with the status `proving`. A source `none` makes the preflight proofs and no other proof.
+- At the `remote` target, the run makes the push probe of [the preflight](#the-preflight) and runs no host command. `buildsImage` and `collectsImages` of `src/project/onboarding.ts` keep a run with no document from tagging or collecting an image.
 - The run writes the proof file. After a passed proof at the `image` target, it tags `<tag>-proved`.
 - After the run, the component collects the garbage of the group. It then calls `environmentReady` of the Worker Service, which drains the `container` instances that run another image of the group. Only after that call returns, it wakes the work pulls of the project through `wake(projectId)` of the Scheduler.
 - A run has a deadline of 30 minutes. A run that reaches it during the build ends with the class `build_failed`. During the proof, the stopped command goes through the classification of [the proof](#the-proof).
@@ -592,6 +595,15 @@ The component computes the status of a group in this order. The first rule that 
 - The build needs the npm install of `kanthord`. The single binary ends the build with `build_failed` and the reason in the tail.
 - The run removes `environments/run-<id>/` at its end. A server start removes each stale `environments/run-*` directory.
 
+### The preflight
+
+- `preflightVerdict` of `src/project/onboarding.ts` runs before the build and before the proof of each run. The first failed proof ends the run with a failed proof file.
+- The free disk proof runs at the `host` and the `image` targets and skips the `remote` target. `freeDiskOf` of `src/kernel/disk.ts` measures the state directory of the server as `{ free_bytes, total_bytes }` with `statfs`. The proof fails with the class `disk_low` when `free_bytes` is below `footprint.disk_free_ratio` times `total_bytes`. A free disk equal to the limit passes. The `tail` is `free_bytes=<n> total_bytes=<n> ratio=<r>`.
+- The push probe runs at every target. `probePush` of `src/project/environment.ts` calls the Repository component with the base commit and the branch `kanthord/preflight-<run_id>`. The connector fetches the base commit into a fresh clone, runs `git push origin <commit>:refs/heads/<branch>` and then `git push origin --delete refs/heads/<branch>`. The probe creates no commit and changes no file.
+- A refused push fails the run with the class `push_refused`. The `tail` is `pushTailOf` of `src/repository/git-failure.ts`: the message of a workflow scope refusal, else the stderr of git, else the error message. The probe cancelled by the run signal throws and records no class.
+- The probe pushes no workflow file, so it cannot prove the `workflow` scope. A push of a node change to a workflow file proves it, under [the outbound operations](intake-service.impl.md#outbound-operations-and-checks).
+- A `disk_low` or a `push_refused` failure starts no session of [the agent `pe@1`](#the-agent-pe1), because `UNREPAIRABLE_CLASSES` holds both classes.
+
 ### The proof
 
 - The proof runs the setup commands, `updateContentCommand` then `postCreateCommand`, then each command of `checks`, on the base-branch head.
@@ -606,7 +618,7 @@ The component computes the status of a group in this order. The first rule that 
 - The steps are `volume`, `cache volume`, `start`, `bundle`, `clone`, `remove container` and `remove volume`.
 - The message is `The environment proof failed at <step>: <message>`. `<message>` is the trimmed last 4096 bytes of the step output. A runtime command step gives its error output.
 - A step with blank output gives the message `The environment proof failed at <step>.`. The message becomes `tail` of the proof file.
-- At the `host` target, the host clones the base-branch head into `environments/run-<id>/checkout`. Each command runs with the variables that a `server` instance gives its commands.
+- At the `host` target, the host clones the base-branch head into `environments/run-<id>/checkout`. Each command runs with the variables that a `server` instance gives its commands. A `detected` source runs its setup commands there as the server user, with the `HOME` of that user, so the install scripts of the repository run on the server host.
 - The proof runs no agent and spends no LLM budget.
 
 ### The failure of an execution
@@ -642,7 +654,8 @@ The component computes the status of a group in this order. The first rule that 
 ### The environment list
 
 - `project.environment.list` at `GET /api/project/:project_id/environment` is a `human` read. It answers `{ items }` with one environment state for each current repository binding, in binding name order.
-- An environment state holds `binding_id`, `binding_name`, `resource_identity`, `target`, `source`, `status`, `digest`, `tag`, `run_started_at`, `step_started_at`, `reason`, `reason_started_at`, `failure`, `checks`, `repairs` and `repairing`.
+- An environment state holds `binding_id`, `binding_name`, `resource_identity`, `target`, `source`, `status`, `digest`, `tag`, `run_started_at`, `step_started_at`, `reason`, `reason_started_at`, `failure`, `checks`, `repairs`, `repairing` and `review_flow`.
+- `review_flow` is `ReviewFlow | null` (`reviewFlowSchema` of `src/project/contract.ts`). `reviewFlowOf` of `src/project/service.ts` gives null when the action of the binding is not `pull_request`. For a `pull_request` binding it gives `off` when `link_trust.actor_ids` is absent or empty, else `on`. The value offers the flow, is no proof and changes no status. `off` means that no pull request review sends a node back, and a human sets `link_trust.actor_ids` to turn it on.
 - `reason_started_at` is the time when `reason` changed from null to a message, and null while `reason` is null. A later message keeps the time.
 - `repairing` is true while a session of [the agent `pe@1`](#the-agent-pe1) runs for the group, and false otherwise.
 - `failure` is null unless the status is `failed`. It holds `class`, `origin`, `execution_id`, `command`, `exit_code`, `tail`, `reproduce` and `ended_at` of the proof file.
@@ -793,6 +806,7 @@ The delete operations of the Project Service:
 - A session ends at a passed proof, after 5 attempts or after 64 tool calls. The sixth `environment_write` answers the reason `attempt_limit`, and it writes nothing and runs nothing. The 65th tool call answers `tool_limit`, and a refused write answers `write_refused`. These reasons are tool answers to the session, not codes of an operation.
 - A group holds at most one session at a time. Sessions of different groups run at once and share the queue of [the run](#the-run).
 - Only a failure event starts a session: a run that writes a failed proof file, or [the failure of an execution](#the-failure-of-an-execution). A failure inside a session and the end of a session start none.
+- The class of the failed proof is neither `disk_low` nor `push_refused`.
 - The source of the failed digest is `detected`, `universal` or `none`, or `stored` with the last write by `pe@1`. The server process holds that mark in memory. After a restart, a stored environment counts as written by a human, and no session starts for it.
 - The current binding set still gives the group the target of the failed run or execution. A failure at an old target thus starts no session.
 - A session starts while `repairs` of the failed digest is below 3. The component increments `repairs` before the session starts. A new write of the same digest keeps the count, and `project.binding.environment.rebuild` resets it to 0.
@@ -827,6 +841,7 @@ The first layer of the build builds the image at the start of a `container` inst
 | log  | `project.onboarding.read_failed`                         | A read of a group fails with a new reason. It names the project, the binding, the resource identity, the reason and the failure reason.                 |
 | log  | `project.onboarding.session_failed`                      | A `pe@1` session ends with an error. It names the binding and the digest.                                                                               |
 | 409  | `project.environment.run_active`                         | A rebuild of a group with an active run.                                                                                                                |
+| 409  | `project.environment.not_ready`                          | `project.resume` of a paused project with a repository binding whose environment is neither `none` nor `ready`. `details: { environments }`.            |
 | 404  | `project.binding.not_found`                              | The binding of an environment route is absent, foreign, removed or no repository binding.                                                               |
 
 ## The client identity

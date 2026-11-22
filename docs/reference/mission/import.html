@@ -325,16 +325,15 @@
             <code>id</code> matches the current node or task of the same file
             name. An <code>id</code> that another plan file holds never matches
             by file name. A plan file that matches no current node or task
-            creates a node or a task. The import retires every current node
-            that no plan file matches. An edited copy of plan files without
+            creates a node or a task. The import retires every current node that
+            no plan file matches. An edited copy of plan files without
             <code>id</code> lines, for example the files of the first import,
-            thus updates the nodes of the same file names. Its preview lists
-            the files that match no node in <code>creates</code> and the other
-            nodes in <code>retirements</code>.
-            A retired node that holds an attempt adds
-            <code>mission.import.condition_failed</code>, and a retired terminal
-            node adds <code>mission.import.terminal_change</code>. To remove a
-            node that holds an attempt, follow the
+            thus updates the nodes of the same file names. Its preview lists the
+            files that match no node in <code>creates</code> and the other nodes
+            in <code>retirements</code>. A retired node that holds an attempt
+            adds <code>mission.import.condition_failed</code>, and a retired
+            terminal node adds <code>mission.import.terminal_change</code>. To
+            remove a node that holds an attempt, follow the
             <a href="#import-condition">retirement exit</a>.
           </p>
           <p>To edit an applied plan:</p>
@@ -444,8 +443,8 @@ kanthord mission import apply mission_01M4C5J3SA6W8RBBC92HA9SSDS plan/*.md --fil
                   <td><code>creates</code></td>
                   <td>array of file names</td>
                   <td>
-                    Entries that match no current node or task. An entry
-                    without <code>id</code> matches by file name.
+                    Entries that match no current node or task. An entry without
+                    <code>id</code> matches by file name.
                   </td>
                 </tr>
                 <tr>

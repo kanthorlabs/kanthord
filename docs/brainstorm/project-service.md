@@ -108,6 +108,14 @@ The human act that adds the repository binding is the consent to build and to pr
 Onboarding is one-time work, so it depends on no worker. It is a server operation of the Project Service. It is no mission node, no claim and no Scheduler job.
 Onboarding resolves the environment, builds its image when a `container` instance runs its nodes, and runs the [proof](project-service.vocabulary.md#proof) on the base-branch head before any node of the binding spends budget.
 A node whose repository binding holds an environment that is not ready waits. It changes no state while it waits, and it continues when the environment is ready.
+A run of the Onboarding component makes three proofs in this order: the free disk of the server, the push scope of the binding credential, and the setup commands and checks of the environment.
+The first failed proof ends the run and fails the environment. An environment is `ready` or `none` only after each proof of its digest passes.
+The push proof pushes the existing base commit to a temporary branch and deletes that branch, so a credential that cannot push fails before the first node runs. A push of a workflow file needs the `workflow` scope of the credential. The proof pushes no file, so it cannot prove that scope. The first push of a node change to a workflow file proves it, and its refusal names the `workflow` scope.
+The free disk proof fails when the free bytes of the state directory of the server are below the [disk free ratio](footprint-service.impl.md#configuration) of its total bytes.
+A failed push proof and a failed disk proof start no repair by the agent `pe@1`, because a change of the environment cannot fix them.
+A detected environment applies at every placement. Each checkout and each clone of a `detected` environment runs its setup commands before the agent or a verification uses it.
+A clone that holds less free disk than that ratio stops its execution with `environment_failed` before any setup command runs.
+The environment state of a binding with the action `pull_request` tells a human whether the review flow is on. The flow is on when the link trust of the binding lists an actor id. With no actor id, a pull request review sends no node back.
 An environment failure of an execution stops that execution with its own reason, `environment_failed`. It never becomes a revision turn of the coder agent. A failure whose detail holds `digests` never counts toward the failure limit of the node. A failure without `digests` counts toward that limit.
 The human acts only when the proof or an execution fails. The human then stores a fixed environment or runs the onboarding again.
 Only a human with the project scope and the agent `pe@1` change the stored environment. `pe@1` changes only an environment that it wrote or that no one stored. A push to the repository changes the environment only through the repository files that the sources read.
@@ -169,6 +177,7 @@ A worker instance of a paused project stays registered, and each of its work pul
 A project pause stops no other operation of the project: a Mission write, a human node control including a node pause, a release and an Intake event proceed.
 A resume makes the project admit claims again, and it wakes the waiting work pulls of the project.
 A pause of a paused project and a resume of an active project change nothing.
+A resume of a paused project is refused while a repository binding of the project holds an [environment](#environment-of-a-repository-binding) that is neither `none` nor `ready`. The refusal changes nothing, so the project stays paused and admits no claim.
 
 ## Authorization and credential custody
 

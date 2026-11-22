@@ -405,7 +405,7 @@ The Docker form of `Container on this host`:
 
 - KanthorD supplies no service unit. After a host reboot, no `serve worker` process runs until the host service manager starts it. The operator runs one service for each instance, with `kanthord serve worker --instance <name>` and the absolute path of the binary. A service needs no new option and holds no secret.
 - The instance file stays in `<XDG configuration directory>/kanthord/workers/<name>.yaml` with mode `0600`. The service sets `XDG_CONFIG_HOME` only for an instance file outside the default directory.
-- A stop with `SIGTERM` exits 0 after a successful deregistration, so neither service manager restarts it. A process that another process supersedes exits 3 with `worker.instance.superseded`.
+- A stop with `SIGTERM` exits 0 after a successful deregistration, so neither service manager restarts it. A process that another process supersedes exits 3 with `worker.instance.superseded` (`INSTANCE_SUPERSEDED_CODE` of `src/worker/contract.ts`, `ExitCode.Superseded` of `src/apps/cli/index.ts`).
 - On Linux, `Restart=on-failure` with `RestartPreventExitStatus=3` restarts a failed process and keeps a superseded process stopped. `loginctl enable-linger <user>` starts the user manager at boot with no login.
 - On macOS, a launchd agent `com.kanthorlabs.kanthord.worker.<name>` runs the instance with `RunAtLoad` and `KeepAlive` with `SuccessfulExit` set to false. Launchd restarts the process after exit 3 too, and the restarted process takes the connection back from the second process. The operator stops the second process first, or stops the agent with `launchctl bootout`. A launchd agent starts at the login of its user, so the host needs an automatic login for a start after a reboot.
 
@@ -1984,12 +1984,13 @@ Tests assert that the action performer does not reuse an open pull request of th
 
 ## The environment setup
 
-- The execution setup answers `environment` for each repository binding of the node, from the current revision of that binding at the claim: `{ source: "stored", document, digest }`, `{ source: "repository", digest }` at the `container` placement, `{ source: "detected" | "universal", document, digest }` at the `image` target, or null.
-- `digest` is the current digest of the group in the [Onboarding component](project-service.impl.md#the-digest-and-the-tag).
+- The execution setup answers `environment` for each repository binding of the node, from the current revision of that binding at the claim: `{ source: "stored", document, digest }`, `{ source: "repository", digest }` at the `container` placement, `{ source: "detected", document }` at every placement, `{ source: "universal", document }` at the `container` placement, or null (`executionEnvironment` of `src/worker/execution-setup.ts`).
+- `digest` of a `stored` or a `repository` environment is the current digest of the group in the [Onboarding component](project-service.impl.md#the-digest-and-the-tag).
 - `worker/unit/environment-setup.ts` runs the setup of each checkout: each script of `updateContentCommand`, then each script of `postCreateCommand`. The object form runs its values one after another in key order.
 - The setup runs at the prepare, in each release tree, in the reviewer checkouts and in the examine checkouts.
+- The execution setup also answers `disk_free_ratio`, the value of `footprint.disk_free_ratio` (`executionSetupSchema` of `src/worker/contract.ts`). Before any setup command of the entries, `assertDiskFree` of `src/worker/unit/environment-setup.ts` measures each checkout directory with `freeDiskOf` of `src/kernel/disk.ts`. A directory with `free_bytes` below `disk_free_ratio` times `total_bytes` stops the execution with `environment_failed` and the code `disk_low` (`EnvironmentFailure.DiskLow`). A free disk equal to the limit passes. The stop detail is the JSON `{ free_bytes, total_bytes, disk_free_ratio, directory }`.
 - Each command has the command limit of a verification, and the setup uses the wall deadline of the execution. Its time counts toward the budget of the execution.
-- At the `server` and the `worker` placements, only the setup commands of a stored environment run. The repository devcontainer reaches the worker only at the `container` placement, and the worker reads it at `origin/<base branch>` of its checkout. A non-regular entry counts as absent.
+- At the `server` and the `worker` placements, only the setup commands of a stored or a `detected` environment run. The repository devcontainer reaches the worker only at the `container` placement, and the worker reads it at `origin/<base branch>` of its checkout. A non-regular entry counts as absent.
 - After a setup passes in a checkout, the worker appends each untracked path to `.git/info/exclude`, so no task commit takes the setup output.
 - A setup that changes a tracked file stops the execution with `environment_failed`, the code `setup_failed` and the paths in the detail, because KanthorD commits no change that the agent did not make.
 - The setup writes only inside the checkout, `$HOME` and `/tmp`, because the root file system of the container is read-only. A system install belongs in `onCreateCommand`, which runs at the build as root.
@@ -2508,6 +2509,7 @@ The cause names the layer that caused a failure event. `src/worker/unit/executio
 | `provider_failed`                         | `unauthorized`                                                           | `human.configuration`                                              |
 | `provider_failed`                         | `bad_request`                                                            | `unattributed`, suspects `worker_action`, `prompt`, `llm_provider` |
 | `environment_failed`                      | `setup_failed`, `command_absent`, `affected_invalid`, `affected_timeout` | `environment.<code>`                                               |
+| `environment_failed`                      | `disk_low`                                                               | `infrastructure.disk_low`                                          |
 | `environment_failed`                      | `base_failed`                                                            | `unattributed`, suspects `environment`, `plan`                     |
 | `operation_failed`                        | a git failure whose reason is `host_unreachable`                         | `infrastructure.network`                                           |
 | failed `worker.git` step                  | `fetch_base`, `push`                                                     | `unattributed`, suspects `infrastructure`, `worker_action`         |
