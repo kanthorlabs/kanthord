@@ -4,7 +4,7 @@ This set designs the next agent and worker of KanthorD. It starts from the direc
 
 ## Goals
 
-1. **R1.** An agent runs one agent profile with no KanthorD server. The agent CLI `kanthord run agent` gives it the input as options, a JSON file or a Markdown file.
+1. **R1.** An agent runs one agent profile with no KanthorD server. The agent CLI `kanthord run agent` gives it the input as options and in the pi prompt forms: `@path` text files, messages and `--append-system-prompt <path>` files. Aelita dropped the JSON input file on 2026-11-22 ([L2](L2-agent-cli.md#evaluation-of-the-direction)).
 2. **R2.** The coding category has the agent profiles and the tools that it needs today, and no more.
 3. **R3.** A worker adds instructions and capabilities to an agent session, and it gives the implementation of each worker tool that the profile declares. Each tool that calls the KanthorD server is a worker tool or a consumer tool.
 4. **R4.** The line runs inside the worker behind typed ports and opens an agent session only through the agent contract.
