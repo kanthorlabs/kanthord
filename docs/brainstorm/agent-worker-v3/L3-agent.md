@@ -13,7 +13,7 @@ Back to the [index](index.md). The terms follow the [glossary](index.md#glossary
 7. **G7.** The contract enforces the stop, the forced stop, the wall budget, the list-price budget and the turn limit. It gives the class of a failure from the pi predicates.
 8. **G8.** Each pi extension is one module with one factory and its own test file ([L1 Extension rule](L1-model.md#extension-rule)).
 9. **G9.** Each public behavior of L3 is an end-to-end acceptance check or a unit-level rule with its owning module and test file ([index](index.md#layer-files)).
-10. **G10.** Each open path of today has a stated shape and guard list until [L5](L5-worker.md) and the Workbench change move its consumer to the contract.
+10. **G10.** Each open path of today has a stated shape and guard list until [L5](L5-worker.md) moves the worker and the Workbench branch moves the Workbench at its rebase.
 
 ## Agent runtime files
 
@@ -43,7 +43,7 @@ Change: the runtime and the server part of `src/agent/` separate by file. A file
 | `pi-tools.ts`                                          | Runtime                                  | The pi tool install. Change: the code constant moves here from `WorkerErrorCode.StartToolMissing` (`src/worker/contract.ts:1061`). The value `worker.start.tool_missing` stays, because `docs/cli/worker.md:1341` documents it for `serve server` and `serve worker`                   |
 | `pinned-layers.ts`                                     | Runtime                                  | The system prompt pin (`pinInference`) and the state of the work pin. Change: the work part of `pinContext` leaves, so `pinnedLayersHook` alone adds the work pin ([Pinned layers](#pinned-layers)). `setWork` takes `WorkPin` (`interface WorkPin { text: string }`). A `WorkPrompt` fits that shape, so the file imports no `prompt-composer.ts` and the worker call stays |
 | `hooks/*.ts`                                           | Runtime                                  | The extensions of [Extension modules](#extension-modules)                                                                                                                                                                                                                              |
-| `hooks/tool-approval.ts`                               | Workbench Service                        | Consumer hook of the Workbench. It moves to `src/workbench/tool-approval.ts` with the [Workbench change](#workbench-service)                                                                                                                                                           |
+| `hooks/tool-approval.ts`                               | Workbench Service                        | Consumer hook of the Workbench. It moves to `src/workbench/tool-approval.ts` with the [Workbench change](#constraints-on-the-workbench-branch-at-rebase)                                                                                                                                                                  |
 | `agent-port.ts`                                        | Worker layer                             | It moves unchanged to `src/worker/unit/agent-port.ts`, next to its test of today. [L5](L5-worker.md) rewires it on the contract as the worker port `agent.open`                                                                                                                        |
 | `session-directory.ts`, `review-roots.ts`              | Worker layer                             | They compute the session directory and the roots input ([L1 Tool inventory](L1-model.md#tool-inventory)). They move unchanged to `src/worker/unit/`                                                                                                                                    |
 | `capabilities/*.ts`                                    | Worker layer                             | `executionEvidence`, `linkUpdates`, `SessionHostTools`, `asToolError`. They move unchanged to `src/worker/unit/capabilities/` ([L5](L5-worker.md#worker-capabilities))                                                                                                                 |
@@ -78,7 +78,7 @@ Change: the import check of [L1-D5](L1-model.md#decisions) uses an allowed set. 
 - the modules of `src/kernel/`. The closure stops at a kernel module: a package that a kernel module imports is allowed, for example `simple-git` of `src/kernel/git-environment.ts`. No kernel module imports a module of a service today;
 - `src/llm/provider-failure.ts`;
 - the runtime modules of `src/agent/`;
-- after the merge of `feature/workbench-v2`: `@anthropic-ai/sandbox-runtime`, for `bash-sandbox.ts`.
+- after the rebase of `feature/workbench-v2`: `@anthropic-ai/sandbox-runtime`, for `bash-sandbox.ts` ([Constraints on the Workbench branch at rebase](#constraints-on-the-workbench-branch-at-rebase)).
 
 The check also refuses each reference to `setGlobalDispatcher` and `EnvHttpProxyAgent` in a runtime module ([L2 requirement 9](L2-agent-cli.md#requirements-on-l3)). pi does not export `configureHttpDispatcher` from `dist/index.d.ts`, so no runtime module can call it.
 
@@ -161,12 +161,12 @@ Each field and its reader:
 | `knownSecrets`     | The source of the known secrets. The contract reads it at the open and at each turn start                                                                                                                                                                                                                                                                                       | Each consumer                                        |
 | `childEnvironment` | The names of a child process and of the precondition `git` commands ([Child processes](#child-processes); [Start preconditions](#start-preconditions))                                                                                                                                                                                                                          | Each consumer                                        |
 | `hostHome`         | The base of the `<cwd>` section that `homeRelativeCwd` writes                                                                                                                                                                                                                                                                                                                   | Each consumer                                        |
-| `consumerTools`    | The pi tool definitions of declared consumer tools. A name outside the declared consumer tools of the profile makes the open throw `agent.tool_undeclared` ([L3-D6](#decisions))                                                                                                                                                                                                | Project Service; Workbench Service after the merge   |
+| `consumerTools`    | The pi tool definitions of declared consumer tools. A name outside the declared consumer tools of the profile makes the open throw `agent.tool_undeclared` ([L3-D6](#decisions))                                                                                                                                                                                                | Project Service; the Workbench branch after its rebase |
 | `extensions`       | The consumer extensions: worker capabilities and consumer hooks, in consumer order                                                                                                                                                                                                                                                                                              | Worker, Workbench Service                            |
 | `signal`           | The stop signal. An abort starts the graceful stop ([Stop and forced stop](#stop-and-forced-stop))                                                                                                                                                                                                                                                                              | Each consumer                                        |
 
 - The input names no execution, no claim, no node and no server address ([L1 boundary rule 1](L1-model.md#agentworker-boundary)). Change: today `SessionOpenRequest` carries `claim.execution_id` and `setup.agents` (`src/agent/agent-port.ts`).
-- The [Workbench change](#workbench-service) adds three inputs, each with its reader: `workspace.confine`, the session kind `resume` and `bashSandbox`. They do not exist before that change.
+- The [Workbench change](#constraints-on-the-workbench-branch-at-rebase) adds three inputs at the rebase of the branch, each with its reader: `workspace.confine`, the session kind `resume` and `bashSandbox`. They do not exist on `main` before that rebase.
 
 ### Session record
 
@@ -362,20 +362,16 @@ The full tool set of each profile:
 
 | Profile                          | Agent tools                                           | Declared consumer tools                                                                                                                                                   | Confined | Start preconditions                                | Profile prompt                         |
 | -------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------- | -------------------------------------- |
-| `swe@1`                          | `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash` | `host`: `evidence-upload`, `link_update_list`. After the merge: `operation`: the six node review reads; `workbench`: `evidence_read`, `offer_action`, `request_owner_act` | No       | `workspace_directory`, `git_worktree`, `git_clean` | Standard, coding text, `role/swe@1.md` |
+| `swe@1`                          | `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash` | `host`: `evidence-upload`, `link_update_list`                                                                                                                             | No       | `workspace_directory`, `git_worktree`, `git_clean` | Standard, coding text, `role/swe@1.md` |
 | `bee@1`                          | the seven tools of `swe@1`                            | none                                                                                                                                                                      | No       | as `swe@1`                                         | Standard, coding text, `role/bee@1.md` |
 | `fee@1`                          | the seven tools of `swe@1`                            | none                                                                                                                                                                      | No       | as `swe@1`                                         | Standard, coding text, `role/fee@1.md` |
 | `te@1`                           | the seven tools of `swe@1`                            | none                                                                                                                                                                      | No       | as `swe@1`                                         | Standard, coding text, `role/te@1.md`  |
-| `re@1`                           | `read`, `grep`, `find`, `ls`                          | After the merge: `operation`: the six node review reads; `workbench`: `evidence_read`, `offer_action`, `request_owner_act`                                                | Yes      | `workspace_directory`                              | Standard, coding text, `role/re@1.md`  |
-| `env@1` (`pe@1` after the merge) | `read`, `grep`, `find`, `ls`                          | `environment`: `probe`, `environment_write`                                                                                                                               | Yes      | `workspace_directory`                              | Standard, `env@1.md`                   |
-| `ops@1` (after the merge)        | none                                                  | `operation`: the 36 operations of `OPS_OPERATIONS`; `workbench`: `offer_action`, `request_owner_act`                                                                      | No       | `workspace_directory`                              | Standard, `ops@1.md`                   |
-| `plan@1` (after the merge)       | none                                                  | `operation`: the 8 operations of `PLAN_OPERATIONS`; `workbench`: `offer_action`, `request_owner_act`                                                                      | No       | `workspace_directory`                              | Standard, `plan@1.md`                  |
+| `re@1`                           | `read`, `grep`, `find`, `ls`                          | none                                                                                                                                                                      | Yes      | `workspace_directory`                              | Standard, coding text, `role/re@1.md`  |
+| `env@1`                          | `read`, `grep`, `find`, `ls`                          | `environment`: `probe`, `environment_write`                                                                                                                               | Yes      | `workspace_directory`                              | Standard, `env@1.md`                   |
 
-- The six node review reads are `NODE_REVIEW_READS` of the branch: `mission.node.get`, `mission.attempt.list`, `mission.outcome.list`, `mission.assessment.list`, `mission.evidence.list`, `mission.evidence.get` (`git show origin/feature/workbench-v2:src/agent/catalog.ts`).
 - The role profiles hold the seven agent tools of today and no other tool ([L1 E1, fit rule 8](L1-model.md#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule)). They declare no consumer tool, because no consumer gives a tool to a role profile this round ([L1-D4](L1-model.md#decisions)).
 - `re@1` and `env@1` are confined. Change: confinement is the property `confined` of the profile. Today `CONFINED_AGENTS` holds only `re@1` (`src/agent/catalog.ts`), and the Project Service adds the confinement to `env@1` itself (`src/project/environment-agent.ts:306`).
-- `guard@1` of the branch is no profile. The Workbench calls `runtime.complete` for it and opens no agent session (`git show origin/feature/workbench-v2:src/workbench/guard-classifier.ts`). It stays a declaration of the server part. The fork summary of the branch is a direct completion too.
-- `offer_action` and `request_owner_act` are tools of the Workbench on the branch (`WORKBENCH_ACTION_TOOL_NAME` in `src/workbench/actions.ts:32`, `WORKBENCH_REQUEST_OWNER_ACT_TOOL` in `src/workbench/contract.ts:39`). Change: the `workbench` field of the branch lists only `evidence_read`. The Workbench change adds the two names, so pi registers them.
+- The Workbench branch adds its profiles and tools at its rebase ([Constraints on the Workbench branch at rebase](#constraints-on-the-workbench-branch-at-rebase)).
 
 ### Consumer tool declaration
 
@@ -398,10 +394,9 @@ export interface Profile {
 ```
 
 - `builtin` holds the agent tools. `host` holds the worker tools, read by the worker. `environment` holds the consumer tools of the Project Service. Change: today `EnvironmentTool` exists in `catalog.ts`, but `env@1` declares neither tool.
-- The merge adds `operation: readonly string[]` and `workbench: readonly WorkbenchTool[]`, with their reader, the Workbench Service.
 - The declared names of a session are the agent tools of the profile plus each consumer tool name of every field.
 - `WorkerTool` holds `evidence-upload` and `link_update_list`. Their parameter schemas move to `src/worker/contract.ts`.
-- `TOOL_CATALOG` keeps one location list for each declared tool, also an empty list ([L1 tool ownership rule 7](L1-model.md#tool-ownership-rule)). Today `bash` has no entry (`src/agent/catalog.ts:70-81`). So the confinement blocks `bash` in a confined session with `The tool bash has no location rule in this session.` (`src/agent/hooks/checkout-confinement.ts`). No confined profile declares `bash` today, so no entry has a reader. The [Workbench change](#workbench-service) adds the entries of `bash` and of each operation and Workbench tool, each with an empty list.
+- `TOOL_CATALOG` keeps one location list for each declared tool, also an empty list ([L1 tool ownership rule 7](L1-model.md#tool-ownership-rule)). Today `bash` has no entry (`src/agent/catalog.ts:70-81`). So the confinement blocks `bash` in a confined session with `The tool bash has no location rule in this session.` (`src/agent/hooks/checkout-confinement.ts`). No confined profile declares `bash` today, so no entry has a reader.
 
 ### A declared consumer tool with no implementation
 
@@ -432,7 +427,7 @@ The KanthorD prompt chain of a session, in this order:
 - Each new part of the server part gets a `PromptPart` kind, so its reference reaches the span.
 - L3-U1 proves the byte-equal text of each consumer of today.
 
-The precedence of [agent.md](../agent.md#prompt-composer) stays. `run agent` has no layer 3 text and no framing. The [evaluation](L2-agent-cli.md#one-evaluation-run) gives the stored Repository prompt and the Binding prompt of `swe@1` as two context texts, in the order of the worker path. The Workbench part `workbench.md` stays in layer 1 after the Role, as today (`promptFiles` in `src/agent/prompt-files.ts`). After the merge, the server part places the parts `identity` and `variant` of the branch in layer 1.
+The precedence of [agent.md](../agent.md#prompt-composer) stays. `run agent` has no layer 3 text and no framing. The [evaluation](L2-agent-cli.md#one-evaluation-run) gives the stored Repository prompt and the Binding prompt of `swe@1` as two context texts, in the order of the worker path. The Workbench part `workbench.md` stays in layer 1 after the Role, as today (`promptFiles` in `src/agent/prompt-files.ts`).
 
 ### Composition function
 
@@ -550,7 +545,7 @@ export const StartPrecondition = {
 - Each command has the deadline `RUNTIME_SETUP_DEADLINE_MS` (`src/agent/agent-session.ts`). A timeout fails the precondition of that command.
 - **Every consumer.** The list holds for every consumer ([L1 handoff](L1-model.md#handoffs-to-later-layers)). The worker gives roots that pass: the checkouts of a node, each the top level of a git worktree with no uncommitted change. [L5](L5-worker.md) states the roots of each chain.
 - **Read-only profiles.** `re@1` and `env@1` declare only `workspace_directory`. They change no file, so a change in their workspace cannot mix with their work.
-- **Resume.** The session kind `resume` arrives with the [Workbench change](#workbench-service). Constraint of that change: a resume checks each precondition except `git_clean`. Reason: at a resume, the uncommitted change is the work of the same session, and the session file records it.
+- **Resume.** The session kind `resume` arrives with the [Workbench change](#constraints-on-the-workbench-branch-at-rebase), with its precondition rule.
 - Change: today `openSession` checks no precondition (`src/agent/agent-session.ts`).
 
 ## Guards
@@ -591,7 +586,6 @@ The tool <name> is not declared for this agent.
 - `run agent`: `cwd` and the one root are the workspace ([L2 Options](L2-agent-cli.md#options)).
 - Worker: [L5](L5-worker.md) gives the roots. Today `planOf` gives the review directory and its evidence placement (`reviewRootsOf`, `src/agent/review-roots.ts`).
 - Project Service: the checkout is `cwd` and the one root, as today (`src/project/environment-agent.ts:306`).
-- Workbench after the merge: `place.cwd` is `cwd` and the one root ([Workbench Service](#workbench-service)).
 
 ### Pinned layers
 
@@ -699,7 +693,7 @@ export interface RedactionCounts {
 - The worker, the Workbench of `main` and the Project Service open sessions with the open paths of today until their consumers move. The worker sends session entries and gives the full-entry read of [Exit redaction](#exit-redaction). The Workbench and the Project Service read the session events with no exit redaction. With the removal of the `assistant` redaction, a key in LLM output then reaches the server records and the Workbench views. That makes a rule of today weaker.
 - Change: `sessionParts` adds `assistantRedaction(state)` after `inputRedaction` on each open path of today: `openSessionRuntime` and `openSession`. It keeps the three redactions of LLM output of today and their counts.
 - `assistantRedaction` and `outputFinding` are never in one session. The contract path holds `outputFinding` and no `assistantRedaction`. The open paths of today hold `assistantRedaction` and no `outputFinding`, because no consumer of those paths reads a warning before L5.
-- The module and its test leave when the last open path of today leaves: [L5](L5-worker.md) for the worker, the Workbench change for the Workbench.
+- The module and its test leave when the last open path of today leaves: [L5](L5-worker.md) for the worker, the rebase of the Workbench branch for the Workbench.
 
 ## Open paths until L5 and the Workbench change
 
@@ -711,7 +705,7 @@ After [L6](L6-migration.md) part A, three open paths exist:
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | `openAgent`          | `run agent`; the Project Service after its step ([Project Service](#project-service))                                               | Stays                                                     |
 | `openSessionRuntime` | `agentPort` in `src/worker/unit/agent-port.ts` (`src/agent/agent-port.ts:182` today)                                                | [L5](L5-worker.md)                                        |
-| `openSession`        | The Workbench Service (`src/workbench/service.ts:397`); the Project Service (`src/project/environment-agent.ts:283`) until its step | The Workbench change, and the step of the Project Service |
+| `openSession`        | The Workbench Service (`src/workbench/service.ts:397`); the Project Service (`src/project/environment-agent.ts:283`) until its step | The Workbench branch at its rebase, and the step of the Project Service |
 
 The input of both open paths of today after part A, exact:
 
@@ -862,24 +856,43 @@ The Project Service opens each `env@1` session through `openAgent`:
 - Change: the Project Service reads `TurnEnd.failure.reason` in place of `session.state.errorMessage`, and logs `redactionSummary()`.
 - The Project Service change touches no worker module. [L6](L6-migration.md) places it in part A or part B. Until then it uses `openSession`.
 
-### Workbench Service
+### Constraints on the Workbench branch at rebase
 
-- **Constraint.** The Workbench change starts only after `feature/workbench-v2` merges into `main` ([L1-D8](L1-model.md#decisions)). Until then the Workbench of `main` uses `openSession` with [Interim redaction](#interim-redaction). Before the Workbench change, the agent build changes three things in Workbench files:
+Ulrich set the merge order on 2026-11-22. The Agent V2 and Worker V3 work merges into `main` first. After this round, `feature/workbench-v2` rebases onto `main`. The Workbench change is the work of that rebase. Each item of this section is a constraint that the branch meets at its rebase.
+
+- **`main` until the rebase.** The Workbench of `main` keeps `openSession` with [Interim redaction](#interim-redaction). Reason: the branch rewrites the Workbench (37 files, +14622 lines under `src/workbench`). The agent build changes three things in Workbench files of `main`:
   - the import paths of moved symbols;
   - the call of `finalPrompt` in place of `systemPrompt`;
   - the catalog reads of [Catalog reads at the split](#catalog-reads-at-the-split).
+- **Removal.** The rebase deletes `openSession`, `assistantRedaction` and `SessionRedactionInput`, when no other consumer reads them.
 - **Open.** The Workbench opens each session through `openAgent`:
-  - `systemPrompt` `composed`, from `finalPrompt` of the Workbench parts and the framing.
+  - `systemPrompt` from `finalPrompt` of the Workbench parts and the framing. The server part places the parts `identity` and `variant` of the branch in layer 1.
   - `workspace` `{ cwd: place.cwd, roots: [place.cwd], confine: true }`. This keeps the confinement of every Workbench session of the branch (`checkoutConfinement(session.place.cwd)`, `src/workbench/service.ts:1702` of the branch).
   - `budget` all `null`; `session` `directory` for a new session and `resume` for a resume.
   - `consumerTools`: the operation tools, `offer_action`, `request_owner_act` and `evidence_read`. `extensions`: `[toolApproval]`.
-- **Inputs that the change adds.** Constraints of the change:
+- **Catalog.** The branch adds these profiles and fields:
+
+  | Profile                       | Agent tools | Declared consumer tools                                                                              | Confined | Start preconditions   | Profile prompt       |
+  | ----------------------------- | ----------- | ---------------------------------------------------------------------------------------------------- | -------- | --------------------- | -------------------- |
+  | `swe@1`, `re@1` (added tools) | as `main`   | `operation`: the six node review reads; `workbench`: `evidence_read`, `offer_action`, `request_owner_act` | as `main` | as `main`             | as `main`            |
+  | `pe@1` (rename of `env@1`)    | as `env@1`  | as `env@1`                                                                                           | Yes      | `workspace_directory` | as `env@1`           |
+  | `ops@1`                       | none        | `operation`: the 36 operations of `OPS_OPERATIONS`; `workbench`: `offer_action`, `request_owner_act` | No       | `workspace_directory` | Standard, `ops@1.md` |
+  | `plan@1`                      | none        | `operation`: the 8 operations of `PLAN_OPERATIONS`; `workbench`: `offer_action`, `request_owner_act` | No       | `workspace_directory` | Standard, `plan@1.md` |
+
+  - The six node review reads are `NODE_REVIEW_READS` of the branch: `mission.node.get`, `mission.attempt.list`, `mission.outcome.list`, `mission.assessment.list`, `mission.evidence.list`, `mission.evidence.get` (`git show origin/feature/workbench-v2:src/agent/catalog.ts`).
+  - `AgentTools` gains `operation: readonly string[]` and `workbench: readonly WorkbenchTool[]`, with their reader, the Workbench Service.
+  - `offer_action` and `request_owner_act` are tools of the Workbench on the branch (`WORKBENCH_ACTION_TOOL_NAME` in `src/workbench/actions.ts:32`, `WORKBENCH_REQUEST_OWNER_ACT_TOOL` in `src/workbench/contract.ts:39`). The `workbench` field of the branch lists only `evidence_read`. The rebase adds the two names, so pi registers them.
+  - `guard@1` of the branch is no profile. The Workbench calls `runtime.complete` for it and opens no agent session (`git show origin/feature/workbench-v2:src/workbench/guard-classifier.ts`). It stays a declaration of the server part. The fork summary of the branch is a direct completion too.
+  - `TOOL_CATALOG` gains the entries of `bash` and of each operation and Workbench tool, each with an empty location list. The confinement then passes `bash` with no path check. The confinement does not confine `bash`; the sandbox confines it.
+- **Inputs that the rebase adds.**
   - `workspace.confine: boolean`. `true` adds the confinement to a profile that does not set it. A consumer can never remove the confinement of a profile ([L3-D18](#decisions)).
-  - The session kind `resume` with `SessionManager.open(path, dirname(path))`. The file exists, and the start preconditions skip `git_clean` ([L3-D23](#decisions)).
+  - The session kind `resume` with `SessionManager.open(path, dirname(path))`. The file exists. A resume checks each start precondition except `git_clean`. Reason: at a resume, the uncommitted change is the work of the same session, and the session file records it ([L3-D23](#decisions)).
   - `bashSandbox: SandboxScope | null` ([`bash`](#workbench-bash)). The open throws `AgentOpenError` with the new code `agent.sandbox_missing` when three conditions hold: the session is confined, the profile declares `bash`, and `bashSandbox` is `null`.
-  - The `TOOL_CATALOG` entries of `bash` and of each operation and Workbench tool, each with an empty location list. The confinement then passes `bash` with no path check. The confinement does not confine `bash`; the sandbox confines it.
-- **Stored entries at a resume.** At the open of a `resume`, the contract emits each stored entry of the session file as an `entry` event. Each event passes `exitValue`, and all come before the first `send`. The Workbench views read stored entries only from these events.
+  - `@anthropic-ai/sandbox-runtime` joins the allowed set of [Import rule](#import-rule).
+- **Events.** The Workbench is a reader of the events that L5 adds ([Events](#events)). At the open of a `resume`, the contract emits each stored entry of the session file as an `entry` event, after `exitValue` and before the first `send`. The Workbench views read stored entries only from these events. The streaming view reads `message_update` only with the hold-back of [Events](#events).
 - **Views.** The Workbench reads only the contract events and the `TurnEnd`, after the exit redaction. It holds no `AgentSession`.
+- **Custom message entry.** The branch calls `appendCustomMessageEntry` (`src/workbench/service.ts:2261` of the branch). That entry kind enters the model context. The rebase adds a contract API that applies the input redaction to it, or removes the call.
+- **Checks.** L1 [AC19](L1-model.md#checks) runs on the branch after the rebase. The lint glob of [L1-D15](L1-model.md#decisions) covers `src/workbench/tool-approval.ts`.
 
 #### Workbench `bash`
 
@@ -887,9 +900,9 @@ The Project Service opens each `env@1` session through `openAgent`:
 - On the branch, `bashSandbox` has two readers:
   - The Workbench wraps each command with `bashSandbox.wrap` and a deny list of server files (`builtinTools` in `src/workbench/tools.ts:318-345` of the branch).
   - The worker wraps each command with the sandbox scope of its slot (`src/worker/unit/tool-table.ts:145` of the branch). The slot gives `deny_read: hostDenyRead(env)` (`src/apps/worker/slot.ts:164` of the branch).
-- Change: the input gains `bashSandbox`, and the runtime `bash` wraps each command with it. The Workbench gives `hostDenyRead`. [L5](L5-worker.md) gives the scope of the worker. So the sandbox of the branch keeps its strength.
-- The branch sets `killGroupAtEnd: false` (`src/workbench/tools.ts:330` of the branch). **(Q1)** holds the ruling.
-- **`swe@1` with no worktree.** Today the working directory of a Workbench session is a directory per agent name that is no git worktree (`workbenchDirectory` in `src/workbench/sessions.ts:31`). The coding preconditions refuse it. **(Q2)** holds the ruling.
+- The input gains `bashSandbox`, and the runtime `bash` wraps each command with it. The Workbench gives `hostDenyRead`. The rebase gives the scope of the worker on the V3 worker port. So the sandbox of the branch keeps its strength.
+- The branch sets `killGroupAtEnd: false` (`src/workbench/tools.ts:330` of the branch). [L3-D37](#decisions) holds the ruling.
+- **`swe@1` with no worktree.** Today the working directory of a Workbench session is a directory per agent name that is no git worktree (`workbenchDirectory` in `src/workbench/sessions.ts:31`). A Workbench `swe@1` session passes the coding preconditions ([L3-D38](#decisions)). [HANDOFF.md](../HANDOFF.md#workbench-service), Workbench Service, holds the directory rule.
 
 ## Extension modules
 
@@ -907,7 +920,7 @@ Each module exports one extension factory, with its test file next to it ([L1 Ex
 | `src/agent/hooks/input-redaction.ts`      | `inputRedaction`      | `input-redaction.test.ts`      | New module from `hook`, less the three redactions of LLM output, plus `errorMessage`                                      |
 | `src/agent/hooks/output-finding.ts`       | `outputFinding`       | `output-finding.test.ts`       | New module                                                                                                                |
 | `src/agent/hooks/assistant-redaction.ts`  | `assistantRedaction`  | `assistant-redaction.test.ts`  | New interim module from `hook`. It leaves with the last open path of today                                                |
-| `src/agent/hooks/tool-approval.ts`        | `toolApproval`        | `tool-approval.test.ts`        | New test. Today only `sensitive-text-redaction.test.ts` tests it. Both move to `src/workbench/` with the Workbench change |
+| `src/agent/hooks/tool-approval.ts`        | `toolApproval`        | `tool-approval.test.ts`        | New test. Today only `sensitive-text-redaction.test.ts` tests it. Both move to `src/workbench/` at the rebase of the Workbench branch |
 
 - `src/agent/redaction.ts` is no extension. It holds the state that five factories share: the marker table, the matchers and the counts. Its test file is `redaction.test.ts`.
 - `src/agent/hooks/sensitive-text-redaction.ts` and its test leave. Each of its tests moves to the test file of the module that owns the behavior.
@@ -1016,7 +1029,7 @@ Each rule holds in one module, with no process and no LLM stub ([index](index.md
 
 - **The turn limit end to end.** `run agent` has no turn input. L3-U6 covers it before L5, and [L5](L5-worker.md) covers it for the worker.
 - **The forced stop end to end.** `run agent` reaches it only after a 10-second graceful stop that a test cannot force with no hang of pi. L3-U7 and the signal handler rule of L2 cover it.
-- **The Workbench and the Project Service.** L1 [AC19](L1-model.md#checks) and [AC20](L1-model.md#checks) belong to L5.
+- **The Workbench and the Project Service.** L1 [AC19](L1-model.md#checks) runs on the Workbench branch after its rebase. L1 [AC20](L1-model.md#checks) belongs to L5.
 - **The interim redaction and the open paths of today.** They are temporary paths. L3-U12 and L3-U13 cover them.
 - **The filter driver of a repository.** A filter command can run at `git_clean`, by design. No check asserts its absence.
 
@@ -1050,27 +1063,25 @@ These are order hints. [L6](L6-migration.md) fixes the order.
    - `childEnvironment`, `hostHome`, and the worker capabilities in `extensions`.
 2. The roots of each chain pass the coding preconditions: the checkouts of an `implement` node; the trees of `workspace.review` for `examine` with `swe@1`. Each root is the top level of a git worktree with no uncommitted change. L5 confirms it, or states the change.
 3. L5 adds the `observe` input and the events `session` and `entry`, with `exitValue`, under the constraints of [Events](#events). The worker reads `TurnEnd` in place of `completeReply`, `lastText` and `providerFailure`, and the events in place of the `AgentSession` (`src/worker/unit/native-agent.ts`, `agent-telemetry.ts`, `session-entries.ts`). `sessionEntryRecord` keeps its size bound. `countTurns` and the alias `modelOutput` then leave.
-3a. L5 adds `appendCustom(customType, data)` to `AgentRun`. It redacts each string of `data` with `text`, then calls pi `appendCustomEntry`. pi never sends a `custom` entry to the model. The worker writes `kanthord.pinned_context`, and the trace view of `apps` reads it (`apps/src/lib/agent-prompt-parts.ts:174`). Example line: `{"type":"custom","customType":"kanthord.pinned_context","data":{"part":"system_prompt"},"id":"a1b2c3d4","parentId":"9f8e7d6c","timestamp":"2026-11-22T09:15:02.123Z"}`.
-4. The bash process facts of the telemetry: `ToolProcesses.take` and `takeTimeout` (`src/worker/unit/agent-telemetry.ts:351-352`). L5 adds them to a contract event, or deletes those span attributes.
-5. The worker records each `SecretWarning` as a telemetry finding. It renames the span attributes of [Redaction counts](#redaction-counts).
-6. The worker gives the turn limit of `NATIVE_RESOURCE_BUDGET` in `budget.turns` and stops the patch of `finishTurn`.
-7. The full-entry read of a session file (`readSessionFileEntry`): L5 rules its redaction before the worker path drops `assistantRedaction` ([Exit redaction](#exit-redaction)).
-8. The sandbox scope of the worker `bash` after the merge ([Workbench `bash`](#workbench-bash)).
+4. L5 adds `appendCustom(customType, data)` to `AgentRun`. It redacts each string of `data` with `text`, then calls pi `appendCustomEntry`. pi never sends a `custom` entry to the model. The worker writes `kanthord.pinned_context`, and the trace view of `apps` reads it (`apps/src/lib/agent-prompt-parts.ts:174`). Example line: `{"type":"custom","customType":"kanthord.pinned_context","data":{"part":"system_prompt"},"id":"a1b2c3d4","parentId":"9f8e7d6c","timestamp":"2026-11-22T09:15:02.123Z"}`.
+5. The bash process facts of the telemetry: `ToolProcesses.take` and `takeTimeout` (`src/worker/unit/agent-telemetry.ts:351-352`). L5 adds them to a contract event, or deletes those span attributes.
+6. The worker records each `SecretWarning` as a telemetry finding. It renames the span attributes of [Redaction counts](#redaction-counts).
+7. The worker gives the turn limit of `NATIVE_RESOURCE_BUDGET` in `budget.turns` and stops the patch of `finishTurn`.
+8. The full-entry read of a session file (`readSessionFileEntry`): L5 rules its redaction before the worker path drops `assistantRedaction` ([Exit redaction](#exit-redaction)).
 9. A unit rule that `HostTool` of `src/worker/contract.ts` equals the worker tool names of the catalog.
 10. Layer 2 of E1 in the worker path ([Prompt files](#prompt-files)):
     - the part `coding` of `PromptPart`;
     - the server Role from `role/<name>.md`;
     - the protocol text in the worker instructions;
     - the deletion of the old `swe@1.md` and `re@1.md`.
-11. The Workbench change of [Workbench Service](#workbench-service), after the merge, with the rulings of Q1 and Q2. The lint glob of [L1-D15](L1-model.md#decisions) covers `src/workbench/tool-approval.ts`.
 
 ### To HANDOFF.md
 
-L3 adds no item. The contract answers two open items of [HANDOFF.md](../HANDOFF.md#agent-component), Agent component: "Give an agent session a budget input that the consumer supplies" (`RunBudget`) and "split `NativeAgentInput` ... into a session input that names no execution" (`AgentInput`). L6 closes them when it builds the contract.
+L3 adds three items: the lint rule of [L3-D39](#decisions) under Architecture, the rebase of the Workbench branch and the Workbench `swe@1` directory under Workbench Service. The contract answers two open items of [HANDOFF.md](../HANDOFF.md#agent-component), Agent component: "Give an agent session a budget input that the consumer supplies" (`RunBudget`) and "split `NativeAgentInput` ... into a session input that names no execution" (`AgentInput`). L6 closes them when it builds the contract.
 
 ## Changes needed in upper layers
 
-No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and L2.
+No change is open. L3-D28 to L3-D36 and L3-D42 record the changes that L3 applied to L1 and L2.
 
 ## Decisions
 
@@ -1078,11 +1089,11 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 2. **L3-D2.** `SpanStatus` leaves the runtime with the trace. `credentialSecrets` and `mergedSecrets` move to `src/llm/known-secrets.ts`. `ProviderFailure` moves to `src/llm/provider-failure.ts`, because `run-outcome.ts` adds that import. The code constant of the pi tool install moves to `pi-tools.ts` with its value `worker.start.tool_missing`. Reason: each import serves a consumer concern, and a new code value changes a documented code for no gain.
 3. **L3-D3.** The agent contract is `openAgent(input)` with the input, the run handle and the output of [Input and output contract](#input-and-output-contract). Constraint: each new consumer opens sessions only through it, and no consumer of it gets the `AgentSession`.
 4. **L3-D4.** The runtime catalog in `catalog.ts` lists every profile that opens a session. `declarations.ts` of the server part lists only the configuration owners. Constraint: `AGENT_NAMES` holds no role profile. `guard@1` stays a server declaration, because it opens no session.
-5. **L3-D5.** `AgentTools` of the branch is the field shape. `main` holds `builtin`, `host` and `environment`; the merge adds `operation` and `workbench`. Constraint: a field exists only with its reader. `offer_action` and `request_owner_act` join `workbench`. The role profiles declare no consumer tool.
+5. **L3-D5.** `AgentTools` of the branch is the field shape. `main` holds `builtin`, `host` and `environment`; the Workbench branch adds `operation` and `workbench` at its rebase. Constraint: a field exists only with its reader. `offer_action` and `request_owner_act` join `workbench`. The role profiles declare no consumer tool.
 6. **L3-D6.** The pi option `tools` holds the declared names of the session. An undeclared name in `consumerTools` makes the open throw `agent.tool_undeclared`. An undeclared extension tool gets `Tool <name> not found`. Reason: pi drops an undeclared tool with no signal. Constraint: the allowlist guard blocks only a nested `ctx.executeTool` call, and its block text stays `The tool <name> is not declared for this agent.`.
 7. **L3-D7.** The profile prompt of a coding profile is `base.md`, `coding.md` and `role/<name>.md`. `coding.md` holds the three sections that `swe@1.md` and `re@1.md` share today. Constraint: the worker path keeps `swe@1.md` and `re@1.md` until layer 2 of E1, and L3-U3 fails on a difference between the two copies. `bee@1` and `te@1` differ from `swe@1` only in the role statement, and `fee@1` also in item 6.
 8. **L3-D8.** `composeSystemPrompt` of `prompt-chain.ts` is the one composition function. Its callers are `run agent` and `finalPrompt` of the server part. The input `systemPrompt` is the composed text, whole, for every consumer. `system_prompt_digest` is the digest of its output before the redaction. Reason: the redaction marker holds a random tag per session. Constraint: `finalPrompt` keeps the unresolved-part rule; `systemPrompt` leaves; the composed text of each consumer of today stays byte-equal.
-9. **L3-D9.** The start preconditions are `workspace_directory`, `git_worktree` and `git_clean`. The coding implementation profiles declare all three. `re@1`, `env@1`, `ops@1` and `plan@1` declare `workspace_directory`. Each root must be the top level of a git worktree. Constraint: `git` runs with `isolatedGitEnvironment(childEnvironment({ ...input.childEnvironment, PATH }))` and `--no-optional-locks`. `PATH` is the `PATH` of the input, else of the runtime process. The check runs no fsmonitor command and no hook, and it keeps the filter drivers. The reason holds no path.
+9. **L3-D9.** The start preconditions are `workspace_directory`, `git_worktree` and `git_clean`. The coding implementation profiles declare all three. `re@1` and `env@1` declare `workspace_directory`, and so do `ops@1` and `plan@1` of the Workbench branch. Each root must be the top level of a git worktree. Constraint: `git` runs with `isolatedGitEnvironment(childEnvironment({ ...input.childEnvironment, PATH }))` and `--no-optional-locks`. `PATH` is the `PATH` of the input, else of the runtime process. The check runs no fsmonitor command and no hook, and it keeps the filter drivers. The reason holds no path.
 10. **L3-D10.** The guard order of a contract session is `homeRelativeCwd`, `toolAllowlist`, `markerRestore`, `checkoutConfinement`, `pinnedLayersHook`, the consumer extensions, `inputRedaction`, `outputFinding`. Constraint: the consumer gives only its extensions, and each guard fails closed.
 11. **L3-D11.** `markerRestore` blocks a tool call whose input holds a known secret as raw text, in every tool, with the matcher `secretMatcher` of the session. Reason: it keeps AH-Q3 after R2-H. Constraint: the block changes no recorded response.
 12. **L3-D12.** On the contract path, the build change of R2-H removes the three redactions of LLM output and keeps the input redaction, the restore and `exitText`. The rotate warning has the rule `llm_credential` and one count per `assistant` message. Constraint: `output_found` is new; only `outputFinding` writes it.
@@ -1093,10 +1104,10 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 17. **L3-D17.** The class of a provider error is `retryable` only when `isContextOverflow` rejects it and `isRetryableAssistantError` accepts it. The failure kind is `providerFailureOf` of the redacted error text. Constraint: the contract retries nothing; the retries of pi stay.
 18. **L3-D18.** Confinement is the property `confined` of the profile. Constraint of the Workbench change: the input gains `workspace.confine`. A consumer can add the confinement with it and can never remove it. `TOOL_CATALOG` gains `bash` with an empty location list. The sandbox, not the confinement, confines `bash`.
 19. **L3-D19.** A child process gets only the names of `input.childEnvironment`, less the names that `childEnvironment` removes, plus the pi `PATH`. This rule holds today. Constraint: L3-U11 guards it as a regression rule; the runtime process and pi do not read the input.
-20. **L3-D20.** The Project Service opens `env@1` through the contract with a `memory` session. Its `end` callback calls `endAfterTurn`, which keeps the end of today after any batch that holds a passed `environment_write`. Reason: `finishTurn` is the exported pi mechanism that gives this end with no abort, and `terminate: true` needs every result of a batch. Constraint: no consumer patches `finishTurn`; only the contract sets it. Each `send` clears the flag at its start.
-21. **L3-D21.** After the merge, the runtime `bash` is the one `bash` of every consumer, and the input gains `bashSandbox`. The Workbench and the worker are its readers. Constraint: the sandbox of the branch keeps its strength. A confined session of a profile that declares `bash` with no `bashSandbox` makes the open throw `agent.sandbox_missing`. L5 gives the scope of the worker; the Workbench change starts only after the merge of `feature/workbench-v2`.
+20. **L3-D20.** The Project Service opens `env@1` through the contract with a `memory` session. Its `end` callback calls `endAfterTurn`, which keeps the end of today after the tool batch of each of the five cases that call `end()`. Reason: `finishTurn` is the exported pi mechanism that gives this end with no abort, and `terminate: true` needs every result of a batch. Constraint: no consumer patches `finishTurn`; only the contract sets it. Each `send` clears the flag at its start.
+21. **L3-D21.** At the rebase of the Workbench branch, the runtime `bash` is the one `bash` of every consumer, and the input gains `bashSandbox`. The Workbench and the worker are its readers. Constraint: the sandbox of the branch keeps its strength. A confined session of a profile that declares `bash` with no `bashSandbox` makes the open throw `agent.sandbox_missing`. The rebase gives the scope of the worker on the V3 worker port.
 22. **L3-D22.** Every contract session holds the pinned layers. `send(text, { work })` redacts `work` and sets the work pin; `null` clears it. `run agent` passes its message as `work`. Reason: a pi compaction replaces the first user message with a model summary. Constraint: only `pinnedLayersHook` adds the work pin, at the event `context`, and it never writes the session file. The system prompt pin applies to every consumer, and no consumer sets it.
-23. **L3-D23.** The session record has three kinds now: `new_file`, `directory` and `memory`. Constraint: `new_file` uses `SessionManager.open` with the explicit path and the workspace as `cwd`, and the contract asserts that no entry exists at the path. The Workbench change adds `resume`, which skips `git_clean` and emits the stored entries after `exitValue`.
+23. **L3-D23.** The session record has three kinds now: `new_file`, `directory` and `memory`. Constraint: `new_file` uses `SessionManager.open` with the explicit path and the workspace as `cwd`, and the contract asserts that no entry exists at the path. The Workbench branch adds `resume` at its rebase, which skips `git_clean` and emits the stored entries after `exitValue`.
 24. **L3-D24.** The contract never clamps the reasoning effort. An unsupported level throws `agent.level_unsupported` at the open. Constraint: the consumer checks the level first, as `run agent` does ([L2 Model selection](L2-agent-cli.md#model-selection), rule 6).
 25. **L3-D25.** Each failure of the open that is no refusal throws `AgentOpenError` with one of the codes `agent.tool_undeclared`, `agent.level_unsupported` and `agent.open_failed`. An abort during the open gives `agent.open_failed` with the message `aborted`. Constraint: the message passes `exitText`; a failed open leaves no session file.
 26. **L3-D26.** Until L5 and the Workbench change, `openSessionRuntime` and `openSession` keep `OpenSessionInput` and `SessionRedactionInput` of today, with the state of `redaction.ts`. Constraint: `sessionParts` adds `homeRelativeCwd`, `markerRestore`, the caller hooks, `inputRedaction` and `assistantRedaction`, and no guard that a caller adds. `countTurns`, `modelOutput`, `take` and `takeTimeout` stay until L5.
@@ -1111,9 +1122,11 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 35. **L3-D35. Applied to L1.** The tool inventory row of `agentPort` states that `agent-contract.ts` is the agent part, and that the rest of `agent-port.ts` becomes the worker port `agent.open`.
 36. **L3-D36. Applied to L2.** A failed open gives `cli.run.agent.open_failed` with the `reason` row, class `terminal`, exit `1` and no result. A signal during the open keeps the rule of L2 Shutdown, rule 5: exit `2` and no result.
 37. **L3-D37.** At the Workbench change, the runtime `bash` of the Workbench kills the process group at the end of each command, as for every other consumer, with the 600 s command limit (Ulrich, 2026-11-22). Constraint: no process of a Workbench command outlives that command.
-38. **L3-D38.** At the Workbench change, the Workbench gives each new `swe@1` session its own new directory, with `git init` and one empty commit (Ulrich, 2026-11-22). A resume of that session uses the same directory and skips `git_clean`. Constraint: two sessions never share a working directory. When a Workbench session later binds a repository, its directory is a `git worktree` of that repository.
+38. **L3-D38.** A Workbench `swe@1` session passes the coding preconditions (Ulrich, 2026-11-22). Constraint: the Workbench branch owns the directory rule of that session, and [HANDOFF.md](../HANDOFF.md#workbench-service), Workbench Service, records it.
 39. **L3-D39.** A new engine lint rule `kanthord/no-inline-object-type` refuses an object type literal in a union member (`TSUnionType > TSTypeLiteral`) and in a property type (`TSPropertySignature > TSTypeAnnotation > TSTypeLiteral`). It applies to each file that the V3 work adds or rewrites, and each build step of [L6](L6-migration.md) lists those files. Constraint: the rule adds no entry to `eslint-suppressions.json`. Each type of this page uses named interfaces and a const object for each kind. The other sites of today go to [HANDOFF.md](../HANDOFF.md#architecture), Architecture.
 40. **L3-D40.** The contract fixes the input type, the output type and the invariants of [Output](#output). It does not fix the model text, the tool calls or the end that a run reaches. Constraint: an acceptance check asserts an exact model-dependent value only through the LLM stub.
+41. **L3-D41.** The Agent V2 and Worker V3 work merges into `main` first, and `feature/workbench-v2` rebases onto it after this round (Ulrich, 2026-11-22). The Workbench of `main` keeps `openSession` with the interim redaction until that rebase. Constraint: each branch-only item lies in [Constraints on the Workbench branch at rebase](#constraints-on-the-workbench-branch-at-rebase), and the rest of this page describes `main`.
+42. **L3-D42. Applied to L1.** The Workbench change sentences, L1-D8 and AC19 state the merge order of L3-D41. AC19 runs on the branch after the rebase, owned by the Workbench change. The hub round order holds the rebase as step 7.
 
 ## Open questions for Ulrich
 
