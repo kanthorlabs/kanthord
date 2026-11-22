@@ -64,9 +64,11 @@ Calibration finds the level of the eval model before the comparison.
 7. **No verdict.** Calibration ends with no verdict in each of these conditions:
    - the pass share is above the band at the lowest step, or below the band at the highest step;
    - the next level is a level that the evaluation measured before;
-   - no run counts (the band verdict `none`).
-8. The calibration line of the report names the next level, or "no verdict".
-9. The runs of a calibration that does not fix the level count toward the cost cap, but not toward the comparison.
+   - no run counts (the band verdict `none`);
+   - a planned run of the level has no line in `checks.jsonl`.
+8. **Fixed level.** The fixed level is the level of the last calibration call with the band verdict `in`.
+9. The calibration line of the report names the fixed level for `in`, the next level for `above` or `below`, or "no verdict".
+10. The runs of a calibration that does not fix the level count toward the cap, but not toward the comparison.
 
 ### Confirming check
 
@@ -75,7 +77,8 @@ Ulrich ruled on 2026-11-22: the production model is `anthropic/claude-sonnet-5-5
 1. Each role profile R that passes rules 1 and 2 of the [Exit rule](#exit-rule) runs on the production model. It runs once on each case of its group. `swe@1` runs once on the same cases.
 2. R passes the confirming check when it passes no fewer runs than `swe@1`.
 3. **Void check.** The confirming check gives no verdict when `swe@1` passes 0 runs, or when a run of the check ends `budget_end`. Reason: with no pass of `swe@1`, or with a run that the budget cut, the comparison shows nothing.
-4. The [cost cap](#run-budget) of the evaluation covers the confirming check. Each run gets the task budget of its case, scaled to the production model ([Run budget](#run-budget), rule 3).
+4. The [cap](#run-budget) of the evaluation covers the confirming check. Each run gets the case budget of its case, scaled to the production model ([Price ratio](#price-ratio)).
+5. **Start.** The `--confirm` call exits `1` and starts no run when a planned run of the comparison has no line in `checks.jsonl`. It exits `0` and starts no run when no R passes rules 1 and 2.
 
 ## Evaluation set
 
@@ -105,7 +108,7 @@ Ulrich ruled on 2026-11-22: the evaluation uses the KanthorD XDG directories. `d
 
 ### Configuration
 
-Ulrich ruled on 2026-11-22: the cost cap is a value that Ulrich can change. `config.json` holds exactly two keys.
+Ulrich ruled on 2026-11-22: the cap is a value that Ulrich can change. `config.json` holds exactly two keys.
 
 | Key          | Value                                                                                      | Question it answers                  |
 | ------------ | ------------------------------------------------------------------------------------------ | ------------------------------------ |
@@ -114,8 +117,18 @@ Ulrich ruled on 2026-11-22: the cost cap is a value that Ulrich can change. `con
 
 - `cap_usd` is a hypothesis. Ulrich sets it again from the measured costs of the report ([`report.sh`](#reportsh), the cost block).
 - `run.sh` and `report.sh` read the file at the start of each call. A resumed evaluation reads the value of that time.
-- `evaluation.mjs` reads the price of `base_model` with the exported pi API: `ModelRuntime.getModel` of the runtime of [Credential](#credential), rule 3. The price of today is 0.30 input, 1.20 output, 0.006 cache read and 0 cache write per MTok.
-- **Refusals.** `run.sh` and `report.sh` exit `1` before each run when the file is absent, is no JSON object, holds another key, holds a `cap_usd` that is not a number above 0, or names a `base_model` that pi does not give. They also exit `1` when the base model has no input or output price, or has price tiers. stderr names the file and the key.
+- **Price read.** `evaluation.mjs` reads each price with the exported pi API and no credential file:
+  - `ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null, allowModelNetwork: false, refreshOnCreate: false })`. `ModelRuntime` is an export of `@earendil-works/pi-coding-agent`, and `InMemoryCredentialStore` is an export of `@earendil-works/pi-ai`.
+  - `getModel(provider, id)` gives the model. The price is its `cost`: `input`, `output`, `cacheRead`, `cacheWrite` and `tiers`.
+  - The same read gives the price of `base_model` and of the `--model` of the call.
+- **Refusals.** `run.sh` and `report.sh` exit `1` at the start of the call in each of these conditions:
+  - the file is absent, or is no JSON object;
+  - the file holds another key;
+  - `cap_usd` is not a number above 0;
+  - pi gives no model for `base_model`;
+  - the base model has no `input`, `output` or `cacheRead` price.
+
+  stderr names the file and the key. A refused call writes no line to `calls.jsonl`.
 
 ### Case folder
 
@@ -124,14 +137,14 @@ Ulrich ruled on 2026-11-22: the cost cap is a value that Ulrich can change. `con
 | `case.json`     | `group`, `commit`, `wall`, `usd`, `allowed` and `tests`. [Unit-level rules](#unit-level-rules), rule 1, holds the schema        |
 | `repo.bundle`   | A git bundle of the case repository, with no remote. It holds only the commit C of `commit` and its ancestors, and no other ref |
 | `setup.sh`      | The dependency install for one workspace. It reads only the case folder and the shared fixture folder, and it uses no network   |
-| `task.md`       | The task text, the `--prompt` value                                                                                             |
+| `task.md`       | The case text, the `--prompt` value                                                                                             |
 | `repository.md` | The Repository prompt of the case: a heading, one blank line and the text                                                       |
 | `binding.md`    | The Binding prompt of `swe@1` for the case, in the same form                                                                    |
 | `check/`        | The hidden checks: `check.sh`, the hidden tests and, for the group `test`, the mutants                                          |
 
 - The case id is the name of the case folder.
 - `group` is `backend`, `frontend` or `test`. The group gives the role profile of the case ([Groups](#groups)).
-- `wall` is the wall budget of the case, for example `30m`. `usd` is the cost budget of the case in base dollars, for example `0.5usd` ([Run budget](#run-budget)). `allowed` is the list of path globs that the run can change. `tests` is the list of path globs of the test files of the case repository.
+- `wall` is the wall budget of the case, for example `30m`. `usd` is the cost budget of the case in base dollars, for example `0.5usd` ([Price ratio](#price-ratio)). `allowed` is the list of path globs that the run can change. `tests` is the list of path globs of the test files of the case repository.
 - `setup.sh` installs each dependency into a path that the `.gitignore` of the case repository names. So the start precondition `git_clean` of [L3](L3-agent.md#start-preconditions) still passes.
 - No file of `check/` lies in a workspace before the hidden checks run.
 
@@ -144,9 +157,12 @@ Ulrich ruled on 2026-11-22: the cost cap is a value that Ulrich can change. `con
 | `test`     | `te@1`       | 5     | A synthetic module with 2 or 3 mutants for each case                                                                                               | The new tests pass on the reference code and fail on each mutant                                                                                               |
 
 - The `frontend` fixture reproduces the dogfood finding of [E1](L1-model.md#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule): a session that does not follow the existing interface fails the case.
-- **Arbitrary-value rule.** The rule reads each added line of a file that ends in `.tsx`, `.jsx` or `.html`. It splits each class token at each `:` outside brackets. The last part is the utility. The rule fails when a utility holds `[`.
+- **Arbitrary-value rule.** The rule reads each added line of a file that ends in `.tsx`, `.jsx` or `.html`.
+  - A class token is a token between spaces inside a string literal or a template literal of the line. A token outside a literal is no class token.
+  - The rule splits each class token at each `:` outside brackets. The last part is the utility. The rule fails when a utility holds `[`.
   - Fail: `w-[calc(100%-1rem)]`, `text-[var(--x)]`, `bg-[#fff]`, `[mask-type:luminance]`.
   - Pass: `data-[state=open]:p-2`, `[&>*]:p-2`, `group-[.is-open]:hidden`. The bracket lies in a variant, not in the utility.
+  - Pass: `items[0]` and `useState<string[]>([])` outside a literal.
   - `evaluation.mjs` owns the rule ([Unit-level rules](#unit-level-rules), rule 7).
 - The evaluation set holds no review case. [L8](L8-worker-evaluation.md) owns the review cases.
 
@@ -165,7 +181,14 @@ Ulrich ruled on 2026-11-22: the cost cap is a value that Ulrich can change. `con
 
 The runner does each step.
 
-1. **Workspace.** Make the run directory and a new workspace root. Clone `repo.bundle` into `<workspace root>/w` and check out C: `git clone --no-hardlinks "$CASE/repo.bundle" "$ROOT/w"` and `git -C "$ROOT/w" checkout --detach "$C"`. No two runs share one clone.
+1. **Workspace.** Make the run directory and a new workspace root. No two runs share one clone. Run these commands:
+   - `git clone --no-hardlinks "$CASE/repo.bundle" "$ROOT/w"`;
+   - `git -C "$ROOT/w" checkout --detach "$C"`;
+   - `git -C "$ROOT/w" remote remove origin`;
+   - `git -C "$ROOT/w" reflog expire --expire=now --all`.
+
+   Reason: the clone writes the absolute path of the bundle into the remote and the reflog. After the last two commands, the workspace holds no path of the case folder.
+
 2. **Setup.** Run `setup.sh` with `w` as the current directory. An exit other than `0` stops the evaluation.
 3. **Credential refresh.** For an `oauth` entry, refresh the entry ([Credential](#credential), rule 3).
 4. **Run.** Call `run agent` with the same task, context, model selection and budget for each profile. Only the profile, the workspace and the session file change. `$RUN` is the run directory, and `$RESULTS` is the results directory.
@@ -191,32 +214,59 @@ The runner does each step.
 
 (G2, G6)
 
-1. **Task budget.** Ulrich ruled on 2026-11-22: each case sets its task budget in `case.json`, a wall budget `wall` and a cost budget `usd`. For reference, the largest Worker V2 execution had a list price of 1.09 usd for 3 units in 35 minutes, on Haiku 5.5 (`baseline.md`, execution `T8TWV9P5`).
+1. **Case budget.** Ulrich ruled on 2026-11-22: each case sets its case budget in `case.json`, a wall budget `wall` and a cost budget `usd`. For reference, the largest Worker V2 execution had a list price of 1.09 usd for 3 units in 35 minutes, on Haiku 5.5 (`baseline.md`, execution `T8TWV9P5`).
 2. **No turn limit.** The evaluation run has no turn limit. The wall budget and the cost budget of the case bound each run ([L2 Budget](L2-agent-cli.md#budget), rule 8).
-3. **Scaled cost budget.** `usd` is in base dollars. The runner passes `--budget <usd × r>usd`, rounded up to the next 0.01. `r` is the input price of the model divided by the input price of `base_model`. For a model with price tiers, the runner uses the input price of the tier above 100k input tokens. Reason: an agent session passes 100k input tokens, and input tokens make most of its cost. For example, `r` is 1 for the second eval model, 1.67 for Haiku 5.5 and 6.67 for Sonnet 5.5.
-4. **No price.** The runner passes no cost budget when the provider is `openai-compatible`. Reason: an `openai-compatible` model has no price, so `run agent` refuses a cost budget for it with `cli.run.agent.budget_unpriced` ([L2 Budget](L2-agent-cli.md#budget), rule 6). Another model with no price gets the cost budget, so `run agent` refuses it and the evaluation stops.
+3. **Scaled cost budget.** `usd` is in base dollars. A run of the model m gets `--budget <usd × r(m)>usd` ([Price ratio](#price-ratio)).
+4. **No price.** The runner passes no cost budget when the model has no `input` price, for example an `openai-compatible` model. Reason: `run agent` refuses a cost budget for a model with no price, with `cli.run.agent.budget_unpriced` ([L2 Budget](L2-agent-cli.md#budget), rule 6). Such a run has the base cost `0`.
 5. **Wall limit.** `wall` is at most `2h`, the default wall budget of `run agent`.
-6. **Base cost.** The base cost of a run is its `usage` priced at the price of `base_model`: `input`, `output`, `cache_read` and `cache_write`, each at its own price. So a model with a higher price spends more real dollars than its base cost for the same tokens. The base cost of a run of the [L7 fixtures](#l7-fixtures) follows from the `usage` of the stub.
-7. **Total cap.** Ulrich ruled on 2026-11-22: one cap `cap_usd` of [Configuration](#configuration) covers calibration, the comparison and the confirming check. The sum is the base cost of each line of `results.jsonl` of the evaluation, each calibration and each attempt included.
-8. **Stop at the cap.** Each run reserves the `usd` of its case, also when the runner passes no cost budget (rule 4). The runner starts a run only when the sum plus that reserve is at or below `cap_usd`. Else it stops, writes the report and exits `4`. An evaluation that stops at the cap gives no verdict.
+6. **Base cost.** The base cost of a run of the model m is its `list_price_usd` divided by `r(m)`. So a model with a higher price spends more real dollars than its base cost.
+7. **One cap.** Ulrich ruled on 2026-11-22: one cap `cap_usd` of [Configuration](#configuration) covers calibration, the comparison and the confirming check. The sum is the base cost of each line of `results.jsonl` of the evaluation, each calibration and each attempt included.
+8. **Start gate.** Each run reserves the `usd` of its case, also when the runner passes no cost budget (rule 4). The runner starts a run only when the sum plus that reserve is at or below `cap_usd`. Else it writes the report and exits `4`. The cap is a start gate: the last run can pass the cap. A stop at the cap leaves a planned run with no check line, and the [Exit rule](#exit-rule) decides the verdict.
 9. A subscription entry pays no list price, but the cap applies to the base cost ([L2 Budget](L2-agent-cli.md#budget), rule 5).
 10. Ulrich approves `cap_usd` before the first live run.
 
+### Price ratio
+
+Ulrich ruled on 2026-11-22: one price ratio converts between the base model and the run model. The ratio assumes a cache-read hit of 80%.
+
+1. **Blended price.** For a model m, in USD per million input-side tokens:
+
+   ```text
+   blend(m) = 0.8 × cacheRead(m) + 0.2 × input(m) + 0.02 × output(m)
+   ```
+
+   - 0.8 and 0.2: the assumption of Ulrich, 80% cache-read hits on the input side.
+   - 0.02: the output tokens for each input-side token in the Worker V2 baseline. The baseline holds 584,888 output tokens against 30.31M input-side tokens, which is 1.9%.
+   - For a model with price tiers, each price is the price of the highest tier. Reason: an agent session passes the tier threshold.
+
+2. **Ratio.** `r(m) = blend(m) / blend(base_model)`. `r` is the exact quotient, with no rounding.
+3. **Scaled budget.** The runner passes `--budget <usd × r(m)>usd`. An exact multiple of 0.01 stays. Else the value rounds up to the next 0.01. The runner computes the product in cents with integer arithmetic, so `0.3usd` at `r` 1 stays `0.3usd`.
+4. The three constants are part of this rule. `config.json` does not hold them.
+
+| Model                            | `cacheRead` | `input` | `output` | `blend` | `r`   |
+| -------------------------------- | ----------- | ------- | -------- | ------- | ----- |
+| DeepSeek V4.1 Flash, OpenRouter  | 0.006       | 0.30    | 1.20     | 0.0888  | 1     |
+| Haiku 5.5, tier above 100k input | 0.05        | 0.50    | 2.50     | 0.19    | ~2.14 |
+| Sonnet 5.5                       | 0.20        | 2.00    | 10.00    | 0.76    | ~8.56 |
+
+- The prices are the pi `1.1.0` catalog prices per MTok.
+- Check: the baseline Haiku list price, 1.98 usd, divided by the exact base price of its tokens, 0.879 usd, is 2.25. That is near 2.14.
+
 ### Cost arithmetic
 
-These estimates use the Worker V2 baseline of Haiku 5.5 at `medium`: 1.98 usd list price for 21 units, a mean of 0.094 usd for each unit (`baseline.md`). One run of one case counts as one unit.
+These estimates use the Worker V2 baseline of Haiku 5.5 at `medium`: 1.98 usd list price for 21 units (`baseline.md`). One run of one case counts as one unit. The baseline tokens are 718 input, 584,888 output, 29,466,368 cache read and 842,513 cache write.
 
-- The base price divided by the Haiku 5.5 price above 100k input tokens is 0.6 for input, 0.48 for output and 0.12 for cache read. The baseline holds no split of the token types. So the base cost of one Haiku run is about 0.011 to 0.056 usd.
-- The confirming check estimate assumes that a Sonnet run uses the tokens of a Haiku run. So a Sonnet run has the same base cost. Its list price is about 0.4 to 1.9 usd.
+- One Haiku run: about 0.094 usd list price, and 0.094 / 2.14 = about 0.044 base dollars.
+- One Sonnet run with the same tokens: 13.85 usd for the 21 units at the Sonnet price, so about 0.66 usd list price, and 0.66 / 8.56 = about 0.077 base dollars.
 
-| Phase                    | Runs                                                        | Base cost        | List price             |
-| ------------------------ | ----------------------------------------------------------- | ---------------- | ---------------------- |
-| Calibration at one level | 15 runs of `swe@1`                                          | about 0.2 to 0.8 | about 1.4 usd          |
-| Comparison               | 15 runs of `swe@1` (repeat 2), 30 runs of the role profiles | about 0.5 to 2.5 | about 4.2 usd          |
-| Confirming check, one R  | 5 runs of R and 5 runs of `swe@1` on Sonnet 5.5             | about 0.1 to 0.6 | about 4 usd to 19 usd  |
-| Full plan, three R       | 90 runs                                                     | about 1.0 to 5.0 | about 18 usd to 63 usd |
+| Phase                    | Runs                                                        | Base cost  | List price |
+| ------------------------ | ----------------------------------------------------------- | ---------- | ---------- |
+| Calibration at one level | 15 runs of `swe@1`                                          | about 0.66 | about 1.41 |
+| Comparison               | 15 runs of `swe@1` (repeat 2), 30 runs of the role profiles | about 1.98 | about 4.24 |
+| Confirming check, one R  | 5 runs of R and 5 runs of `swe@1` on Sonnet 5.5             | about 0.77 | about 6.6  |
+| Full plan, three R       | 90 runs                                                     | about 4.96 | about 25.4 |
 
-- `cap_usd` 15 thus holds the full plan in base cost. The list price of the confirming check is not capped in list price. The report shows it for each phase.
+- `cap_usd` 15 thus holds the full plan in base cost. The report shows the base cost and the list price of each phase.
 
 ## Pass rule
 
@@ -250,7 +300,7 @@ The rule is a heuristic. pi records the tool call arguments as the model wrote t
 
 - the absolute path of the evaluation set, of the results directory and of the case folder;
 - the path parts `evaluation/agent`, `evaluation/runs` and `/check/`;
-- the file names `check.sh`, `checks.jsonl`, `results.jsonl`, `session.jsonl` and `stderr.txt`.
+- the file names `check.sh`, `checks.jsonl`, `results.jsonl`, `calls.jsonl`, `report.md`, `config.json`, `session.jsonl` and `stderr.txt`.
 
 A path that a shell builds from parts, a glob or a cut output can pass the search.
 
@@ -265,17 +315,18 @@ Reason: a lost run then never helps the role profile. The rule keeps a profile o
 
 ### Exit codes of a run
 
-| Exit of `run agent`                           | Runner action                                                                                                                               |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0`                                           | The diff rules and the hidden checks decide the pass                                                                                        |
-| `4`, `5`                                      | The run fails. Its checks still run, so the check record exists                                                                             |
-| `75`                                          | The run starts again with a new session file and a new workspace, as the next attempt. The third exit `75` in one call stops the evaluation |
-| `1`, `2`                                      | The evaluation stops                                                                                                                        |
-| stderr holds `cli.run.agent.prompt_text_path` | The evaluation stops. Reason: a prompt file did not reach the run ([L2 Text or path](L2-agent-cli.md#text-or-path))                         |
+| Exit of `run agent`                           | Runner action                                                                                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `0`                                           | The diff rules and the hidden checks decide the pass                                                                                                   |
+| `4`, `5`                                      | The run fails. Its checks still run, so the check record exists                                                                                        |
+| `75`                                          | The run starts again with a new session file and a new workspace, as the next attempt. The third exit `75` of one run in one call stops the evaluation |
+| `1`, `2`                                      | The evaluation stops                                                                                                                                   |
+| stderr holds `cli.run.agent.prompt_text_path` | The evaluation stops. Reason: a prompt file did not reach the run ([L2 Text or path](L2-agent-cli.md#text-or-path))                                    |
 
 - Each line of `results.jsonl` stays, the lines of a retried run included ([L2 Comparison rule](L2-agent-cli.md#comparison-rule)).
-- **Stop.** A stopped evaluation writes the report. The runner exits `1`.
-- **Resume.** A later call with the same evaluation id and phase resumes the evaluation. The resume key of a run is the phase, the level, the case, the agent and the repeat. The runner skips each run whose key has a line in `checks.jsonl`. A run that starts again takes the next free attempt number, so no session file is used twice.
+- **Stop.** A stopped evaluation writes the report. The runner exits `1`. A stop leaves a planned run with no check line, and the [Exit rule](#exit-rule) decides the verdict.
+- **Resume.** A later call with the same evaluation id and phase resumes the evaluation. The resume key of a run is the phase, the level, the case, the agent and the repeat. The runner skips each run whose key has a line in `checks.jsonl`. A run that starts again takes the next free attempt number, so no run uses a session file twice.
+- **Planned runs.** The planned runs of a call are the runs that its phase names in [`run.sh`](#runsh). The planned runs of R are its `compare` runs, the `swe@1` runs of the comparison on the group of R, and, when R passes rules 1 and 2 of the [Exit rule](#exit-rule), the `confirm` runs of R and of `swe@1`.
 
 ### Check record
 
@@ -292,15 +343,14 @@ Each line of `checks.jsonl` holds `phase`, `case`, `repeat`, `session`, `pass` a
 
 ### Call record
 
-Each call of `run.sh` appends one line to `<results directory>/calls.jsonl` at its end. The line holds `phase`, `level`, `cap_usd`, `exit` and `unstarted`.
+Each call of `run.sh` that passes its start checks appends one line to `<results directory>/calls.jsonl` at its end. The line holds `phase`, `cap_usd`, `exit` and `unstarted`. A call that a start check or a configuration refusal ends writes no line.
 
-| Field       | Reader                                                               |
-| ----------- | -------------------------------------------------------------------- |
-| `phase`     | The report: the cost block of each phase                             |
-| `level`     | The report: the cost block of each phase                             |
-| `cap_usd`   | The report: the cap that each phase ran under                        |
-| `exit`      | The report: "no verdict" after a stop (`1`) or a cap stop (`4`)      |
-| `unstarted` | The report: the count of planned runs of the call that did not start |
+| Field       | Reader                                                                                    |
+| ----------- | ----------------------------------------------------------------------------------------- |
+| `phase`     | The report: the cost block of each phase                                                  |
+| `cap_usd`   | The report: the cap that each phase ran under                                             |
+| `exit`      | The report: it selects the calls with exit `4`                                            |
+| `unstarted` | The report: the count of planned runs that the cap did not start, from the last such call |
 
 ## Exit rule
 
@@ -313,8 +363,8 @@ Ulrich ruled on 2026-11-22: the exit rule is fixed before the first run, and the
 3. **Confirming check.** R passes the [confirming check](#confirming-check).
 
 - R stays in the catalog when rules 1, 2 and 3 hold. Else R leaves the catalog ([L1-D16](L1-model.md#decisions)).
-- **No verdict.** `report.sh` gives no verdict for R in each of these conditions:
-  - a planned run of R or of `swe@1` on the group of R has no line in `checks.jsonl`;
+- **No verdict.** `report.sh` gives no verdict for R in each of these conditions. This list is the only no-verdict rule of a role profile.
+  - a planned run of R has no line in `checks.jsonl` ([Planned runs](#exit-codes-of-a-run));
   - the confirming check of R is void.
 
 ## Runner
@@ -342,6 +392,7 @@ run.sh --model <provider>/<model>:<level> --evaluation <id> [--calibrate | --con
 - A comparison call exits `1` and starts no run in each of these conditions:
   - the last calibration of the evaluation has no band verdict `in`;
   - `--model` is not the model and the level of that calibration.
+- A `--confirm` call follows the start rule of [Confirming check](#confirming-check), rule 5.
 - The runner refuses `NODE_USE_ENV_PROXY` in its environment and `--use-env-proxy` in `NODE_OPTIONS` with exit `1` ([Credential](#credential), rule 4).
 - The runner exits `0` when each run of the call ends, `1` at a stop, and `4` at the cap.
 
@@ -364,16 +415,22 @@ report.sh --evaluation <id>
    It refuses a file that breaks a check. It exits `1` and names the first two lines.
 
 4. It writes `report.md` in the results directory:
-   - one calibration line for each level: the level, the pass share, the band verdict `in`, `above`, `below` or `none`, and the next level or "no verdict";
-   - one table for each group, from the comparison set, with these columns: profile, counted runs, passes, pass rate and passes for each case; then the count of `budget_end`, of `failed` and of contaminated runs; then the median `duration_ms`, the median `tool_calls` and the sum of the base cost;
-   - one verdict line for each role profile: `keep`, `leave` with the number of each exit rule that fails, or "no verdict";
+   - one calibration line for each level: the level, the pass share, the band verdict `in`, `above`, `below` or `none`, and the text of [Calibration](#calibration), rule 9;
+   - one table for each group that has a case, from the comparison set, with these columns: profile, counted runs, passes, pass rate and passes for each case; then the count of `budget_end`, of `failed` and of contaminated runs; then the median `duration_ms`, the median `tool_calls` and the sum of the base cost;
+   - one verdict line for each role profile of a group that has a case: `keep`, `leave` with the number of each exit rule that fails, or `no verdict`;
    - the cost block.
+   - The pass share shows one fraction digit, for example `33.3%`. The band compares the exact fraction.
 5. **Cost block.** For each phase and each model, the block holds:
-   - the sum of the base cost and the sum of `list_price_usd`;
-   - the mean and the maximum base cost of one run;
+   - the sum of `list_price_usd`, the `r` of the model and the sum of the base cost;
+   - the mean and the maximum base cost of one run, over the result lines that have a check line;
    - the `cap_usd` of each call of the phase, from `calls.jsonl`;
-   - the count of runs that the cap did not start;
-   - one total line: the projected base cost of the full plan, and the current `cap_usd`. The full plan is 15 calibration runs, 45 comparison runs and 10 confirm runs for each role profile. The projection is the count of planned runs times the mean base cost of one run.
+   - the `unstarted` of the last call of the phase with exit `4`, else `0`.
+
+   One total line follows: the projected base cost of the full plan, and the current `cap_usd`.
+   - The full plan follows the case count N of the set and the case count of each group: N calibration runs, 3N comparison runs, and 2 runs for each case of the group of each role profile in the confirming check.
+   - The projection is the count of planned runs times the mean base cost of one run.
+   - With no line, each sum is `0`, the mean and the maximum are `none`, and the projection is `none`.
+
 6. The report holds no text of a session file and no credential value.
 
 ## Credential
@@ -390,7 +447,7 @@ report.sh --evaluation <id>
    - A thrown error or an `undefined` result stops the evaluation with exit `1`. The runner prints no error text of pi. Reason: the error text of a refresh can hold the response body.
    - The refresh writes nothing to stdout or stderr. An `api_key` entry needs no refresh.
 4. **No proxy.** The refresh request uses no proxy of the environment. The runner refuses `NODE_USE_ENV_PROXY` and `--use-env-proxy`, as `run agent` does ([L2 Proxy settings](L2-agent-cli.md#proxy-settings)). `evaluation.mjs` sets no global dispatcher.
-5. **No write by the run.** The runner records the SHA-256 digest and the mode of the `auth.json` file before the run, after the refresh, and after the run. The two values after the refresh and after the run are equal, and the mode is `0600`. The configuration directory `<home>/.config/kanthord` gets no new entry. Else the evaluation stops.
+5. **No write by the run.** The runner records the SHA-256 digest and the mode of the `auth.json` file after the refresh and after the run. The two digests are equal, and the mode is `0600` at both times. The configuration directory `<home>/.config/kanthord` gets no new entry. Else the evaluation stops.
 6. **No credential in a session file.** After each run, the runner counts the credential values of the entry in the session file of the run. It counts before the next refresh. It prints only the count, as step 3 of the [L2 Gate procedure](L2-agent-cli.md#gate-procedure-the-real-credential-run) does. A count other than `0` stops the evaluation.
 7. **Provisioning.** Ulrich provisions each provider of the evaluation once, with these steps:
    1. Make a private temporary directory with mode `0700`.
@@ -411,7 +468,10 @@ Each check is an end-to-end test ([index](index.md#reading-order)). It runs the 
 L7 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
 
 - **Set.** An evaluation set repository E under `$XD/kanthord/evaluation/agent/`, where `XDG_DATA_HOME` is `$XD`.
-  - E holds three cases `b1`, `b2` and `b3` with the group `backend`, `wall` `10m` and `usd` `0.5usd`. The `allowed` of each case is `["ok.txt", "b2.txt", "b3.txt"]`.
+  - E holds three cases `b1`, `b2` and `b3` with the group `backend`, `wall` `10m` and `usd` `0.5usd`. The `allowed` of each case is `["ok.txt", "b2.txt", "b3.txt"]`, and its `tests` is `["test/**"]`.
+  - The `repo.bundle` of each case holds one commit C with the file `README.md` (text `case`) and a `.gitignore` with the line `node_modules/`. The author is the author of content rule 2. `commit` is the id of C.
+  - The `setup.sh` of each case exits `0` and writes no file.
+  - The `repository.md` of each case holds `# Repository` and the text `fixture`. The `binding.md` holds `# Binding` and the text `fixture`.
   - The `check.sh` of `b1` exits `0` when `w/ok.txt` holds `ok`. The `check.sh` of `b2` exits `0` when `w/b2.txt` holds `ok`. The `check.sh` of `b3` exits `0` when `w/b3.txt` holds `ok`. Else each exits `1`.
   - The `task.md` of each case holds `task b1`, `task b2` or `task b3`.
   - `config.json` holds `cap_usd` `15` and `base_model` `openrouter/deepseek/deepseek-v4.1-flash`.
@@ -424,6 +484,7 @@ L7 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
 - **Auth.** The `--auth` file of L2 at `$H/.config/kanthord/auth.json`, the default path, with K. The user database gives H as the home of the OS user. Its `OPENAI_COMPATIBLE_MODELS` lists `stub-1`, `stub-2` with `reasoning_levels` `["off", "high"]`, and `stub-3` (`approvedModelSchema` in `src/llm/platforms.ts`).
 - **Model.** `openai-compatible/stub-1:off`. The runner passes no cost budget for it ([Run budget](#run-budget), rule 4).
 - **R.** The results directory `$XS/kanthord/evaluation/runs/<evaluation-id>/`, where `XDG_STATE_HOME` is `$XS`.
+- **Own paths.** Each check and each variant has its own `$XD`, `$XS` and E, unless the check states otherwise. The two pairs of variant 1 of L7-AC2 share them.
 
 ### Checks
 
@@ -433,8 +494,8 @@ L7 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
    - Assert: each command exits `0`.
      - `R/results.jsonl` holds 12 lines: 6 of `swe@1` and 6 of `bee@1`. The lines of one case have one `input_digest`.
      - `R/checks.jsonl` holds 12 lines, one for each `session` of `results.jsonl`. The 2 lines of `swe@1` on `b1` have `pass` `true`. Each other line has `pass` `false`.
-     - `R/report.md` holds the calibration line with the pass share 33% and the band verdict `in`, and the verdict line `bee@1 leave` with the failed rules 1 and 2.
-     - The cost block holds the base cost of 12 runs of 1000 input and 100 output tokens, and the cap `15`.
+     - `R/report.md` holds the calibration line with the pass share `33.3%`, the band verdict `in` and the fixed level `off`, and the verdict line `bee@1 leave` with the failed rules 1 and 2.
+     - The cost block holds, for `calibrate` and for `compare`, the list price `0`, the `r` `none` and the base cost `0`. Reason: the stub model has no price ([Run budget](#run-budget), rule 4). It holds the cap `15` for each phase, and the projection `0`.
      - Each run directory under `R/calibrate-off/` and `R/compare-off/` holds `session.jsonl` and `stderr.txt`, and no other file.
      - No workspace root remains under `$XS/kanthord/evaluation/work/`. `git -C E status --porcelain` prints nothing.
 
@@ -454,18 +515,22 @@ L7 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
    - Fixture: Set, Auth, Model. Variant 1: Stub for `swe@1` calls `read` with the absolute path of `E/cases/b1/check/check.sh`, then calls `write` with `ok.txt` and the text `ok`, then answers `done`. Variant 2: the same, with `bash` and the command `cat ../../../runs/e3/calibrate-off/b1/swe@1-1-1/stderr.txt` in place of the `read`.
    - Command: `run.sh --model openai-compatible/stub-1:off --evaluation e3 --calibrate`, then `report.sh --evaluation e3`.
    - Assert: each command exits `0`. Each of the 3 lines of `R/checks.jsonl` has `contaminated` `true`. `R/report.md` shows 0 counted runs and 3 contaminated runs for `swe@1`, and the band verdict `none` with "no verdict".
+   - Variant 3: Stub for `swe@1` calls `bash` with the command `git remote -v; git reflog; cat .git/config`, then calls `write` with `ok.txt` and the text `ok`, then answers `done`. Command: as above, with the evaluation id `e3c`.
+     - Assert: each command exits `0`. Each of the 3 lines of `R/checks.jsonl` has `contaminated` `false`. The 3 session files hold no path of E.
 
 4. **L7-AC4. The cap stops the evaluation before a run.**
    - Fixture: Set, Stub, Auth, Model. The `usd` of each case is `16usd`.
    - Command: `run.sh --model openai-compatible/stub-1:off --evaluation e4 --calibrate`, then `report.sh --evaluation e4`.
-   - Assert: `run.sh` exits `4`. Stub receives no request. `R/results.jsonl` holds no line. `R/calls.jsonl` holds one line with `cap_usd` `15`, `exit` `4` and `unstarted` `3`. `R/report.md` holds the cost block with the base cost `0`, the cap `15` and 3 runs that the cap did not start, and no verdict line.
+   - Assert: `run.sh` exits `4`. Stub receives no request. `R/results.jsonl` holds no line. `R/calls.jsonl` holds one line with `phase` `calibrate`, `cap_usd` `15`, `exit` `4` and `unstarted` `3`.
+     - `R/report.md` holds the calibration line of `off` with the band verdict `none` and "no verdict", and the line `bee@1 no verdict`.
+     - Its cost block holds the base cost `0`, the mean `none`, the cap `15`, the `unstarted` `3` and the projection `none`.
 
 5. **L7-AC5. A credential value in a session file stops the evaluation.**
    - Fixture: Set, Stub, Auth, Model. Stub for `swe@1`: the answer text holds K once, after the `write` call.
    - Command: `run.sh --model openai-compatible/stub-1:off --evaluation e5 --calibrate`, then `report.sh --evaluation e5`.
    - Assert: `run.sh` exits `1` after the first run. Its stdout holds the count `1` and no other part of K. `R/results.jsonl`, `R/checks.jsonl`, `R/calls.jsonl`, `R/report.md` and each `stderr.txt` hold K zero times. Auth has the same SHA-256 digest and mode `0600` before and after. `E` holds K zero times.
 
-6. **L7-AC6. A role profile that wins on both models is kept.**
+6. **L7-AC6. A role profile that wins on both models stays.**
    - Fixture: Set, Stub, Auth.
    - Command: `run.sh --model openai-compatible/stub-2:off --evaluation e6 --calibrate`, then the same with no `--calibrate`, then `run.sh --model openai-compatible/stub-3:off --evaluation e6 --confirm`, then `report.sh --evaluation e6`.
    - Assert: each command exits `0`.
@@ -478,25 +543,29 @@ L7 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
 7. **L7-AC7. A second calibration level joins the same evaluation.**
    - Fixture: Set, Stub, Auth.
    - Command: `run.sh --model openai-compatible/stub-2:off --evaluation e7 --calibrate`, then `run.sh --model openai-compatible/stub-2:high --evaluation e7 --calibrate`, then `report.sh --evaluation e7`.
-   - Assert: each command exits `0`. `R/calibrate-off/` and `R/calibrate-high/` each hold 3 run directories. `R/checks.jsonl` holds 6 lines. `R/report.md` holds two calibration lines, one for each level.
+   - Assert: each command exits `0`.
+     - The run directories are `R/calibrate-off/b1/swe@1-1-1`, `R/calibrate-off/b2/swe@1-1-1`, `R/calibrate-off/b3/swe@1-1-1` and the same three under `R/calibrate-high/`.
+     - `R/checks.jsonl` holds 6 lines.
+     - `R/report.md` holds two calibration lines. Each has the pass share `33.3%` and the band verdict `in`. The line of `high` names the fixed level `high`.
 
 ### Unit-level rules
 
 These rules hold with no process and no LLM stub, so their tests are unit tests ([index](index.md#reading-order)). The owning module is `scripts/evaluation/agent/evaluation.mjs` of the engine, with its test file `evaluation.test.mjs`. [L6](L6-migration.md) assigns the exact file.
 
 1. **The case schema.** `case.json` holds exactly `group`, `commit`, `wall`, `usd`, `allowed` and `tests`. `group` matches a row of [Groups](#groups). `commit` is a full hexadecimal commit id. `wall` is a wall budget of [L2 Budget](L2-agent-cli.md#budget), rule 1, of at most `2h`. `usd` is a cost budget of rule 2. The schema refuses each other value.
-2. **The calibration band.** A pass share of 30% and of 80% is `in`. 29.9% is `below`. 80.1% is `above`. No counted run is `none`. The next level follows the steps of [Calibration](#calibration), rule 6. Each condition of rule 7 gives no verdict.
-3. **The exit rule.** Each rule of [Exit rule](#exit-rule): a margin of 3 and of 4, an equal count of case wins and losses, each case of [Lost runs](#lost-runs), a planned run with no check line, and a failed and a void confirming check.
+2. **The calibration band.** A pass share of 30% and of 80% is `in`. 29.9% is `below`. 80.1% is `above`. No counted run is `none`. The band compares the exact fraction, so 1 of 3 is `in`, and the report shows `33.3%`. The next level follows the steps of [Calibration](#calibration), rule 6. Each condition of rule 7 gives no verdict. The fixed level is the level of the last call with `in`.
+3. **The exit rule.** Each rule of [Exit rule](#exit-rule): a margin of 3 and of 4, an equal count of case wins and losses, each case of [Lost runs](#lost-runs), a planned run with no check line, and a failed and a void confirming check. The planned runs of R include its confirm runs when R passes rules 1 and 2.
 4. **The counted run.** Each string of [Counted run](#counted-run), and the join of a check line to its result line by `session`.
-5. **The cap.** [Run budget](#run-budget), rules 6 to 8: the base cost of a `usage` with each token type; the sum plus the reserve equal to `cap_usd` starts the run; one cent above stops the call. A run with no cost budget reserves the `usd` of its case.
-6. **The scaled budget.** [Run budget](#run-budget), rule 3: `r` of a model with tiers uses the tier above 100k input tokens; the result rounds up to the next 0.01.
+5. **The cap.** [Run budget](#run-budget), rules 6 to 8: the base cost is `list_price_usd / r`; a model with no price has the base cost `0`; the sum plus the reserve equal to `cap_usd` starts the run; one cent above stops the call. A run with no cost budget reserves the `usd` of its case.
+6. **The price ratio.** Each rule of [Price ratio](#price-ratio): `blend` of the three models of its table; the highest tier of a model with tiers; `r` 1 for the base model, so `0.3usd` stays `0.3usd`; an exact multiple of 0.01 stays, and another product rounds up to the next 0.01.
 7. **The diff rules.** Each rule of [Passed run](#passed-run), with each fail form and each pass form of the arbitrary-value rule of [Groups](#groups).
 8. **The configuration.** Each refusal of [Configuration](#configuration).
 9. **The report keys.** [`report.sh`](#reportsh), rule 3: the report refuses each break of each check. It accepts two cases with two budgets, and a confirm set with another model.
-10. **The run action.** Each row of [Exit codes of a run](#exit-codes-of-a-run): the exits `0`, `1`, `2`, `4`, `5` and `75`, the third exit `75` in one call, and `cli.run.agent.prompt_text_path` in stderr. The next free attempt number of a resumed run.
-11. **The start checks.** The refusal of `NODE_USE_ENV_PROXY` and of `--use-env-proxy` in `NODE_OPTIONS`. The refusal of a comparison call with no band verdict `in`, and with a `--model` that is not the calibrated model and level.
+10. **The run action.** Each row of [Exit codes of a run](#exit-codes-of-a-run): the exits `0`, `1`, `2`, `4`, `5` and `75`, the third exit `75` of one run in one call, and `cli.run.agent.prompt_text_path` in stderr. The next free attempt number of a resumed run.
+11. **The start checks.** The refusal of `NODE_USE_ENV_PROXY` and of `--use-env-proxy` in `NODE_OPTIONS`. The refusal of a comparison call with no band verdict `in`, and with a `--model` that is not the calibrated model and level. The exit `1` of a `--confirm` call on an incomplete comparison set, and the exit `0` with no run when no R passes rules 1 and 2. A refused call writes no line to `calls.jsonl`.
 12. **The credential state.** A changed digest, a changed mode, a mode other than `0600`, and a new entry in the configuration directory each stop the evaluation.
 13. **The refresh.** With an `oauth` entry that expires far in the future, the refresh writes no file, keeps the digest of `auth.json` and writes nothing to stdout or stderr. A thrown error and an `undefined` result each give the stop, with no error text of pi.
+14. **The price read.** The price read of [Configuration](#configuration) creates no entry in `<home>/.config/kanthord` and reads no credential file. It gives the base prices 0.30, 1.20 and 0.006.
 
 ### Rules with no check, and the reason
 
@@ -526,14 +595,17 @@ These rules hold with no process and no LLM stub, so their tests are unit tests 
 7. **L7-D7.** Each profile runs each case 2 times. A role profile stays when it passes at least 4 more of its 10 runs than `swe@1`, wins more cases than it loses and passes the confirming check (Ulrich, 2026-11-22). Constraint: the rule is fixed before the first run.
 8. **L7-D8.** The confirming check runs on `anthropic/claude-sonnet-5-5:high`, one run of each case of the group (Ulrich, 2026-11-22). Constraint: R passes no fewer runs than `swe@1`; the check is void when `swe@1` passes 0 runs or a run ends `budget_end`.
 9. **L7-D9.** The evaluation run has no turn limit. The wall budget and the cost budget of each case, fixed in `case.json`, bound each run (Ulrich, 2026-11-22). Constraint: `wall` is at most `2h`; the runner passes no cost budget for `openai-compatible`.
-10. **L7-D10.** One cap `cap_usd` in `config.json` covers each phase of one evaluation. The cap is in base dollars, the price of `base_model` `openrouter/deepseek/deepseek-v4.1-flash` (Ulrich, 2026-11-22). Constraint: `cap_usd` starts at 15 as a hypothesis, and Ulrich sets it again from the measured costs; the base cost of a run prices each token type of its `usage` at the base price; the runner starts a run only when the sum plus the case reserve is at or below `cap_usd`; a stop at the cap gives no verdict; Ulrich approves `cap_usd` before the first live run.
+10. **L7-D10.** One cap `cap_usd` in `config.json` covers each phase of one evaluation. The cap is in base dollars, the price of `base_model` `openrouter/deepseek/deepseek-v4.1-flash` (Ulrich, 2026-11-22). Constraint: `cap_usd` starts at 15 as a hypothesis, and Ulrich sets it again from the measured costs; the base cost of a run is its `list_price_usd` divided by `r`; the cap is a start gate, and a run starts only when the sum plus the case reserve is at or below `cap_usd`; Ulrich approves `cap_usd` before the first live run.
 11. **L7-D11.** The evaluation set lies in `<data>/evaluation/agent/`, and the results lie in `<state>/evaluation/runs/<evaluation-id>/` of the KanthorD XDG directories (Ulrich, 2026-11-22). Constraint: each directory has mode `0700`; each run directory names its phase and level; each workspace is a new clone in a random root under `<state>/evaluation/work/`; the set has no remote; nobody commits a result.
-12. **L7-D12.** The runner is `run.sh`, `report.sh` and `evaluation.mjs` in `scripts/evaluation/agent/` of the engine. Constraint: it calls only the built `kanthord run agent`, git, the case scripts, Node and the exported pi API; the runs go in sequence; a stop gives no verdict, and the same evaluation id resumes it by the key phase, level, case, agent and repeat.
+12. **L7-D12.** The runner is `run.sh`, `report.sh` and `evaluation.mjs` in `scripts/evaluation/agent/` of the engine. Constraint: it calls only the built `kanthord run agent`, git, the case scripts, Node and the exported pi API; the runs go in sequence; a stop leaves a planned run with no check line, and the same evaluation id resumes it by the key phase, level, case, agent and repeat.
 13. **L7-D13.** The credential is the KanthorD `auth.json` file at the default `--auth` path. Constraint: no credential value enters a case, a result, a check record, a call record or a report; the runner checks the digest and the mode of the file around each run, and counts the credential values after each run; provisioning uses a private temporary pi directory and one move of `auth.json`.
 14. **L7-D14.** The refresh of an `oauth` entry uses `ModelRuntime.create` and `getAuth` of pi with an explicit `authPath` from the user database. Constraint: no pi CLI, no environment variable that selects the file, no proxy of the environment, no output of the token, and no error text of pi.
 15. **L7-D15. Applied to L1, L2 and the hub.** The L2 comparison rule names the verdict inputs of L7. L1 "Rules with no check" points L1-D16 to L7 unit-level rule 3. The hub gate step 4.1 holds the L7 checks, step 4.3 states that no verdict fails the step, L6 part A holds the runner and the set, and the glossary holds the terms of L7.
-16. **L7-D16.** The task budget `usd` of a case is in base dollars. The runner scales it to each model with `r`, the input price of the model divided by the base input price (Ulrich, 2026-11-22). Constraint: a model with price tiers uses the tier above 100k input tokens.
+16. **L7-D16.** The case budget `usd` of a case is in base dollars. The runner scales it to each model with one price ratio `r(m) = blend(m) / blend(base_model)`, where `blend(m) = 0.8 × cacheRead(m) + 0.2 × input(m) + 0.02 × output(m)` (Ulrich, 2026-11-22). Constraint: the ratio assumes a cache-read hit of 80%; a model with price tiers uses its highest tier; the constants are part of the rule; an exact multiple of 0.01 stays, else the scaled budget rounds up to the next 0.01.
 17. **L7-D17. Applied to L1, L2 and the hub.** L1-D16 states the margin of 4. The L2 result section points to the L7 verdict inputs, and the L2 comparison rule compares `system_prompt_digest` for each case. The hub glossary holds the term group and the new definition of case.
+18. **L7-D18.** The price read uses the exported pi API with an in-memory credential store. Constraint: the price read opens no credential file.
+19. **L7-D19.** Each workspace is a clone with no remote and no reflog. Constraint: no path of the case folder stays in the workspace.
+20. **L7-D20. Applied to L2 and the hub.** L2-D15 and the L2 comparison rule name a new clone of the case commit. The hub glossary holds the terms base model and base cost.
 
 ## Open questions for Ulrich
 
