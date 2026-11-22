@@ -24,6 +24,8 @@ The layers go from the overall to the details. Each CLI layer comes before the c
 
 Each layer file starts with its goals `G1`, `G2`, ..., ends with its decisions and its open questions for Ulrich, and names the goals that each section serves.
 
+Each layer file has a section "Acceptance checks". Each check states one public behavior of the layer: the fixture, the command or call, and the exact observable result (output, exit code, file, state or refusal). An agent runs each check end to end with no human step. The implementation of a layer passes the checks of that layer and of every upper layer. A change to a check of an upper layer goes to that layer first. Each build step of L6 names the checks that it makes pass.
+
 ## Layer files
 
 The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A Fable review with the verdict accept sets `reviewed`. Ulrich sets `accepted` at the joint review.
