@@ -25,9 +25,9 @@ This set designs the next agent and worker of KanthorD. It starts from the direc
 
 The layers go from the overall to the details. Each CLI layer comes before the core layer that serves it, so the core satisfies the contract that the CLI states. When a core layer needs a change to that contract, the change goes to the CLI layer first. LA and LB give the build order, which is a separate order.
 
-Each layer file starts with its goals `G1`, `G2`, ..., ends with its decisions and its open questions for Ulrich, and names the goals that each section serves.
+Each layer file, LA and LB included, starts with its goals `G1`, `G2`, ..., ends with its decisions and its open questions for Ulrich, and names the goals that each section serves.
 
-Each layer file has a section "Acceptance checks". Each check states one public behavior of the layer: the fixture, the command or call, and the exact observable result (output, exit code, file, state or refusal). An agent runs each check end to end with no human step. Each check is an end-to-end test: it runs the shipped command or service as a process, with a real file system, real git and the real pi runtime, and a stub only at the outside edge (the LLM stub). It asserts an outcome that crosses components. A rule that a schema, a validator or one function proves alone is a unit test, not an acceptance check; the layer lists it with the module that owns its unit tests. Each check of L1 names the owner layer that makes it runnable. The implementation of a layer passes the checks of that layer and of every upper layer. A change to a check of an upper layer goes to that layer first. Each build step of LA and LB names the checks that it makes pass.
+LA and LB are build plans. They hold build steps and a gate, and no acceptance check of their own. Each other layer file has a section "Acceptance checks". Each check states one public behavior of the layer: the fixture, the command or call, and the exact observable result (output, exit code, file, state or refusal). An agent runs each check end to end with no human step. Each check is an end-to-end test: it runs the shipped command or service as a process, with a real file system, real git and the real pi runtime, and a stub only at the outside edge (the LLM stub). It asserts an outcome that crosses components. A rule that a schema, a validator or one function proves alone is a unit test, not an acceptance check; the layer lists it with the module that owns its unit tests. Each check of L1 names the owner layer that makes it runnable. The implementation of a layer passes the checks of that layer and of every upper layer. A change to a check of an upper layer goes to that layer first. Each build step of LA and LB names the checks that it makes pass.
 
 ## Round order
 
@@ -35,7 +35,7 @@ Ulrich set this order on 2026-11-22, and renumbered the layer chain on the same 
 
 1. L1, the model. Status `accepted`.
 2. L2, the agent CLI. Then L3, the agent. Then L4, the agent evaluation (Ulrich, 2026-11-22).
-3. LA: the build plan of the agent and its evaluation. It holds the build steps from the code of today to L1, L2, L3 and L4, the runner and the evaluation set of L4, and the agent gate.
+3. LA: the build plan of the agent and its evaluation. It holds the build steps from the code of today to L1, L2, L3 and L4. It also holds the runner and the evaluation set of L4, the agent gate and the removal of each `leave` profile.
 4. The agent gate, in this order:
    1. The acceptance checks and the unit-level rules of L1, L2, L3 and L4 that their owner layers make runnable pass.
    2. An end-to-end run of `kanthord run agent` with a real LLM credential passes. The credential comes from the pi `auth.json` of Ulrich, through `--auth`.
@@ -57,7 +57,7 @@ The status set is `planned` (no file yet), `draft`, `reviewed` and `accepted`. A
 | LA    | [LA-agent-build.md](LA-agent-build.md)             | The agent build plan         | Specify the build steps of the agent and its evaluation from the code of today, and the agent gate with the evaluation run of L4       | R7             | `planned`  |
 | L5    | [L5-worker-cli.md](L5-worker-cli.md)               | The worker CLI               | Specify the CLI that runs a worker against a KanthorD server                                                                           | R5, R6, R8     | `planned`  |
 | L6    | [L6-worker.md](L6-worker.md)                       | The worker                   | Specify `coder@1`, the worker layer, the link to the line and the server                                                               | R3, R4, R6, R8 | `planned`  |
-| L7    | [L7-worker-evaluation.md](L7-worker-evaluation.md) | The worker evaluation        | Specify the worker-level checks against a local KanthorD server, the review cases and the successor of the Worker V2 eval set          | R5, R9         | `planned`  |
+| L7    | [L7-worker-evaluation.md](L7-worker-evaluation.md) | The worker evaluation        | Specify the worker-level checks against a local KanthorD server, the review cases and the successor of the Worker V2 eval set          | R5             | `planned`  |
 | LB    | [LB-worker-build.md](LB-worker-build.md)           | The worker build plan        | Specify the build steps of the worker and its evaluation after the agent gate, and the worker gate with the evaluation run of L7       | R7             | `planned`  |
 
 L1 links these anchors of later files. Each later file keeps the heading of each anchor.

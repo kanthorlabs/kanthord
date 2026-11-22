@@ -730,7 +730,7 @@ After [LA](LA-agent-build.md), three open paths exist:
 | `openSessionRuntime` | `agentPort` in `src/worker/unit/agent-port.ts` (`src/agent/agent-port.ts:182` today)                                                | [L6](L6-worker.md)                                                      |
 | `openSession`        | The Workbench Service (`src/workbench/service.ts:397`); the Project Service (`src/project/environment-agent.ts:283`) until its step | The Workbench branch at its rebase, and the step of the Project Service |
 
-The input of both open paths of today after part A, exact:
+The input of both open paths of today after [LA](LA-agent-build.md), exact:
 
 ```ts
 export interface OpenSessionInput {
