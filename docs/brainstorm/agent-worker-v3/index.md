@@ -39,6 +39,7 @@ Ulrich set this order on 2026-11-22. The worker work starts only after the agent
    3. The evaluation of [L1-D20](L1-model.md#decisions) runs: each role profile against `swe@1`.
 5. L4, the worker CLI. Then L5, the worker.
 6. L6 part B: the build steps of the worker.
+7. After this round, `feature/workbench-v2` rebases onto `main` and moves the Workbench to the agent contract (Ulrich, 2026-11-22). The Agent V2 and Worker V3 work merges into `main` first. [L3](L3-agent.md#constraints-on-the-workbench-branch-at-rebase) lists the constraints of that rebase.
 
 ## Layer files
 
