@@ -24,7 +24,7 @@ The layers go from the overall to the details. Each CLI layer comes before the c
 
 Each layer file starts with its goals `G1`, `G2`, ..., ends with its decisions and its open questions for Ulrich, and names the goals that each section serves.
 
-Each layer file has a section "Acceptance checks". Each check states one public behavior of the layer: the fixture, the command or call, and the exact observable result (output, exit code, file, state or refusal). An agent runs each check end to end with no human step. Each check of L1 names the owner layer that makes it runnable. The implementation of a layer passes the checks of that layer and of every upper layer. A change to a check of an upper layer goes to that layer first. Each build step of L6 names the checks that it makes pass.
+Each layer file has a section "Acceptance checks". Each check states one public behavior of the layer: the fixture, the command or call, and the exact observable result (output, exit code, file, state or refusal). An agent runs each check end to end with no human step. Each check is an end-to-end test: it runs the shipped command or service as a process, with a real file system, real git and the real pi runtime, and a stub only at the outside edge (the LLM stub). It asserts an outcome that crosses components. A rule that a schema, a validator or one function proves alone is a unit test, not an acceptance check; the layer lists it with the module that owns its unit tests. Each check of L1 names the owner layer that makes it runnable. The implementation of a layer passes the checks of that layer and of every upper layer. A change to a check of an upper layer goes to that layer first. Each build step of L6 names the checks that it makes pass.
 
 ## Round order
 
