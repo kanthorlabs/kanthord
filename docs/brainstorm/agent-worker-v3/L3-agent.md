@@ -41,7 +41,7 @@ Change: the runtime and the server part of `src/agent/` separate by file. A file
 | `environment.ts`                                       | Runtime                                  | `childEnvironment`. Unchanged                                                                                                                                                                                                                                                          |
 | `pi.ts`                                                | Runtime                                  | `loadPi`, the pi directory. Unchanged                                                                                                                                                                                                                                                  |
 | `pi-tools.ts`                                          | Runtime                                  | The pi tool install. Change: the code constant moves here from `WorkerErrorCode.StartToolMissing` (`src/worker/contract.ts:1061`). The value `worker.start.tool_missing` stays, because `docs/cli/worker.md:1341` documents it for `serve server` and `serve worker`                   |
-| `pinned-layers.ts`                                     | Runtime                                  | The system prompt pin and the work pin. Change: `setWork` takes `{ text: string }`. A `WorkPrompt` fits that shape, so the file imports no `prompt-composer.ts` and the worker call stays                                                                                              |
+| `pinned-layers.ts`                                     | Runtime                                  | The system prompt pin (`pinInference`) and the state of the work pin. Change: the work part of `pinContext` leaves, so `pinnedLayersHook` alone adds the work pin ([Pinned layers](#pinned-layers)). `setWork` takes `WorkPin` (`interface WorkPin { text: string }`). A `WorkPrompt` fits that shape, so the file imports no `prompt-composer.ts` and the worker call stays |
 | `hooks/*.ts`                                           | Runtime                                  | The extensions of [Extension modules](#extension-modules)                                                                                                                                                                                                                              |
 | `hooks/tool-approval.ts`                               | Workbench Service                        | Consumer hook of the Workbench. It moves to `src/workbench/tool-approval.ts` with the [Workbench change](#workbench-service)                                                                                                                                                           |
 | `agent-port.ts`                                        | Worker layer                             | It moves unchanged to `src/worker/unit/agent-port.ts`, next to its test of today. [L5](L5-worker.md) rewires it on the contract as the worker port `agent.open`                                                                                                                        |
@@ -241,7 +241,8 @@ export interface AgentRun {
 }
 ```
 
-- `send` passes `text` and `pin` through the input redaction. It then sets the work pin of the pinned layers to the redacted `pin`. It calls `session.prompt(text, { expandPromptTemplates: false })` and waits for the end of the agent loop. One `send` runs at a time; a second call during a `send` throws.
+- `send` passes `text` and `work` through the input redaction. It then sets the work pin of the pinned layers to the redacted `work` ([Pinned layers](#pinned-layers)). It calls `session.prompt(text, { expandPromptTemplates: false })` and waits for the end of the agent loop. One `send` runs at a time; a second call during a `send` throws.
+- `work` is the work pin: the task text that stays in each model request after a compaction. A text replaces the pin, and `null` clears it. Example: the worker sends the work prompt "Implement node N, criterion C" with `work` equal to that prompt. A later `send` of "The verification failed: ..." keeps `work` equal to the work prompt. `run agent` passes its message as `work`.
 - `endAfterTurn` ends the agent loop at the end of the current turn, after each tool result of the batch ([Project Service](#project-service)). The contract reads the flag in its `finishTurn` ([Budget](#budget)). The end is `completed`.
 - `appendCustom` redacts each string of `data` with `text`, which is asynchronous, and then writes one pi custom entry (`appendCustomEntry`). The worker writes `kanthord.pinned_context` (`src/worker/unit/native-agent.ts`). The Workbench writes its records on the branch (`appendRecord`).
 - `forceStop` returns at once ([Stop and forced stop](#stop-and-forced-stop)).
@@ -422,6 +423,14 @@ The KanthorD prompt chain of a session, in this order:
 3. **Binding prompt place, layer 3.** The Binding prompt of each repository.
 4. **Consumer texts.** The framing of the consumer (worker or Workbench).
 
+**Add a part.** The chain is one ordered list of `PromptText` parts. One join makes the system prompt ([Composition function](#composition-function)).
+
+- Add a profile part in `profilePrompt`, at its place in layer 1.
+- Add a consumer part to the instruction list before the framing. The framing stays last, and `finalPrompt` asserts it.
+- A later part governs an earlier part.
+- Each new part of the server part gets a `PromptPart` kind, so its reference reaches the span.
+- L3-U1 proves the byte-equal text of each consumer of today.
+
 The precedence of [agent.md](../agent.md#prompt-composer) stays. `run agent` has no layer 3 text and no framing. The [evaluation](L2-agent-cli.md#one-evaluation-run) gives the stored Repository prompt and the Binding prompt of `swe@1` as two context texts, in the order of the worker path. The Workbench part `workbench.md` stays in layer 1 after the Role, as today (`promptFiles` in `src/agent/prompt-files.ts`). After the merge, the server part places the parts `identity` and `variant` of the branch in layer 1.
 
 ### Composition function
@@ -555,7 +564,7 @@ export const StartPrecondition = {
 2. `toolAllowlist(declaredNames)`: blocks a nested call of a name outside the declared names of the session ([Reach of the allowlist guard](#a-declared-consumer-tool-with-no-implementation)).
 3. `markerRestore(state)`: restores a marker of this session into `write` and `edit`, blocks the other markers, and blocks a known secret in each tool input ([Known secret in a tool input](#known-secret-in-a-tool-input)).
 4. `checkoutConfinement({ cwd, roots })`, when the profile is confined. It checks the input after the restore and freezes it.
-5. `pinnedLayersHook`: the work pin.
+5. `pinnedLayersHook`: the work pin ([Pinned layers](#pinned-layers)).
 6. The consumer extensions, in input order: worker capabilities and consumer hooks, for example `toolApproval`.
 7. `inputRedaction(state)`: the input redaction at `message_end` and `context`. It runs after each consumer handler, so it redacts the final message.
 8. `outputFinding(state)`: the rotate warning at `message_end` of an `assistant` message.
@@ -582,6 +591,32 @@ The tool <name> is not declared for this agent.
 - Worker: [L5](L5-worker.md) gives the roots. Today `planOf` gives the review directory and its evidence placement (`reviewRootsOf`, `src/agent/review-roots.ts`).
 - Project Service: the checkout is `cwd` and the one root, as today (`src/project/environment-agent.ts:306`).
 - Workbench after the merge: `place.cwd` is `cwd` and the one root ([Workbench Service](#workbench-service)).
+
+### Pinned layers
+
+Each contract session holds two pins. pi `1.1.0` keeps the last 20000 tokens of a session as they are (`keepRecentTokens`, `dist/core/compaction/compaction.js:53-57`). A compaction replaces each older entry with a summary that the model writes. pi can compact inside one `send`, before the next assistant response (`dist/core/agent-session.js:424-432`, `:541`).
+
+- **Work pin.** It keeps the task text in each model request. Reason: after a compaction, the first user message is a model summary, not the task text.
+- **System prompt pin.** `pinInference` wraps `streamFunction` and adds the composed text only when the first message does not hold it. pi `1.1.0` keeps the system message in the compaction entry (`dist/core/session-manager.js:882`, `:189`), so the pin adds nothing today. It guards a pi upgrade. No consumer sets it.
+
+**How the work pin works.**
+
+1. pi emits the event `context` before each model request. The event holds the messages that pi built from the session for that request.
+2. `pinnedLayersHook` removes each earlier `kanthord.prompt-layer` message from that list.
+3. It looks for a user message whose text equals the work pin.
+4. When no such message exists, it inserts one hidden custom message (`customType` `kanthord.prompt-layer`, `display: false`) with the work pin, after the system messages.
+5. The insert holds for that request only. The session file does not change, and nothing is appended to the session.
+6. `inputRedaction` runs later at the same `context` event, so it redacts the inserted message.
+
+**Example.** The worker runs `swe@1` with the work prompt as its first message and as `work`.
+
+| Moment                                                 | Messages that pi builds                                                    | Insert                                                       |
+| ------------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Turn 3, before a compaction                            | System message, the work prompt, the turns since                           | None: a user message equals the work pin                     |
+| Turn 40, after a compaction at about 180k tokens       | System message, the summary, the last 20000 tokens, "Verification failed: ..." | The work prompt, after the system message                    |
+| Each later request of the session                      | As turn 40, plus the new turns                                              | The work prompt again, because the session never stores it   |
+
+- Change: today `pinnedLayersHook` (`src/agent/hooks/pinned-layers.ts:20-50`) and the work part of `pinContext` (`src/agent/pinned-layers.ts:64-71`) both add the work pin. On the contract path, only `pinnedLayersHook` adds it. Constraint: `pinned-layers.test.ts` passes after the removal, its retry case at `:241` included. When the retry case fails, the work part of `pinContext` stays, and this section records the reason.
 
 ## Redaction
 
@@ -947,13 +982,13 @@ Each rule holds in one module, with no process and no LLM stub ([index](index.md
     - A refused open writes no session file and sends no request. The open sends no request.
     - An abort during the open throws `agent.open_failed` with the message `aborted` and leaves no session file.
     - The guard order is the order of [Guard order](#guard-order).
-    - `send` redacts `pin` before it sets the work pin.
+    - `send` redacts `work` before it sets the work pin. `work: null` clears the pin.
     - An abort gives `stopped` after pi persists the aborted entry. `forceStop` returns at once with the totals so far and kills each live child process. `close` after `forceStop` does nothing.
     - No runtime module writes to `process.stdout` or `process.stderr`. A handler error of an extension ends the run with the failure `internal`.
     - `appendCustom` redacts its data. With no `observe`, the run emits no event.
     - Test file: `src/agent/agent-contract.test.ts`.
 12. **L3-U8. Marker restore.** The restore cases of today ([agent.impl.md](../agent.impl.md#the-restore-by-tool)). The block of a known secret as raw text, with the new block text, in the input of `bash`, `write`, `read` and a consumer tool. Test file: `src/agent/hooks/marker-restore.test.ts`.
-13. **L3-U9. Hooks of today with no test.** `homeRelativeCwd` writes the `<cwd>` section relative to the host home. `pinnedLayersHook` adds the work pin once and keeps the system messages first. `toolApproval` blocks with the reason of the decision and passes an allowed call. Test files: `home-relative-cwd.test.ts`, `pinned-layers.test.ts`, `tool-approval.test.ts` in `src/agent/hooks/`.
+13. **L3-U9. Hooks of today with no test.** `homeRelativeCwd` writes the `<cwd>` section relative to the host home. `pinnedLayersHook` adds the work pin once, only when no user message equals it, and keeps the system messages first. After `session.compact()`, each request holds the work pin. `toolApproval` blocks with the reason of the decision and passes an allowed call. Test files: `home-relative-cwd.test.ts`, `pinned-layers.test.ts`, `tool-approval.test.ts` in `src/agent/hooks/`.
 14. **L3-U10. Redaction state.** With no `assistantRedaction`, `thinking_kept` and `compaction_residual` stay `0`. `output_found` counts the findings of `outputFinding`. `exitText` gives the session marker, and `modelOutput` gives the same text. `exitValue` gives `redactValue`. `text` refreshes the known secrets. Test file: `src/agent/redaction.test.ts`.
 15. **L3-U11. Child processes, a regression rule.** A child process gets only the names of `childEnvironment`, less the removed names, plus the pi `PATH`. A name of `process.env` that the input does not hold is absent. `killAll` kills each live process tree. Test file: `src/agent/tool-table.test.ts`.
 16. **L3-U12. Interim redaction.** `assistantRedaction` keeps the three redactions of LLM output of today and their counts. Test file: `src/agent/hooks/assistant-redaction.test.ts`. The rule leaves with the module.
@@ -1042,7 +1077,7 @@ No change is open. L3-D28 to L3-D36 record the changes that L3 applied to L1 and
 19. **L3-D19.** A child process gets only the names of `input.childEnvironment`, less the names that `childEnvironment` removes, plus the pi `PATH`. This rule holds today. Constraint: L3-U11 guards it as a regression rule; the runtime process and pi do not read the input.
 20. **L3-D20.** The Project Service opens `env@1` through the contract with a `memory` session. Its `end` callback calls `endAfterTurn`, which keeps the end of today after any batch that holds a passed `environment_write`. Reason: `finishTurn` is the exported pi mechanism that gives this end with no abort, and `terminate: true` needs every result of a batch. Constraint: no consumer patches `finishTurn`; only the contract sets it.
 21. **L3-D21.** After the merge, the runtime `bash` is the one `bash` of every consumer, and the input gains `bashSandbox`. The Workbench and the worker are its readers. Constraint: the sandbox of the branch keeps its strength. A confined session of a profile that declares `bash` with no `bashSandbox` makes the open throw `agent.sandbox_missing`. L5 gives the scope of the worker; the Workbench change starts only after the merge of `feature/workbench-v2`.
-22. **L3-D22.** Every contract session holds the pinned layers. `send(text, { pin })` redacts `pin` and sets the work pin. Constraint: the system prompt pin applies to every consumer.
+22. **L3-D22.** Every contract session holds the pinned layers. `send(text, { work })` redacts `work` and sets the work pin; `null` clears it. `run agent` passes its message as `work`. Reason: a pi compaction replaces the first user message with a model summary. Constraint: only `pinnedLayersHook` adds the work pin, at the event `context`, and it never writes the session file. The system prompt pin applies to every consumer, and no consumer sets it.
 23. **L3-D23.** The session record has three kinds now: `new_file`, `directory` and `memory`. Constraint: `new_file` uses `SessionManager.open` with the explicit path and the workspace as `cwd`, and the contract asserts that no entry exists at the path. The Workbench change adds `resume`, which skips `git_clean` and emits the stored entries after `exitValue`.
 24. **L3-D24.** The contract never clamps the reasoning effort. An unsupported level throws `agent.level_unsupported` at the open. Constraint: the consumer checks the level first, as `run agent` does ([L2 Model selection](L2-agent-cli.md#model-selection), rule 6).
 25. **L3-D25.** Each failure of the open that is no refusal throws `AgentOpenError` with one of the codes `agent.tool_undeclared`, `agent.level_unsupported` and `agent.open_failed`. An abort during the open gives `agent.open_failed` with the message `aborted`. Constraint: the message passes `exitText`; a failed open leaves no session file.
