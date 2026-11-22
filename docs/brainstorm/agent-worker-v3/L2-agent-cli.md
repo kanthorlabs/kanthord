@@ -7,7 +7,7 @@ Back to the [index](index.md). The terms follow the [glossary](index.md#glossary
 1. **G1.** `kanthord run agent` runs one agent profile on one piece of work with no KanthorD server. The page states the full CLI contract: the command, each input, the output, the exit codes and each diagnostic code.
 2. **G2.** Each option answers one question that a KanthorD agent run needs. pi stays the base runtime; the command is no wrapper of the pi CLI.
 3. **G3.** Each credential rule of L1 for `run agent` maps to one CLI rule and one diagnostic code. No rule becomes weaker.
-4. **G4.** Each public behavior of L2 is an end-to-end acceptance check or a unit-level rule with its owning module ([index](index.md#layer-files)).
+4. **G4.** Each public behavior of L2 is an end-to-end acceptance check or a unit-level rule with its owning module ([index](index.md#reading-order)).
 5. **G5.** The CLI alone runs the real-credential run of the agent gate and the evaluation of [L1-D20](L1-model.md#decisions). The output file is the record that the evaluation reads.
 6. **G6.** Each need of L2 from the agent contract is a requirement on [L3](L3-agent.md), not an L3 design.
 7. **G7.** The direction point of R1, "input as options, a JSON file or a Markdown file", has a verdict and a fit rule.
@@ -567,7 +567,7 @@ L2 needs these items from the agent contract. [L3](L3-agent.md#input-and-output-
 
 (G4)
 
-Each check is an end-to-end test ([index](index.md#layer-files)). It runs the built `kanthord run agent` as a process, with a real file system, real git and the real pi runtime. The only stub is the LLM stub at the outside edge. Each check asserts an outcome that crosses components. A refusal means: exit code `1`, no result, and the first stderr line that is no JSON line starts with the diagnostic code.
+Each check is an end-to-end test ([index](index.md#reading-order)). It runs the built `kanthord run agent` as a process, with a real file system, real git and the real pi runtime. The only stub is the LLM stub at the outside edge. Each check asserts an outcome that crosses components. A refusal means: exit code `1`, no result, and the first stderr line that is no JSON line starts with the diagnostic code.
 
 ### L2 fixtures
 
@@ -665,7 +665,7 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
 
 ### Unit-level rules
 
-These rules hold with no process, no file system flow and no LLM stub, so their tests are unit tests ([index](index.md#layer-files)). Each item names the owning module. L3 or L6 assigns the exact file. Each rule stays in the text of this page.
+These rules hold with no process, no file system flow and no LLM stub, so their tests are unit tests ([index](index.md#reading-order)). Each item names the owning module. L3 or L6 assigns the exact file. Each rule stays in the text of this page.
 
 1. **The option parser of `run agent`.** Each refusal of [Options](#options), [Model selection](#model-selection) rules 1 to 3 and [Budget](#budget) rules 1 to 3: an absent `<agent-name>`, `--model`, `--session` or `--prompt`; an absent or non-directory `--workspace`; a repeated single-value option; a `--model` with no `/`, no level, an unknown level or the provider `anthropic-subscription`; a `--budget` of no kind, of zero or of a repeated kind; the `--output` forms. The `--token` refusal comes before each other refusal. The help lists each option and no `--token`.
 2. **The text-or-path reader.** Each rule of [Text or path](#text-or-path) and [Prompt](#prompt): the exact "looks like a path" test; a value with a line break; an absent path as text with the notice; a path under `/dev` or `/proc`, before or after link resolution; a path in the KanthorD configuration directory or the pi directory; the `--auth` file by device and inode; the removal of final line breaks; an existing entry that is no regular file, or not UTF-8, or an image; the join with one blank line; an empty part; `prompt_missing`.

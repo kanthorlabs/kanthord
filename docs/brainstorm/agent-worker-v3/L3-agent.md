@@ -12,7 +12,7 @@ Back to the [index](index.md). The terms follow the [glossary](index.md#glossary
 6. **G6.** The guards hold in one fixed order. The redaction keeps each credential rule at its strength or stricter after the change of R2-H.
 7. **G7.** The contract enforces the stop, the forced stop, the wall budget, the list-price budget and the turn limit. It gives the class of a failure from the pi predicates.
 8. **G8.** Each pi extension is one module with one factory and its own test file ([L1 Extension rule](L1-model.md#extension-rule)).
-9. **G9.** Each public behavior of L3 is an end-to-end acceptance check or a unit-level rule with its owning module and test file ([index](index.md#layer-files)).
+9. **G9.** Each public behavior of L3 is an end-to-end acceptance check or a unit-level rule with its owning module and test file ([index](index.md#reading-order)).
 10. **G10.** Each open path of today has a stated shape and guard list. The worker path keeps it until [L5](L5-worker.md). The Workbench path keeps it until the rebase of the Workbench branch.
 
 ## Agent runtime files
@@ -953,7 +953,7 @@ Each module exports one extension factory, with its test file next to it ([L1 Ex
 
 (G9)
 
-Each check is an end-to-end test ([index](index.md#layer-files)). It runs the built `kanthord run agent` as a process, with a real file system, real git and the real pi runtime. The only stub is the LLM stub. The fixtures are the [L2 fixtures](L2-agent-cli.md#l2-fixtures): Auth, Stub, W, H, X, T, D, S, O, Run and `$TEST`. "Refused" means: exit `1`, no result, and the first stderr line that is no JSON line starts with the code. "A digest listing of W" is `find W -type f | sort` with the SHA-256 digest of each file, the files of `.git` included.
+Each check is an end-to-end test ([index](index.md#reading-order)). It runs the built `kanthord run agent` as a process, with a real file system, real git and the real pi runtime. The only stub is the LLM stub. The fixtures are the [L2 fixtures](L2-agent-cli.md#l2-fixtures): Auth, Stub, W, H, X, T, D, S, O, Run and `$TEST`. "Refused" means: exit `1`, no result, and the first stderr line that is no JSON line starts with the code. "A digest listing of W" is `find W -type f | sort` with the SHA-256 digest of each file, the files of `.git` included.
 
 1. **L3-AC1. No input entry of a session file holds a known secret.** Makes L1 [AC3](L1-model.md#checks) runnable.
    - Fixture: K is the key of Auth, of ASCII letters only, so no JSON escape changes it. The one commit of W holds `secret.txt` with the text `token K`. `$TEST/context.md` holds `context K`. Run 1 has its own S1 and W1. Run 2 has its own S2 and W2. The scripted answers of run 1: call `read` with the path `secret.txt`; then answer the text `done`. In run 2, Stub answers each request with HTTP 400 and the body `{"error":{"message":"bad key K"}}`.
@@ -1013,7 +1013,7 @@ Each check is an end-to-end test ([index](index.md#layer-files)). It runs the bu
 
 (G9)
 
-Each rule holds in one module, with no process and no LLM stub ([index](index.md#layer-files)). A test with a model uses Faux and the test consumer of the [L1 shared fixtures](L1-model.md#shared-fixtures). Each test file lies next to its module.
+Each rule holds in one module, with no process and no LLM stub ([index](index.md#reading-order)). A test with a model uses Faux and the test consumer of the [L1 shared fixtures](L1-model.md#shared-fixtures). Each test file lies next to its module.
 
 1. **L1 U2.** `inputRedaction` redacts a `custom` message and a steering message before pi persists them, and a `custom` message that a `context` handler adds. Test file: `src/agent/hooks/input-redaction.test.ts`.
 2. **L1 U3.** Each text that the contract gives out holds K zero times: `TurnEnd.text`, `RunFailure.reason`, and the `AgentOpenError` message. K is in the model text, in a tool result and in a provider error. When L5 adds the events, the rule covers each event. Faux streams K in two deltas. No event holds K or a prefix of K of 4 or more characters. Test file: `src/agent/agent-contract.test.ts`.

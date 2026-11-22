@@ -424,7 +424,7 @@ This section states what each item becomes. [L6](L6-migration.md) plans the buil
 
 (G2, G3, G4, G5)
 
-Each check states one public behavior of the model. Each check is an end-to-end test ([index](index.md#layer-files)): it runs the shipped command or service as a process, with a real file system, real git and the real pi runtime. The only stub is the LLM stub at the outside edge. Each check asserts an outcome that crosses components. A rule that one module proves alone is a [unit-level rule](#unit-level-rules) with its owning module. An agent runs each check with no human step. The owner layer turns the check into a runnable command. The implementation of each layer passes the checks of its layer and of every upper layer. A check becomes runnable when its owner layer builds it. Each KanthorD path starts at `engine/`.
+Each check states one public behavior of the model. Each check is an end-to-end test ([index](index.md#reading-order)): it runs the shipped command or service as a process, with a real file system, real git and the real pi runtime. The only stub is the LLM stub at the outside edge. Each check asserts an outcome that crosses components. A rule that one module proves alone is a [unit-level rule](#unit-level-rules) with its owning module. An agent runs each check with no human step. The owner layer turns the check into a runnable command. The implementation of each layer passes the checks of its layer and of every upper layer. A check becomes runnable when its owner layer builds it. Each KanthorD path starts at `engine/`.
 
 A refusal in these checks means: a nonzero exit code, and a first stderr line that starts with the diagnostic code of the failed rule. L2 and L4 name the codes.
 
@@ -577,7 +577,7 @@ The check IDs stay stable. The IDs AC5, AC9, AC11 to AC17 and AC25 moved to [Uni
 
 ### Unit-level rules
 
-Each rule holds in one module, with no process, no file system flow and no LLM stub, so its test is a unit test ([index](index.md#layer-files)). Each item names its former check ID and the owning module. The owner layer assigns the exact file. Each rule stays in the text of this page.
+Each rule holds in one module, with no process, no file system flow and no LLM stub, so its test is a unit test ([index](index.md#reading-order)). Each item names its former check ID and the owning module. The owner layer assigns the exact file. Each rule stays in the text of this page.
 
 1. **U1, from AC2 variants 3 and 4.** The session path check refuses a symbolic link to an absent path and a path in a directory of another OS user. Module: the session path checks of `run agent` (L2).
 2. **U2, from AC3 kinds 4 and 5.** The input redaction covers a custom message and a steering message before pi persists them. `run agent` reaches neither kind. Module: the redaction hook of the agent runtime (L3). The test uses Faux and the test consumer.
