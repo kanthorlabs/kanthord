@@ -830,7 +830,7 @@ The Project Service opens each `env@1` session through `openAgent`:
 - Change: the `end` callback calls `run.endAfterTurn()`. The contract `finishTurn` gives the same end at the same point, with the end `completed`. `run` returns `Aborted` when the context signal aborts, which gives the end `stopped`. It throws for `failed`. It returns `Ended` for each other end, as today (`src/project/environment-agent.ts:152-185`). A refused open throws. The onboarding reads the proof from its records, not from the session.
 - **Reason for `endAfterTurn`.** `finishTurn` is the exported pi mechanism that ends the loop after a batch with no abort ([L3-D20](#decisions)).
 - Change: the Project Service reads `TurnEnd.failure.reason` in place of `session.state.errorMessage`, and logs `redactionSummary()`.
-- The Project Service change touches no worker module. [LA](LA-agent-build.md) or [LB](LB-worker-build.md) places it. Until then it uses `openSession`.
+- The Project Service change touches no worker module. [LA](LA-agent-build.md#step-12-the-project-service-on-the-contract) places it in step 12. Until then it uses `openSession`.
 
 ### Constraints on the Workbench branch at rebase
 
@@ -1030,12 +1030,12 @@ These are order hints. [LA](LA-agent-build.md) fixes the order.
    - Move the lint glob `src/agent/capabilities/**/*.ts` (`eslint.config.js:1007`) to `src/worker/unit/capabilities/**/*.ts` ([L1-D15](L1-model.md#decisions)).
    - Update the list of agent files that `worker-unit` and `apps-worker` can import (`eslint.config.js:518-548`).
    - After this step the import check of [Import rule](#import-rule) can pass.
-2. The split of `sensitive-text-redaction.ts` into `redaction.ts` and the hook modules, with their tests. The build change of [Redaction](#redaction), the known-secret block and the interim module on both open paths of today, in one step. L3-AC1 comes in the same step. This step comes before the step that makes `run agent` write a session file ([L1 Session file](L1-model.md#session-file), "Order").
+2. The split of `sensitive-text-redaction.ts` into `redaction.ts` and the hook modules, with their tests. The build change of [Redaction](#redaction), the known-secret block and the interim module on both open paths of today, in one step. The unit-level rules of Redaction pass in the same step. L3-AC1 runs in the first step that makes `run agent` write a session file (LA-D3). This step comes before the step that makes `run agent` write a session file ([L1 Session file](L1-model.md#session-file), "Order").
 3. The catalog split: `catalog.ts` with the profiles and `AgentTools`, and `declarations.ts`. The prompt files with L3-U3.
 4. `prompt-chain.ts`. `finalPrompt` then calls `composeSystemPrompt`, and `systemPrompt` leaves. L3-U1 proves the byte-equal text.
 5. `start-preconditions.ts`, `run-budget.ts`, `run-outcome.ts`, the changes of `tool-table.ts`, then `agent-contract.ts`.
 6. `run agent` of L2 on the contract.
-7. The Project Service on the contract. It needs no worker change, so it can go in LA or LB.
+7. The Project Service on the contract. It needs no worker change, so LA places it in step 12 (LA-D4).
 8. The gate check of [L1 U8](L1-model.md#unit-level-rules) after the test files of [Extension modules](#extension-modules) exist.
 9. `docs/cli/run.md`: the text of the start preconditions, with the differences from a `git status` of the developer ([Start preconditions](#start-preconditions)).
 10. The lint rule `kanthord/no-inline-object-type` of [L3-D39](#decisions) comes in the first step. Each step lists its files in the scope of L3-D39, and the rule applies to them. Sites at `c864130e` in the files that L3 names, as union members, property object types and string literal property types:

@@ -515,7 +515,7 @@ The check IDs stay stable. The IDs AC5, AC9, AC11 to AC17 and AC25 moved to [Uni
   - Pass: the tool result is the pi result `Tool <name> not found` (`@earendil-works/pi-agent-core`, `dist/agent-loop.js:486`, `prepareToolCall`). The tool implementation does not run. The first request lists no tool name that the profile does not declare. Each text that the Workbench Service gives out holds K zero times.
   - Today: a Workbench session holds only `toolApproval`, and the Workbench Service reads the session events with no exit redaction (`src/workbench/service.ts`).
 
-- **AC20. A Project Service session of `env@1` holds the exit redaction** ([Other consumers](#other-consumers); L1-D8). Owner: L6, with the order of LA or LB.
+- **AC20. A Project Service session of `env@1` holds the exit redaction** ([Other consumers](#other-consumers); L1-D8). Owner: L3, built in [LA](LA-agent-build.md#step-12-the-project-service-on-the-contract) step 12.
   - Fixture: a local KanthorD server as a process, a repository binding, Stub. The server agent credential is K, for `openai-compatible`, routed to Stub. The scripted assistant text holds K.
   - Command: the environment setup of the binding. L6 names the operation and the read command for its output.
   - Pass: each text that the Project Service gives out holds K zero times. U13 holds the allowlist part, because only a test seam gives an `env@1` session a tool that it does not declare.
@@ -614,7 +614,8 @@ Each rule holds in one module, with no process, no file system flow and no LLM s
 - [L5](L5-worker-cli.md): the command `kanthord run worker` under the global root `run`.
 - [L6](L6-worker.md): the anchors `#worker-instructions`, `#worker-capabilities`, `#worker-tools`; the lint glob of the [LLM credential](#llm-credential); the extension list under the [extension rule](#extension-rule).
 - [L6](L6-worker.md): boundary rule 9. The worker commits the work of a session before it opens the next session of the same execution.
-- [L6](L6-worker.md), and [LA](LA-agent-build.md) or [LB](LB-worker-build.md): the Workbench Service and the Project Service open each session through the agent contract, with every guard. The Workbench change happens on `feature/workbench-v2` when the branch rebases onto `main` after this round (Ulrich, 2026-11-22).
+- [LA](LA-agent-build.md#step-12-the-project-service-on-the-contract): the Project Service opens each session through the agent contract, with every guard.
+- [L6](L6-worker.md) and [LB](LB-worker-build.md): the Workbench Service opens each session through the agent contract, with every guard. The Workbench change happens on `feature/workbench-v2` when the branch rebases onto `main` after this round (Ulrich, 2026-11-22).
 - [LA](LA-agent-build.md): the import check of [L1-D5](#decisions); the order of [Session file](#session-file): the build change and the check come before the step that makes `run agent` write a session file.
 - [LA](LA-agent-build.md): remove the field `FoundryHost.capabilities` (`engine/src/worker/unit/foundry.ts:36`) and its three arguments, because `runTasks` never reads it. Remove the exports `foundryEvaluation` and `foundryExamine`, which have no caller. Update `chain-golden.txt` and the `name` strings `"foundryEvaluation"` (`engine/src/worker/unit/chain-evaluation.ts:42`) and `"foundryExamine"` (`engine/src/worker/unit/chain-examine.ts:26`).
 - [LA](LA-agent-build.md): for the [extension rule](#extension-rule), split `sensitive-text-redaction.ts` into one factory per module and add the missing tests. Add a gate check that fails on an extension file with no test file next to it.
