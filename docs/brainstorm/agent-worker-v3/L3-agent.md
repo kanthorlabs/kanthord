@@ -343,7 +343,7 @@ Each requirement of [L2](L2-agent-cli.md#requirements-on-l3) and the contract pa
 | L2 requirement                     | Contract part                                                                                                                                                                                                                                                                | Check                  |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
 | 1. Input                           | `AgentInput`: `systemPrompt` from `composeSystemPrompt(profilePrompt(profile), contextTexts)`, `workspace` `{ cwd: W, roots: [W] }`, `session.kind` `new_file`, no `consumerTools`. The message goes to `send` with `work` equal to the message. No clamp of `thinkingLevel` | L2-AC1, L2-AC13, L3-U7 |
-| 2. Catalog                         | `getProfile` and `PROFILE_NAMES` of `catalog.ts`; `profilePrompt` and `composeSystemPrompt` of `prompt-chain.ts`; `bee@1`, `fee@1`, `te@1` are profiles                                                                                                                      | L2-AC8, L3-U2          |
+| 2. Catalog                         | `getProfile` and `PROFILE_NAMES` of `catalog.ts`; `profilePrompt` and `composeSystemPrompt` of `prompt-chain.ts`                                                                                                                                                             | L2-AC8, L3-U2          |
 | 3. Declared consumer tools         | The pi option `tools` holds the declared names. pi declares only a registered tool ([A declared consumer tool with no implementation](#a-declared-consumer-tool-with-no-implementation))                                                                                     | L2-AC1, L3-AC3         |
 | 4. Start refusal                   | `AgentOpen` `refused` with `StartRefusal`, at step 2 of the [open order](#open-order)                                                                                                                                                                                        | L2-AC12, L3-AC5, L3-U4 |
 | 5. Session file                    | `SessionRecord` `new_file`; the header `cwd` is `workspace.cwd`                                                                                                                                                                                                              | L2-AC1, L2-AC3         |
@@ -367,20 +367,16 @@ Each requirement of [L2](L2-agent-cli.md#requirements-on-l3) and the contract pa
 
 ### Coding tools
 
-Change: the runtime catalog lists every profile that opens an agent session. `AGENT_NAMES` of the server part keeps only the configuration owners ([L1 C6](L1-model.md#e1-constraints)). Today `AGENT_DECLARATIONS` holds `swe@1`, `re@1` and `env@1` (`src/agent/catalog.ts`).
+Change: the runtime catalog lists every profile that opens an agent session. `AGENT_NAMES` of the server part keeps the configuration owners. Today `AGENT_DECLARATIONS` holds `swe@1`, `re@1` and `env@1` (`src/agent/catalog.ts`).
 
 The full tool set of each profile:
 
 | Profile | Agent tools                                           | Declared consumer tools                       | Confined | Start preconditions                                | Profile prompt                         |
 | ------- | ----------------------------------------------------- | --------------------------------------------- | -------- | -------------------------------------------------- | -------------------------------------- |
 | `swe@1` | `read`, `edit`, `write`, `grep`, `find`, `ls`, `bash` | `host`: `evidence-upload`, `link_update_list` | No       | `workspace_directory`, `git_worktree`, `git_clean` | Standard, coding text, `role/swe@1.md` |
-| `bee@1` | the seven tools of `swe@1`                            | none                                          | No       | as `swe@1`                                         | Standard, coding text, `role/bee@1.md` |
-| `fee@1` | the seven tools of `swe@1`                            | none                                          | No       | as `swe@1`                                         | Standard, coding text, `role/fee@1.md` |
-| `te@1`  | the seven tools of `swe@1`                            | none                                          | No       | as `swe@1`                                         | Standard, coding text, `role/te@1.md`  |
 | `re@1`  | `read`, `grep`, `find`, `ls`                          | none                                          | Yes      | `workspace_directory`                              | Standard, coding text, `role/re@1.md`  |
 | `env@1` | `read`, `grep`, `find`, `ls`                          | `environment`: `probe`, `environment_write`   | Yes      | `workspace_directory`                              | Standard, `env@1.md`                   |
 
-- The role profiles hold the seven agent tools of today and no other tool ([L1 E1, fit rule 8](L1-model.md#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule)). They declare no consumer tool, because no consumer gives a tool to a role profile this round ([L1-D4](L1-model.md#decisions)).
 - `re@1` and `env@1` are confined. Change: confinement is the property `confined` of the profile. Today `CONFINED_AGENTS` holds only `re@1` (`src/agent/catalog.ts`), and the Project Service adds the confinement to `env@1` itself (`src/project/environment-agent.ts:306`).
 - The Workbench branch adds its profiles and tools at its rebase ([Constraints on the Workbench branch at rebase](#constraints-on-the-workbench-branch-at-rebase)).
 
@@ -438,7 +434,7 @@ The KanthorD prompt chain of a session, in this order:
 - Each new part of the server part gets a `PromptPart` kind, so its reference reaches the span.
 - L3-U1 proves the byte-equal text of each consumer of today.
 
-The precedence of [agent.md](../agent.md#prompt-composer) stays. `run agent` has no layer 3 text and no framing. The [evaluation](L2-agent-cli.md#one-evaluation-run) gives the stored Repository prompt and the Binding prompt of `swe@1` as two context texts, in the order of the worker path. The Workbench part `workbench.md` stays in layer 1 after the Role, as today (`promptFiles` in `src/agent/prompt-files.ts`).
+The precedence of [agent.md](../agent.md#prompt-composer) stays. `run agent` has no layer 3 text and no framing. In stage 2, the [evaluation](L4-agent-evaluation.md#one-evaluation-run) gives the binding prompt of a kind of project as one context text. The Workbench part `workbench.md` stays in layer 1 after the Role, as today (`promptFiles` in `src/agent/prompt-files.ts`).
 
 ### Composition function
 
@@ -463,7 +459,7 @@ export function systemPromptDigest(composed: string): string;
 - **Callers.** `composeSystemPrompt` has two callers:
   - `run agent`: `composeSystemPrompt(profilePrompt(profile), contextTexts)`, each context text with no heading ([L2 Prompt](L2-agent-cli.md#prompt), rule 3). It passes the result in `systemPrompt`.
   - `finalPrompt` of `prompt-render.ts`, in the server part. It keeps the unresolved-part rule of today. It asserts that the last part is the framing. It returns `null` when a part is not resolved. Else it maps the parts to `PromptText` and calls `composeSystemPrompt`. Its callers stay: `prompt-resolve.ts`, `service.ts` and `src/worker/execution-setup.ts`.
-- Change: `systemPrompt` of `prompt-render.ts` leaves ([L1-D10](L1-model.md#decisions)). Its two callers, the Workbench Service and the Project Service, append the framing part and call `finalPrompt`. They assert that the result is not `null`. The composed text of a worker execution, a Workbench session and an `env@1` session stays byte-equal ([L1 E1, fit rule 9](L1-model.md#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule)).
+- Change: `systemPrompt` of `prompt-render.ts` leaves ([L1-D10](L1-model.md#decisions)). Its two callers, the Workbench Service and the Project Service, append the framing part and call `finalPrompt`. They assert that the result is not `null`. The composed text of a worker execution, a Workbench session and an `env@1` session stays byte-equal ([L3-D8](#decisions)).
 - `profilePrompt` gives the shipped parts of a profile, each with no heading.
 - `systemPromptDigest` is the SHA-256 hex digest of the output of `composeSystemPrompt`. It takes the text before the input redaction and before pi adds `<cwd>` (`dist/core/system-prompt.js:110`). Reason: the marker of a redacted value holds a random tag per session (`tag` in `sensitiveTextRedaction`). So a digest after the redaction differs between two runs with the same input.
 
@@ -471,14 +467,11 @@ export function systemPromptDigest(composed: string): string;
 
 The shared coding text is the three sections `## Code principles`, `## Code` and `## Tests`. Today `swe@1.md` and `re@1.md` hold these three sections byte-equal (`static/prompt/swe@1.md`, `static/prompt/re@1.md`).
 
-| File (new)                    | Content                                                                                                         |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `static/prompt/coding.md`     | The sections `## Code principles`, `## Code` and `## Tests` of `swe@1.md`, byte-equal                           |
-| `static/prompt/role/swe@1.md` | `## Role` of `swe@1.md`; `## Execution` of `swe@1.md` less the protocol text; `## Findings` of `swe@1.md`       |
-| `static/prompt/role/re@1.md`  | `## Role` of `re@1.md`; `## Judgement` items 1 to 7 of `re@1.md`                                                |
-| `static/prompt/role/bee@1.md` | The role statement below; `## Execution` and `## Findings` of `role/swe@1.md`, byte-equal                       |
-| `static/prompt/role/fee@1.md` | The role statement below; `## Execution` of `role/swe@1.md` plus item 6 below; `## Findings` of `role/swe@1.md` |
-| `static/prompt/role/te@1.md`  | The role statement below; `## Execution` and `## Findings` of `role/swe@1.md`, byte-equal                       |
+| File (new)                    | Content                                                                                                   |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `static/prompt/coding.md`     | The sections `## Code principles`, `## Code` and `## Tests` of `swe@1.md`, byte-equal                     |
+| `static/prompt/role/swe@1.md` | `## Role` of `swe@1.md`; `## Execution` of `swe@1.md` less the protocol text; `## Findings` of `swe@1.md` |
+| `static/prompt/role/re@1.md`  | `## Role` of `re@1.md`; `## Judgement` items 1 to 7 of `re@1.md`                                          |
 
 The protocol text that leaves `## Execution` ([L1 boundary rule 7](L1-model.md#agentworker-boundary), [L1-D12](L1-model.md#decisions)):
 
@@ -488,44 +481,8 @@ The protocol text that leaves `## Execution` ([L1 boundary rule 7](L1-model.md#a
   - Its first sentence names the node branch, so it becomes: "**Merge no branch.** Merge, rebase or cherry-pick no other branch into the branch of the workspace."
 - In `re@1.md`, item 8 of `## Judgement` and the section `## Findings` leave.
 
-The role statements, exact text:
-
-```markdown
-## Role
-
-Your role is `bee@1`, the backend engineer that performs the steps of a task.
-Your responsibility is the change that the task describes, in the workspace, to the default standard.
-Write the code, and run any check while you work.
-Before you end a turn, check the work against the criterion of the task and the default standard.
-```
-
-```markdown
-## Role
-
-Your role is `fee@1`, the frontend engineer that performs the steps of a task.
-Your responsibility is the change that the task describes, in the workspace, to the default standard.
-Write the code, and run any check while you work.
-Before you end a turn, check the work against the criterion of the task and the default standard.
-```
-
-```markdown
-## Role
-
-Your role is `te@1`, the test engineer that performs the steps of a task.
-Your responsibility is the tests that the task describes, in the workspace, to the default standard.
-Write the tests, and run them while you work.
-Before you end a turn, check the work against the criterion of the task and the default standard.
-```
-
-Item 6 of `## Execution` of `fee@1`, exact text. It traces to the dogfood finding "The tasks of the `apps` repository did not follow the UI" ([L1 E1](L1-model.md#e1-role-profiles-bee1-fee1-te1-fits-with-a-fit-rule)):
-
-```markdown
-6. **Follow the existing interface.** Before you change a user interface, read the components, the styles and the design tokens that the change touches. Build the change from them. When the task names a design, match it, and state each difference from it in your reply.
-```
-
-- `bee@1` and `te@1` hold no method rule of their own, because no dogfood finding and no evaluation result supports one ([L1-D16](L1-model.md#decisions)). Each differs from `swe@1` only in the role statement. The evaluation of [L1-D20](L1-model.md#decisions) thus measures the role statement and, for `fee@1`, item 6.
-- No Role holds a convention of one repository ([L1 C4](L1-model.md#e1-constraints)).
-- The worker path keeps `swe@1.md` and `re@1.md` of today in layer 1. Layer 2 of E1 moves the worker path to the chain ([L6](L6-worker.md#worker-instructions)). It adds the part `coding` to `PromptPart`. It points the server Role at `role/<name>.md` and deletes the old files. Until then the text exists twice, and [L3-U3](#unit-level-rules) fails on a difference.
+- No Role holds a convention of one repository ([L1 E1, fit rule 6](L1-model.md#e1-project-context-through-the-binding-prompt-fits-with-a-fit-rule)).
+- The worker path keeps `swe@1.md` and `re@1.md` of today in layer 1. [L6](L6-worker.md#worker-instructions) moves the worker path to the chain. It adds the part `coding` to `PromptPart`. It points the server Role at `role/<name>.md` and deletes the old files. Until then the text exists twice, and [L3-U3](#unit-level-rules) fails on a difference. A change of the `swe@1` text from the [evaluation](L4-agent-evaluation.md) edits both copies in one change.
 - The build adds each new file of `static/prompt/` to the shipped assets (`shippedAsset` in `src/kernel/assets.ts`).
 
 ## Start preconditions
@@ -976,7 +933,7 @@ Each check is an end-to-end test ([index](index.md#reading-order)). It runs the 
 
 2. **L3-AC2. Each profile composes the prompt chain.**
    - Fixture: `$TEST/context.md` holds `Repository prompt M4`. Each run has its own W and S. Stub answers the text `ok`.
-   - Command: for P in `swe@1`, `bee@1`, `fee@1`, `te@1`, `re@1` and `env@1`: Run with the profile P and `--system-prompt "$TEST/context.md"`.
+   - Command: for P in `swe@1`, `re@1` and `env@1`: Run with the profile P and `--system-prompt "$TEST/context.md"`.
    - Pass: each run exits `0`. Let C(P) be the join with `"\n\n"` of these texts, in this order, each as the file holds it:
      1. `static/prompt/base.md`;
      2. `static/prompt/coding.md`, for each P except `env@1`;
@@ -989,11 +946,10 @@ Each check is an end-to-end test ([index](index.md#reading-order)). It runs the 
      - `swe@1`: call `evidence-upload` with `{"path":"README"}`, then answer `done`.
      - `re@1`: call `bash` with `{"command":"ls"}`, then answer `done`.
      - `env@1`: call `probe` with `{}`, then answer `done`.
-     - `bee@1`, `fee@1` and `te@1`: answer `done`.
-   - Command: Run once for each of the six profiles.
+   - Command: Run once for each of the three profiles.
    - Pass:
      - Each run exits `0`.
-     - For `swe@1`, `bee@1`, `fee@1` and `te@1`, the first request lists exactly `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash`.
+     - For `swe@1`, the first request lists exactly `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash`.
      - For `re@1` and `env@1`, the first request lists exactly `read`, `grep`, `find` and `ls`.
      - The tool result of the scripted call in S is an error result: `Tool evidence-upload not found`, `Tool bash not found` and `Tool probe not found`.
      - For `re@1` and `env@1`, a digest listing of W is equal before and after.
@@ -1005,8 +961,8 @@ Each check is an end-to-end test ([index](index.md#reading-order)). It runs the 
 
 5. **L3-AC5. The start preconditions of each profile, with no write, no fsmonitor command and no hook.** Gives the precondition list of L1 [AC10](L1-model.md#checks).
    - Fixture: each variant has its own W and S. The script `$TEST/fsmonitor` writes the marker file `$TEST/M10` and exits `0`. The script `$TEST/hook` writes the marker file `$TEST/M11` and exits `0`.
-     1. `bee@1`; W holds an uncommitted change of a tracked file.
-     2. `te@1`; W is an empty directory that is no git worktree.
+     1. `swe@1`; W holds an uncommitted change of a tracked file.
+     2. `swe@1`; W is an empty directory that is no git worktree.
      3. `swe@1`; W is the subdirectory `src` of a git worktree with no uncommitted change.
      4. `re@1`; W is an empty directory that is no git worktree.
      5. `re@1`; W holds an uncommitted change of a tracked file.
@@ -1029,8 +985,8 @@ Each rule holds in one module, with no process and no LLM stub ([index](index.md
 3. **L1 U6.** The `toolAllowlist` handler blocks an undeclared name with the text `The tool <name> is not declared for this agent.`, and the implementation does not run. A declared name passes. Test file: `src/agent/hooks/tool-allowlist.test.ts`.
 4. **L1 U10.** `outputFinding` gives one warning with the rule `llm_credential` and the count of findings for one `assistant` message, and none for a message with no finding. The `assistant` entry stays byte for byte. A known secret in `errorMessage` gives no finding. Test file: `src/agent/hooks/output-finding.test.ts`.
 5. **L3-U1. Composition function.** The golden case holds an instruction file, a Repository prompt, a Binding prompt and the framing. For it, the output of `finalPrompt` is byte-equal to its output of today. The output for the Workbench parts is byte-equal to `systemPrompt` of today. `finalPrompt` gives `null` for an unresolved part. A heading renders as heading, blank line, text. The digest is the digest of the text before the redaction. Test file: `src/agent/prompt-chain.test.ts`.
-6. **L3-U2. Catalog.** Each profile has the exact tool set, confinement and precondition list of [Coding tools](#coding-tools). Each declared tool except `bash` has a `TOOL_CATALOG` entry. `getProfile` of an unknown name gives `undefined`. `AGENT_NAMES` holds no role profile. Test file: `src/agent/catalog.test.ts`.
-7. **L3-U3. Prompt files.** `coding.md` equals the three shared sections of `swe@1.md` and of `re@1.md`. `role/swe@1.md` and `role/re@1.md` equal the other sections of `swe@1.md` and `re@1.md` less the protocol text of [Prompt files](#prompt-files). `## Execution` and `## Findings` of `role/bee@1.md` and `role/te@1.md` equal those of `role/swe@1.md`, and those of `role/fee@1.md` differ only by item 6. No Role holds the words `worker`, `node branch` or `gate`. Test file: `src/agent/prompt-assets.test.ts`.
+6. **L3-U2. Catalog.** Each profile has the exact tool set, confinement and precondition list of [Coding tools](#coding-tools). Each declared tool except `bash` has a `TOOL_CATALOG` entry. `getProfile` of an unknown name gives `undefined`. Test file: `src/agent/catalog.test.ts`.
+7. **L3-U3. Prompt files.** `coding.md` equals the three shared sections of `swe@1.md` and of `re@1.md`. `role/swe@1.md` and `role/re@1.md` equal the other sections of `swe@1.md` and `re@1.md` less the protocol text of [Prompt files](#prompt-files). No Role holds the words `worker`, `node branch` or `gate`. Test file: `src/agent/prompt-assets.test.ts`.
 8. **L3-U4. Start preconditions.** Each id passes and fails as its row states. A subdirectory of a worktree fails `git_worktree`. The order and the first failure. The reason text. Each `git` command gets `--no-optional-locks` for `git_clean`, the isolated environment and the `PATH` of the input, else of the runtime process. A name of `process.env` that `input.childEnvironment` does not hold is absent from the environment of each `git` command. A timeout fails the precondition. Test file: `src/agent/start-preconditions.test.ts`.
 9. **L3-U5. End and class.** Test file: `src/agent/run-outcome.test.ts`.
    - Each end from its condition.
@@ -1075,7 +1031,7 @@ These are order hints. [LA](LA-agent-build.md) fixes the order.
    - Update the list of agent files that `worker-unit` and `apps-worker` can import (`eslint.config.js:518-548`).
    - After this step the import check of [Import rule](#import-rule) can pass.
 2. The split of `sensitive-text-redaction.ts` into `redaction.ts` and the hook modules, with their tests. The build change of [Redaction](#redaction), the known-secret block and the interim module on both open paths of today, in one step. L3-AC1 comes in the same step. This step comes before the step that makes `run agent` write a session file ([L1 Session file](L1-model.md#session-file), "Order").
-3. The catalog split: `catalog.ts` with the profiles and `AgentTools`, and `declarations.ts`. The role profiles. The prompt files with L3-U3.
+3. The catalog split: `catalog.ts` with the profiles and `AgentTools`, and `declarations.ts`. The prompt files with L3-U3.
 4. `prompt-chain.ts`. `finalPrompt` then calls `composeSystemPrompt`, and `systemPrompt` leaves. L3-U1 proves the byte-equal text.
 5. `start-preconditions.ts`, `run-budget.ts`, `run-outcome.ts`, the changes of `tool-table.ts`, then `agent-contract.ts`.
 6. `run agent` of L2 on the contract.
@@ -1110,7 +1066,7 @@ These are order hints. [LA](LA-agent-build.md) fixes the order.
 7. The worker gives the turn limit of `NATIVE_RESOURCE_BUDGET` in `budget.turns` and stops the patch of `finishTurn`. Today `ExecutionBudget` counts turns and patches `finishTurn` itself (`src/worker/unit/native-agent.ts:194-197`).
 8. The full-entry read of a session file (`readSessionFileEntry`): L6 rules its redaction before the worker path drops `assistantRedaction` ([Exit redaction](#exit-redaction)).
 9. A unit rule that `HostTool` of `src/worker/contract.ts` equals the worker tool names of the catalog.
-10. Layer 2 of E1 in the worker path ([Prompt files](#prompt-files)):
+10. The worker path on the prompt chain ([Prompt files](#prompt-files)):
     - the part `coding` of `PromptPart`;
     - the server Role from `role/<name>.md`;
     - the protocol text in the worker instructions;
@@ -1129,10 +1085,10 @@ No change is open. L3-D28 to L3-D36 and L3-D42 to L3-D45 record the changes that
 1. **L3-D1.** The runtime and the server part of `src/agent/` separate by file as [File assignment](#file-assignment) states. Constraint: the import closure of each runtime module stays in the allowed set of [Import rule](#import-rule), and the closure stops at a kernel module. `agent-port.ts`, `session-directory.ts`, `review-roots.ts` and `capabilities/` move unchanged to `src/worker/unit/`.
 2. **L3-D2.** `SpanStatus` leaves the runtime with the trace. `credentialSecrets` and `mergedSecrets` move to `src/llm/known-secrets.ts`. `ProviderFailure` moves to `src/llm/provider-failure.ts`, because `run-outcome.ts` adds that import. The code constant of the pi tool install moves to `pi-tools.ts` with its value `worker.start.tool_missing`. Reason: each import serves a consumer concern.
 3. **L3-D3.** The agent contract is `openAgent(input)` with the input, the run handle and the output of [Input and output contract](#input-and-output-contract). Constraint: each new consumer opens sessions only through it, and no consumer of it gets the `AgentSession`.
-4. **L3-D4.** The runtime catalog in `catalog.ts` lists every profile that opens a session. `declarations.ts` of the server part lists only the configuration owners. Constraint: `AGENT_NAMES` holds no role profile. `guard@1` stays a server declaration, because it opens no session.
-5. **L3-D5.** `AgentTools` of the branch is the field shape. `main` holds `builtin`, `host` and `environment`; the Workbench branch adds `operation` and `workbench` at its rebase. Constraint: a field exists only with its reader. `offer_action` and `request_owner_act` join `workbench`. The role profiles declare no consumer tool.
+4. **L3-D4.** The runtime catalog in `catalog.ts` lists every profile that opens a session. `declarations.ts` of the server part lists only the configuration owners. Constraint: `guard@1` stays a server declaration, because it opens no session.
+5. **L3-D5.** `AgentTools` of the branch is the field shape. `main` holds `builtin`, `host` and `environment`; the Workbench branch adds `operation` and `workbench` at its rebase. Constraint: a field exists only with its reader. `offer_action` and `request_owner_act` join `workbench`.
 6. **L3-D6.** The pi option `tools` holds the declared names of the session. An undeclared name in `consumerTools` makes the open throw `agent.tool_undeclared`. An undeclared extension tool gets `Tool <name> not found`. Reason: pi drops an undeclared tool with no signal. Constraint: the allowlist guard blocks only a nested `ctx.executeTool` call, and its block text stays `The tool <name> is not declared for this agent.`.
-7. **L3-D7.** The profile prompt of a coding profile is `base.md`, `coding.md` and `role/<name>.md`. `coding.md` holds the three sections that `swe@1.md` and `re@1.md` share today. Constraint: the worker path keeps `swe@1.md` and `re@1.md` until layer 2 of E1, and L3-U3 fails on a difference between the two copies. `bee@1` and `te@1` differ from `swe@1` only in the role statement, and `fee@1` also in item 6.
+7. **L3-D7.** The profile prompt of a coding profile is `base.md`, `coding.md` and `role/<name>.md`. `coding.md` holds the three sections that `swe@1.md` and `re@1.md` share today. Constraint: the worker path keeps `swe@1.md` and `re@1.md` until L6 moves the worker path to the chain, and L3-U3 fails on a difference between the two copies; a change of the `swe@1` text edits both copies in one change.
 8. **L3-D8.** `composeSystemPrompt` of `prompt-chain.ts` is the one composition function. Its callers are `run agent` and `finalPrompt` of the server part. The input `systemPrompt` is the composed text, whole, for every consumer. `system_prompt_digest` is the digest of its output before the redaction. Reason: the redaction marker holds a random tag per session. Constraint: `finalPrompt` keeps the unresolved-part rule; `systemPrompt` leaves; the composed text of each consumer of today stays byte-equal.
 9. **L3-D9.** The start preconditions are `workspace_directory`, `git_worktree` and `git_clean`. The coding implementation profiles declare all three. `re@1` and `env@1` declare `workspace_directory`, and so do `ops@1` and `plan@1` of the Workbench branch. Each root must be the top level of a git worktree. Constraint: `git` runs with `isolatedGitEnvironment(childEnvironment({ ...input.childEnvironment, PATH }))` and `--no-optional-locks`. `PATH` is the `PATH` of the input, else of the runtime process. The check runs no fsmonitor command and no hook, and it keeps the filter drivers. The reason holds no path.
 10. **L3-D10.** The guard order of a contract session is `homeRelativeCwd`, `toolAllowlist`, `markerRestore`, `checkoutConfinement`, `pinnedLayersHook`, the place of the consumer extensions, `inputRedaction`, `outputFinding`. Constraint: a consumer gives only its extensions, and each guard fails closed.
