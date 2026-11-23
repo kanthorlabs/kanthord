@@ -69,14 +69,13 @@ The rulings:
 1. **`SpanStatus`.** It leaves the runtime. The trace belongs to the consumer ([L1 Statelessness](L1-model.md#statelessness), check 4). `SessionTrace` moves with `agent-port.ts` to the worker layer, and the worker sets the span status from the [output](#output).
 2. **`SecretShape`.** `credentialSecrets` and `mergedSecrets` read a pi `CredentialStore` that the consumer holds. They move to `src/agent/known-secrets.ts` ([LA1-D8](LA1-run-skeleton.md#decisions)). The runtime takes `KnownSecrets` as input and imports no custody module.
 3. **The worker contract.** Each import leaves with the moves of the [file assignment](#file-assignment). The catalog owns the names of the worker tools. `HostTool` of `src/worker/contract.ts` keeps its values, and a unit rule of L6 asserts that they equal the catalog names.
-4. **`ProviderFailure` (new design).** `ProviderFailure` stays in `src/scheduler/contract.ts` ([LA1-D8](LA1-run-skeleton.md#decisions)). `run-outcome.ts` calls `providerFailureOf` from `src/llm/provider-failure.ts`. That import brings `src/scheduler/contract.ts` into the closure; PR7 decides the exact mechanism to stay within the boundary.
+4. **`ProviderFailure` (new design).** `ProviderFailure` stays in `src/scheduler/contract.ts` ([LA1-D8](LA1-run-skeleton.md#decisions)). `run-outcome.ts` imports `providerFailureOf` from `src/scheduler/contract.ts`, where it now lives ([LA1-D13](LA1-run-skeleton.md#decisions)). The entry `src/llm/provider-failure.ts` is superseded: `scheduler/contract.ts` is in the allowed set as a service contract.
 
 Change: the import check of [L1-D5](L1-model.md#decisions) uses an allowed set. The import closure of each runtime module, type imports included, holds only these modules:
 
 - the built-in modules of Node;
 - `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core` and `zod`;
 - the modules of `src/kernel/`. The closure stops at a kernel module: a package that a kernel module imports is allowed, for example `simple-git` of `src/kernel/git-environment.ts`. No kernel module imports a module of a service today;
-- `src/llm/provider-failure.ts`;
 - the runtime modules of `src/agent/`;
 - after the rebase of `feature/workbench-v2`: `@anthropic-ai/sandbox-runtime`, for `bash-sandbox.ts` ([Constraints on the Workbench branch at rebase](#constraints-on-the-workbench-branch-at-rebase)).
 
