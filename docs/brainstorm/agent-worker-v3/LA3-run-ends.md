@@ -44,7 +44,7 @@ After LA3, a user can run each command line of [L2 Run order](L2-agent-cli.md#ru
 
 ## Pull requests
 
-Each pull request is one engine pull request and one root pull request that moves the submodule pointer ([LA How each pull request ships](LA-agent-build.md#how-each-pull-request-ships)). Each one passes `pnpm run verify` in `engine` and the CI jobs `check`, `e2e` and `agent-e2e`.
+Each pull request is one engine pull request into `feature/agent-v2` ([LA How each pull request ships](LA-agent-build.md#how-each-pull-request-ships)). Each one passes `pnpm run verify` in `engine` and the CI jobs `check`, `e2e` and `agent-e2e`.
 
 ### PR 1. Start preconditions
 

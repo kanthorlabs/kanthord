@@ -67,7 +67,7 @@ Total sites that LA1 fixes: 24 union members, 8 property object types and 8 stri
 
 ## Pull requests
 
-Each pull request is one engine pull request and one root pull request that moves the submodule pointer ([LA How each pull request ships](LA-agent-build.md#how-each-pull-request-ships)). Each one passes `pnpm run verify` in `engine`. The verify command of each row is `pnpm run verify`, plus the named test files with `pnpm --silent run test:files <file>` for a fast check.
+Each pull request is one engine pull request into `feature/agent-v2` ([LA How each pull request ships](LA-agent-build.md#how-each-pull-request-ships)). Each one passes `pnpm run verify` in `engine`. The verify command of each row is `pnpm run verify`, plus the named test files with `pnpm --silent run test:files <file>` for a fast check.
 
 1. **PR1. The lint rule**.
    - Files: `eslint.config.js` with the rule, its four selectors and an empty file list; the rule test.

@@ -25,12 +25,15 @@ LA is a build plan. It holds no acceptance check of its own ([index](index.md#re
 
 (G1, G4)
 
-1. Each pull request is one pull request in the engine submodule and one root pull request that moves the submodule pointer. The root pull request uses the subject `chore: point to the engine with <pull request>`, as the root history does.
-2. A pull request uses the account `kanthorlabs`: `GH_TOKEN=$(gh auth token --user kanthorlabs) gh pr create ...`.
-3. Each pull request passes `pnpm run verify` in `engine`, with the corepack pnpm `11.24.0`, and the CI jobs `check` and `e2e`. From LA2 PR 1, each pull request also passes the CI job `agent-e2e`.
-4. The root pointer moves only after the engine pull request merges.
-5. A pull request that changes a page of `engine/docs/cli/` changes it in the same engine pull request.
-6. **Lint scope.** Each pull request lists the files in the scope of [L3-D39](L3-agent.md#decisions) and adds them to the file list of `kanthord/no-inline-object-type`. The pull request fixes each site of the rule in those files. The sub-layer pages give the counts at `c864130e` as union members, property object types and string literal property types.
+1. Each pull request is one engine pull request with the base branch `feature/agent-v2`. The engine `feature/agent-v2` starts from `c864130e`.
+2. One implementation sub-agent writes the pull request. Then one review sub-agent reviews the diff and applies each finding with `action:YES`.
+3. Aelita opens the pull request. When CI is green, Aelita merges it into `feature/agent-v2` with a squash merge. When CI fails, a new sub-agent fixes the failure, and CI runs again.
+4. The root branch `feature/agent-v2` holds the design pages. It moves the submodule pointer after the exit gate of each sub-layer, with the subject `chore: point to the engine with <sub-layer>`.
+5. After the agent gate, each `feature/agent-v2` merges into its `main` through one pull request. The root merge comes after the engine merge.
+6. A pull request uses the account `kanthorlabs`: `GH_TOKEN=$(gh auth token --user kanthorlabs) gh pr create ...`.
+7. Each pull request passes `pnpm run verify` in `engine`, with the corepack pnpm `11.24.0`, and the CI jobs `check` and `e2e`. From LA2 PR 1, each pull request also passes the CI job `agent-e2e`.
+8. A pull request that changes a page of `engine/docs/cli/` changes it in the same engine pull request.
+9. **Lint scope.** Each pull request lists the files in the scope of [L3-D39](L3-agent.md#decisions) and adds them to the file list of `kanthord/no-inline-object-type`. The pull request fixes each site of the rule in those files. The sub-layer pages give the counts at `c864130e` as union members, property object types and string literal property types.
 
 ## Sub-layers
 
@@ -173,7 +176,7 @@ The gate runs on the engine `main` after LA5 PR 5 and the set build. `kanthord` 
    - `report.sh --evaluation s1-g<k>`
    - Pass: the gate line shows the pass share of `backend` and of `frontend` at or above `gate_share`, and no A9 breach. A failed gate returns to item 3. After a gate with no verdict, Ulrich decides the next step.
 5. **Stage 2.** Items 2 to 4 with `--stage 2` and the ids `s2-*`.
-6. **Merge.** Each kept change of `eval/swe-1` merges into the engine `main` through one pull request, with a root pointer pull request.
+6. **Merge.** Each kept change of `eval/swe-1` merges into the engine `main` through one pull request, and the root pointer moves on the root `main`.
 
 Only Ulrich can do these actions: give the entry of step 4.2; provision the `anthropic` entry; set the noise threshold after each A/A line; raise `cap_usd`; decide after a gate with no verdict.
 
@@ -194,7 +197,7 @@ Only Ulrich can do these actions: give the entry of step 4.2; provision the `ant
 
 ## Decisions
 
-1. **LA-D1.** LA has five sub-layers with 25 engine pull requests, then the evaluation set build and the agent gate. Constraint: each pull request is one engine pull request and one root pointer pull request; `main` works after each pull request; the pull request lists of the sub-layer pages are the one build order.
+1. **LA-D1.** LA has five sub-layers with 25 engine pull requests, then the evaluation set build and the agent gate. Constraint: each pull request is one engine pull request into `feature/agent-v2`; `main` works after each pull request; the pull request lists of the sub-layer pages are the one build order.
 2. **LA-D2.** The lint rule comes in LA1 PR1 with an empty file list. Constraint: each later pull request adds its in-scope files to the list and fixes their sites; no pull request adds an entry to `eslint-suppressions.json`.
 3. **LA-D3.** L3-AC1 runs in LA1 PR10, the first pull request that makes `run agent` write a session file. Constraint: LA1 PR4 makes the redaction rules pass before LA1 PR10.
 4. **LA-D4.** The Project Service moves to the contract in LA4 PR 1. Constraint: it needs no worker change; it gives the Project Service the exit redaction before the worker round; the Workbench keeps `openSession` until the rebase.

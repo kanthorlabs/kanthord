@@ -62,7 +62,7 @@ LA4 starts after [LA1](LA1-run-skeleton.md), [LA2](LA2-credential-boundary.md) a
 
 ## Pull requests
 
-Each pull request is one engine pull request and one root pull request that moves the submodule pointer ([LA How each pull request ships](LA-agent-build.md#how-each-pull-request-ships)). Each one passes `pnpm run verify` in `engine` and the CI jobs `check`, `e2e` and `agent-e2e`. The Project Service move comes before the deletion ([LA4-D1](#decisions)).
+Each pull request is one engine pull request into `feature/agent-v2` ([LA How each pull request ships](LA-agent-build.md#how-each-pull-request-ships)). Each one passes `pnpm run verify` in `engine` and the CI jobs `check`, `e2e` and `agent-e2e`. The Project Service move comes before the deletion ([LA4-D1](#decisions)).
 
 ### PR 1. The Project Service on the contract
 
@@ -168,7 +168,7 @@ Each rule below stays at its strength or becomes stricter.
 - **To LA5.** None. The runner of L4 calls only `kanthord run agent`.
 - **To LB.** The worker still opens with `openSessionRuntime` through `agentPort` ([L3 Open paths](L3-agent.md#open-paths-until-l6-and-the-workbench-change)). The Worker V2 evaluation set has no runner after PR 2; [L7](L7-worker-evaluation.md) owns its successor.
 - **To the Workbench rebase.** `openSession`, `assistantRedaction` and `SessionRedactionInput` keep one reader, the Workbench Service ([L3-D41](L3-agent.md#decisions)).
-- **To the root pages.** These pages name the removed commands or the capture: `docs/explanation/architecture.html`, `docs/brainstorm/architecture.impl.md`, `docs/brainstorm/custody.impl.md`, `docs/brainstorm/worker-service.vocabulary.md`, `docs/brainstorm/worker-service.impl.md`, `docs/brainstorm/worker-execution-refactor/design.md` and `docs/brainstorm/HANDOFF.md`. The root pull request of PR 2 changes them.
+- **To the root pages.** These pages name the removed commands or the capture: `docs/explanation/architecture.html`, `docs/brainstorm/architecture.impl.md`, `docs/brainstorm/custody.impl.md`, `docs/brainstorm/worker-service.vocabulary.md`, `docs/brainstorm/worker-service.impl.md`, `docs/brainstorm/worker-execution-refactor/design.md` and `docs/brainstorm/HANDOFF.md`. The root branch `feature/agent-v2` changes them with PR 2.
 
 ## Decisions
 

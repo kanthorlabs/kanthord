@@ -47,7 +47,7 @@ The scope follows [L3-D39](L3-agent.md#decisions). The new files are test files 
 
 ## Pull requests
 
-Each PR is one engine pull request and one root pointer pull request ([LA How each pull request ships](LA-agent-build.md#how-each-pull-request-ships)). Each PR passes `pnpm run verify` in `engine` and the CI jobs `check`, `e2e` and `agent-e2e`.
+Each pull request is one engine pull request into `feature/agent-v2` ([LA How each pull request ships](LA-agent-build.md#how-each-pull-request-ships)). Each PR passes `pnpm run verify` in `engine` and the CI jobs `check`, `e2e` and `agent-e2e`.
 
 ### PR 1. The Linux test job
 
