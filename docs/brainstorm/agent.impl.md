@@ -376,14 +376,12 @@ The Agent component owns these keys of the section `agent`.
 - `swe@1` has no confinement, because `bash` reaches each path.
 - The resource loader runs the extension factories in this order:
   1. `homeRelativeCwd`
-  2. the redaction `restore` hook
-  3. `toolAllowlist`
-  4. `checkoutConfinement`, for a `re@1` session only
-  5. `pinnedLayers`
-  6. the `capabilities` of the host
-  7. the redaction `hook`
+  2. `markerRestore`
+  3. caller hooks (from `input.hooks`)
+  4. `inputRedaction`
+  5. `assistantRedaction`
 - pi runs handlers in load order. A guard thus sees each tool call before a capability handler.
-- `pinnedLayers` pins the work prompt as the first user message. [Sensitive text redaction](#sensitive-text-redaction) holds the two redaction hooks.
+- `pinnedLayers` pins the work prompt as the first user message. [Sensitive text redaction](#sensitive-text-redaction) holds the redaction hooks.
 
 ### Checkout confinement
 
@@ -463,9 +461,9 @@ The Agent component owns these keys of the section `agent`.
 - Sensitive text redaction is the first [session hook](agent.vocabulary.md#session-hook). It replaces each [sensitive text](agent.vocabulary.md#sensitive-text) of an agent session with a [redaction marker](agent.vocabulary.md#redaction-marker).
 - It acts before pi persists a message and before the model reads it.
 - Superseded 2026-11-21 by R2-H of Ulrich: KanthorD does not modify LLM output. Assistant text, thinking blocks and the compaction summary stay unredacted, and a finding raises a rotate warning. [L1-model.md](agent-worker-v3/L1-model.md#session-file) holds the rule; the rules below for LLM output are superseded.
-- The rule module is `engine/src/agent/sensitive-text.ts`. The session hooks live in `engine/src/agent/hooks/sensitive-text-redaction.ts`.
-- One redaction object exists for each call of `sensitiveTextRedaction`. It holds the rule set, one growing known set, the redaction table and the tag. It exposes two session hooks: `restore` and `hook`.
-- `openSession` creates the redaction object from the pi session id, unless the consumer passes one. The input of `openSession` holds exactly one of `knownSecrets` and `redaction`, so no consumer opens a session without a redaction.
+- The rule module is `engine/src/agent/sensitive-text.ts`. The session state lives in `engine/src/agent/redaction.ts`. The four hook modules are `marker-restore.ts`, `input-redaction.ts`, `output-finding.ts` and `assistant-redaction.ts` in `engine/src/agent/hooks/`.
+- One redaction object exists for each call of `createRedaction`. It holds the rule set, one growing known set, the redaction table and the tag. It implements `SessionRedaction`.
+- `openSession` creates the redaction object from the pi session id, unless the consumer passes one. The input of `openSession` holds exactly one of `knownSecrets` (`FreshRedaction`) and `redaction` (`ReusedRedaction`), so no consumer opens a session without a redaction.
 - `openSession` redacts the system prompt once with `redaction.text`, passes the result to the resource loader, and returns it. The worker and the workbench pin that text with `pinInference`. The worker pins the redacted work.
 - The worker passes the secrets of every credential of the execution as the known secrets of each session. The workbench passes the secrets of the holder of its current configuration. `env@1` passes the secrets of the server agent credentials.
 - The workbench keeps one redaction object for the life of its session in the process. Each later `openAgent` passes that object, so a marker from before `configure` restores after it.
