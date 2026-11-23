@@ -293,3 +293,9 @@ Proof: each row of "Stricter" or "Same" has a unit rule of [Unit-level rules](#u
     - The `WallTimer` timer is `unref`. Constraint: the consumer calls `dispose` at the end of the run.
     - PR7 ships no command limit: `remainingMs` and the export of `COMMAND_LIMIT_MS` from `run-budget.ts` come with PR8 and their L3-U6 case.
     - The tests of `run-budget.ts` use `t.mock.timers` for `setTimeout` and `Date`, and sleep no real time.
+14. **LA1-D14.** PR8 rulings (2026-11-23).
+    - `openAgent` returns `AgentOpened | AgentRefused`. `AgentOpened` holds `AgentRun` and `AgentRedactionSummary`. `AgentRefused` holds `AgentOpenKind` and `AgentOpenError`.
+    - `RunBudget { deadline: Date | null, usd: number | null }` in `agent-contract.ts` closes the HANDOFF item "Give an agent session a budget input". `AgentInput` closes the HANDOFF item "Move the native agent runtime". Both items are marked closed in `docs/brainstorm/HANDOFF.md`.
+    - The "handler error gives internal failure" case of L3-U7 has no test. All extension handlers in `openAgent` wrap errors internally or swallow them silently. No testing seam is available from the `AgentRun` interface. The case is deferred to L6, where the agent loop is instrumented.
+    - `src/agent/agent-contract.test.ts`, `src/agent/tool-table.test.ts` and `src/agent/pinned-layers.test.ts` are the test files of PR8. They use the faux provider from `src/agent/test-support.ts`.
+    - `scripts/import-check.test.mjs` checks the two rules of [L3 Import rule](L3-agent.md#import-rule). It is in `always_run` of `.kanthord/suite-pass.json` and in the `check` job of `.github/workflows/ci.yml`.
