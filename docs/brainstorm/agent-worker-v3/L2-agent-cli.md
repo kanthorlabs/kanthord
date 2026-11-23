@@ -602,7 +602,7 @@ Constraints:
 - [LA](LA-agent-build.md): move the checks that L1 lists before the deletion of `tasks run`, with the changes of this page. The entry reader uses `readStoredCredential`. `routingMetadataOf` uses the mapping and no seed comparison. `withoutAmbientCredentials` uses R in place of the output folder and also removes the proxy names. The child `TMPDIR` is `R/tmp`. The check of `auth.json` runs before the pi tool install.
 - [LA](LA-agent-build.md): in `docs/cli/other.md`, section "Output and exit behavior", add the exits `2`, `4`, `5` and `75` of `run agent`, the stderr warning line and the stderr notice line. With `run`, the global root names are five. Fix the text that names three: `docs/cli/other.md:1155`, `docs/cli/README.md:71` and `docs/cli/project.md:36`.
 - [LA](LA-agent-build.md): assign the file of each module of [Unit-level rules](#unit-level-rules).
-- [LA](LA-agent-build.md): move `ProviderFailure` from the scheduler contract (`src/scheduler/contract.ts:67-73`) to `src/llm/`, next to `providerFailureOf`, so the agent runtime imports no scheduler module.
+- [LA](LA-agent-build.md): `ProviderFailure` stays in `src/scheduler/contract.ts` ([LA1-D8](LA1-run-skeleton.md#decisions)). PR7 decides the boundary mechanism for `run-outcome.ts` to call `providerFailureOf`.
 - [LA](LA-agent-build.md): the Linux test job. L2-AC2 runs in the network namespace N. L2-AC6 runs as a test user whose user database entry gives the home H.
 
 ## Acceptance checks
