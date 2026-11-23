@@ -357,7 +357,7 @@ The Agent component owns these keys of the section `agent`.
 
 ## The agent port
 
-- `agentPort` in `engine/src/agent/agent-port.ts` opens each guarded agent session of a Foundry host. It answers a `SessionPort`, and `open` answers a `PortSession`.
+- `agentPort` in `engine/src/worker/unit/agent-port.ts` opens each guarded agent session of a Foundry host. It answers a `SessionPort`, and `open` answers a `PortSession`.
 - The input of `agentPort` holds `capabilities`, `modelRuntimeFactory`, `knownSecrets`, `trace`, `sessionRoot`, `budget`, `env` and `hostHome`. `agentPort` receives no credential.
 - `open` reads the first agent of `setup.agents`. It takes the working directory from `reviewWorkspace.directory`, or else from the checkout directory. With more than one checkout, it takes the parent directory of the first checkout.
 - `open` builds each session through the `AgentSessionRuntime` of pi (`openSessionRuntime` in `engine/src/agent/agent-session.ts`). pi emits `session_shutdown` in `runtime.dispose()` only, not in `session.dispose()`. `agentPort` therefore builds each session through `AgentSessionRuntime`.
@@ -391,7 +391,7 @@ The Agent component owns these keys of the section `agent`.
 - A `tool_call` handler reads the catalog entry of the tool. It resolves each field of `locations` and blocks the call when one path leaves every root.
 - A tool with no catalog entry is blocked with the reason `The tool <name> has no location rule in this session.`
 - A `locations` field that holds a value that is not a string is blocked. An absent field passes, so a call with no `path` takes `cwd`.
-- `agentPort` computes the roots (`engine/src/agent/review-roots.ts`). A `reviewWorkspace` gives its `directory` and its evidence directory: `<key>/evidence`, or `directory` when `key` equals `directory`.
+- `agentPort` computes the roots (`engine/src/worker/unit/review-roots.ts`). A `reviewWorkspace` gives its `directory` and its evidence directory: `<key>/evidence`, or `directory` when `key` equals `directory`.
 - A workspace with no checkout has `key` equal to `directory`, so `directory` is its only root. A `re@1` session with no `reviewWorkspace` has the working directory as its only root.
 - The hook copies the path rules of `resolveToCwd` of pi, because pi 1.1.0 does not export them: the `@` prefix, `~`, `~/`, `file://` and Unicode spaces.
 - The hook also checks the spelling variants that the pi `read` tool tries. The hook checks them for each path, not only for a path that does not exist. The variants are: a narrow no-break space before `AM.` or `PM.`, the NFD form, the curly quote, and the curly quote with NFD.
@@ -402,13 +402,13 @@ The Agent component owns these keys of the section `agent`.
 ### Capabilities
 
 - A capability is one `InlineExtension` in `capabilities`. The design has no registry and no plugin format.
-- `executionEvidence` and `linkUpdates` in `engine/src/agent/capabilities/` take `SessionHostTools = (workspace) => HostTools`. Each registers one tool with `pi.registerTool`.
+- `executionEvidence` and `linkUpdates` in `engine/src/worker/unit/capabilities/` take `SessionHostTools = (workspace) => HostTools`. Each registers one tool with `pi.registerTool`.
 - A tool takes the workspace from `ctx.cwd` of the call, so one capability list serves each execution.
 - Each tool declares `annotations.openWorldHint` explicitly. `evidence-upload` and `link_update_list` declare `false`.
 - `sessionTools` in `engine/src/agent/tool-table.ts` puts no capability tool in `customTools`. It puts only the wrapped `bash` there, and only for an agent with `bash`.
 - A capability factory receives only the pi extension API. That API exposes `pi.registerProvider` and `ctx.modelRegistry`, so the lint rule below forbids both. A capability receives no model runtime, no known secrets and no credential from `agentPort`.
 - Today no capability registers an MCP server. The MCP rules of design section 5.5 have no code.
-- The `eslint.config.js` entry for `src/agent/capabilities/**/*.ts` forbids `modelRegistry` and `registerProvider` as a member or a property. The message is `A capability reads no model registry and registers no provider.`
+- The `eslint.config.js` entry for `src/worker/unit/capabilities/**/*.ts` forbids `modelRegistry` and `registerProvider` as a member or a property. The message is `A capability reads no model registry and registers no provider.`
 - For a `Diagnostic`, `asToolError` throws an `Error` with the message `<code>: <message>`. Every other error passes unchanged.
 
 ### The session close
