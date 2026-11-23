@@ -70,11 +70,11 @@ Total sites that LA1 fixes: 24 union members, 8 property object types and 8 stri
 Each pull request is one engine pull request into `feature/agent-v2` ([LA How each pull request ships](LA-agent-build.md#how-each-pull-request-ships)). Each one passes `pnpm run verify` in `engine`. The verify command of each row is `pnpm run verify`, plus the named test files with `pnpm --silent run test:files <file>` for a fast check.
 
 1. **PR1. The lint rule**. Ships with PR2.
-   - Files: `eslint.config.js` with the rule, its four selectors and the file list `["src/agent/known-secrets.ts"]`; the rule test.
+   - Files: `eslint.config.js` with the rule, its four selectors, the file list `["src/agent/known-secrets.ts"]` and the test-file ignores of `kanthord/no-inline-param-type`; the rule test `scripts/no-inline-object-type.test.mjs`, in the script lists of `package.json` and in the test step of `.github/workflows/ci.yml`.
    - Rules: the rule test.
    - `main` works: the rule applies to `src/agent/known-secrets.ts` only.
 2. **PR2. The LLM moves**. Ships with PR1.
-   - Files: `credentialSecrets` and `mergedSecrets` to `src/agent/known-secrets.ts`; each importer. `ProviderFailure` stays in `src/scheduler/contract.ts` ([LA1-D8](#decisions)).
+   - Files: `credentialSecrets` and `mergedSecrets` to `src/agent/known-secrets.ts`; each importer. The agent import list of `worker-unit` and `apps-worker` in `eslint.config.js` gets the entry `known-secrets`. `ProviderFailure` stays in `src/scheduler/contract.ts` ([LA1-D8](#decisions)).
    - Rules: the moved tests of today.
    - `main` works: each importer reads the new place, and no behavior changes.
 3. **PR3. The worker-layer moves**.
@@ -253,4 +253,4 @@ Proof: each row of "Stricter" or "Same" has a unit rule of [Unit-level rules](#u
 5. **LA1-D5.** The harness starts the built `bin/kanthord.mjs` ([LA-D10](LA-agent-build.md#decisions)). Constraint: the harness fails at once when `dist/main.js` is absent.
 6. **LA1-D6.** The e2e support has two files: the LLM stub `src/apps/cli/e2e-llm-stub-test-support.ts` and the harness `src/apps/cli/e2e-run-agent-test-support.ts`. The test files are `src/apps/cli/e2e-run-agent.test.ts`, `src/apps/cli/e2e-run-agent-contract.test.ts` and `src/apps/cli/e2e-run-agent-boundary.test.ts`. Constraint: LA2, LA3 and LA5 use the same stub and harness; the build excludes `*test-support.ts` from `dist` (`tsconfig.build.json`).
 7. **LA1-D7.** The first real-LLM run is gate step 4.2 at the end of LA1, on the play setup of PR11 (Ulrich, 2026-11-23). Constraint: no automated check calls a real model; the CI holds no model credential.
-8. **LA1-D8.** PR1 and PR2 ship as one pull request. `credentialSecrets`, `mergedSecrets` and `KnownSecrets` move to `src/agent/known-secrets.ts` (not `src/llm/`). `ProviderFailure` stays in `src/scheduler/contract.ts`. Reason: `eslint` refuses an empty `files` array, so the lint rule ships with the file `src/agent/known-secrets.ts` already in scope; the boundary rule forbids `agent` and `worker-unit` to import the `llm` component; a `contract.ts` file may import only contract files.
+8. **LA1-D8.** PR1 and PR2 ship as one pull request. `credentialSecrets` and `mergedSecrets` move to `src/agent/known-secrets.ts` (not `src/llm/`). The type `KnownSecrets` stays in the runtime module `src/agent/hooks/sensitive-text-redaction.ts`, and `known-secrets.ts` imports it. `ProviderFailure` stays in `src/scheduler/contract.ts`. Constraint: no runtime module imports `known-secrets.ts`, because that file imports `src/custody/contract.ts`. Reason: `eslint` refuses an empty `files` array, so the lint rule ships with the file `src/agent/known-secrets.ts` already in scope; the boundary rule forbids `agent` and `worker-unit` to import the `llm` component; a `contract.ts` file may import only contract files.

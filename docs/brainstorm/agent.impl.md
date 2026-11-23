@@ -1055,7 +1055,6 @@ A test file builds every fake key from parts at run time, for example `["AKIA", 
 - `restore` blocks: a `llm_credential` marker after the holder changes and the current set no longer holds its secret.
 - `restore` blocks: a value whose view text differs from its source text has index 0, and its restore into `write` blocks.
 - Table: each final merged span of pass 2 enters the table, and its marker restores the exact source text.
-- `mergedSecrets` of two sources returns the secrets of both.
 - `restore` leaves text: a tracer marker, a marker of another session, also in `bash`.
 - A table above `REDACTION_TABLE_MAX` gives index 0, and its restore blocks.
 - A custom tool with a `pattern` parameter refuses a marker before the restore.
@@ -1066,6 +1065,10 @@ A test file builds every fake key from parts at run time, for example `["AKIA", 
 - `context` redacts the summary of a resumed file; `session_compact` counts the residual.
 - `context`: a `custom` message that a consumer `context` handler adds before `hook` reaches the request redacted.
 - `counts`, `text()` counts, a handler error that fails closed.
+
+`engine/src/agent/known-secrets.test.ts`:
+
+- `mergedSecrets` of two sources returns the secrets of both. `credentialSecrets` returns the key of an API key entry, both tokens of an OAuth entry and nothing for an absent provider.
 
 Engine consumers:
 
