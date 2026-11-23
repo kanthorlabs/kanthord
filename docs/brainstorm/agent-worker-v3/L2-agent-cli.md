@@ -554,6 +554,47 @@ L2 needs these items from the agent contract. [L3](L3-agent.md#input-and-output-
 17. **Abort.** An abort ends the turn with `stopped`. The contract returns after pi persists the aborted entry and after each child process ends. The CLI applies the time limit of [Shutdown](#shutdown).
 18. **Forced stop.** The contract gives a forced stop. It kills each child process at once, stops the wait for pi and returns the totals so far and the last assistant text so far.
 
+## Play setup
+
+The script `scripts/play-run-agent.mjs` of the engine prepares a private place where a human runs `run agent` at once. The `package.json` script is `play:agent`.
+
+```sh
+pnpm run play:agent -- [--repo <path>] [--model <provider>/<model>:<level>] [--auth <path>] [--budget <duration>] [--no-refresh]
+```
+
+| Option         | Default                           | Effect                                                                    |
+| -------------- | --------------------------------- | ------------------------------------------------------------------------- |
+| `--repo`       | none                              | Clone this git repository as the workspace. With no value, use the sample |
+| `--model`      | `anthropic/claude-haiku-5-5:high` | The model of each run                                                     |
+| `--auth`       | `~/.pi/agent/auth.json`           | The `--auth` file of each run                                             |
+| `--budget`     | `15m`                             | The wall budget of each run                                               |
+| `--no-refresh` | refresh on                        | Skip the pi token refresh before each run                                 |
+
+The script does these steps:
+
+1. Set the umask `0o077`. Make the play directory `<state>/play/<UTC time>` with mode `0700`. `<state>` is the state directory of KanthorD.
+2. Make the workspace `workspace/`:
+   - With no `--repo`, make the sample repository: `sum.mjs` with an off-by-one bug, `sum.test.mjs` with `node:test` cases that fail, one commit with a fixed author.
+   - With `--repo`, run `git clone --quiet --no-hardlinks <path> workspace`, then remove the remote `origin`.
+3. Write the placeholder prompt `prompt.md`:
+   - Sample: "Fix the bug in `sum.mjs`. Run `node --test` before and after the fix. Reply with the root cause and the test result."
+   - `--repo`: "Read this repository. Reply with five bullets that describe its structure and how to run its tests. Do not change any file."
+4. Write `run.sh` with mode `0700`, and print its path and the next command.
+
+`run.sh [<prompt>]` does these steps:
+
+1. Set `ulimit -c 0`.
+2. Unless `--no-refresh` was given, run `pi auth print-bearer-token --provider <provider> --min-expiry 20m > /dev/null`. `<provider>` is the part of `--model` before the first `/`.
+3. Run `node <engine>/bin/kanthord.mjs run agent swe@1` with `--model`, `--budget`, `--auth`, `--workspace workspace`, `--session sessions/<UTC time>.jsonl`, `--output result.jsonl` and `--prompt`. The prompt is the argument of `run.sh`, else `prompt.md`.
+4. Print the exit code, the fields `end`, `class` and `text` of the last line of `result.jsonl`, and `git -C workspace status --short`.
+
+Constraints:
+
+- The script and `run.sh` never read, copy or print the `--auth` file. Only pi and `kanthord` read it. The refresh output goes to `/dev/null`.
+- The script makes no change outside the play directory. A clone of `--repo` has no remote.
+- The script refuses a missing `dist/main.js` of the engine with exit `1`.
+- Each run of `run.sh` has a new session path, because a session path must not exist ([Session file path](#session-file-path), rule 2).
+
 ## Handoffs to later layers
 
 - [L5](L5-worker-cli.md): `run worker` under the root `run`. Its codes take the form `cli.run.worker.<reason>`, to match `run agent`. `kanthord run --help` then lists `agent` and `worker`.
@@ -667,6 +708,10 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
     - Fixture: Auth, Stub, W, H, X, T, D. The model `stub-1` of `openai-compatible` has no price ([Budget](#budget), rule 6).
     - Command: Run with `--budget 1usd`.
     - Assert: refused with `cli.run.agent.budget_unpriced`, with the row `option: --budget`. Stub receives no request. No file exists at S. O does not exist. T holds no file.
+16. **L2-AC16. The play setup gives a workspace, a placeholder prompt and a run that works.**
+    - Fixture: Auth, Stub, H, X. The state directory of KanthorD is under X.
+    - Command: `pnpm run play:agent -- --model openai-compatible/stub-1:off --auth "$AUTH" --no-refresh`, then the printed `run.sh` with no argument.
+    - Assert: the script exits `0`. The play directory has mode `0700`. `workspace/` is a git repository with one commit, no remote and a clean status. `prompt.md` holds the sample placeholder. `run.sh` exits `0`. The request to Stub holds the text of `prompt.md`. `result.jsonl` holds one line with `end` `completed`. One `0600` file exists in `sessions/`. The output of the script and of `run.sh` holds no value of Auth.
 
 ### Unit-level rules
 
@@ -721,6 +766,7 @@ These rules hold with no process, no file system flow and no LLM stub, so their 
 23. **L2-D23.** Each end and each diagnostic code is `retryable` or `terminal` (Ulrich, 2026-11-22). Constraint: `retryable` means that the same input can succeed later with a new `--session` path and a workspace that passes the start preconditions; the class comes from `isContextOverflow` and `isRetryableAssistantError`; the failure kind comes from `providerFailureOf`; `run agent` retries nothing, and the retries of pi stay.
 24. **L2-D24.** A first signal stops the run gracefully, with the result `stopped`; a second signal ends it after the removal of R (Ulrich, 2026-11-22). Aelita decision: the graceful part has a limit of 10 seconds, then a forced stop. Constraint: SIGINT and SIGTERM have the same effect; the end `stopped` is `terminal`; step 11 ignores a signal.
 25. **L2-D25.** The run refuses a path-like `--prompt` or `--system-prompt` value that names an existing entry that is no regular UTF-8 text file, with `cli.file.not_regular` or `cli.file.encoding_invalid` (Ulrich, 2026-11-22). Constraint: only a path-like value that names no entry is used as text, with the notice `cli.run.agent.prompt_text_path`.
+26. **L2-D26.** The engine ships the play setup `scripts/play-run-agent.mjs` ([Play setup](#play-setup); Ulrich, 2026-11-23). Constraint: it reads no credential, changes nothing outside its play directory and runs only the shipped `run agent`.
 
 ## Open questions for Ulrich
 

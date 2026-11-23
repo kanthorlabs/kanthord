@@ -38,13 +38,13 @@ LA is a build plan. It holds no acceptance check of its own ([index](index.md#re
 
 A sub-layer is a group of pull requests that ends with acceptance checks. Each check of a sub-layer is an end-to-end test. The pull request lists of the sub-layer pages are the one build order. Build the sub-layers in this order. Do not start a sub-layer before the checks of the sub-layer above it pass.
 
-| Sub-layer                                             | Pull requests | End-to-end checks                                                       | Where the checks run                         |
-| ----------------------------------------------------- | ------------- | ----------------------------------------------------------------------- | -------------------------------------------- |
-| [LA1 Run skeleton](LA1-run-skeleton.md)               | PR1 to PR10   | L2-AC1, AC3, AC4, AC5, AC7, AC8, AC9, AC13, AC14; L3-AC1, AC2, AC3, AC4 | `pnpm run verify`, CI job `check`            |
-| [LA2 Credential boundary](LA2-credential-boundary.md) | PR 1, PR 2    | L2-AC2, AC6                                                             | CI job `agent-e2e`                           |
-| [LA3 Run ends](LA3-run-ends.md)                       | PR 1 to PR 4  | L2-AC10, AC11, AC12, AC15; L3-AC5                                       | `pnpm run verify`, CI job `check`            |
-| [LA4 Consumer migration](LA4-consumer-migration.md)   | PR 1 to PR 3  | L1 AC20, AC28, AC29                                                     | `pnpm run verify`, CI jobs `check` and `e2e` |
-| [LA5 Evaluation runner](LA5-evaluation-runner.md)     | PR 1 to PR 5  | L4-AC1 to AC10                                                          | CI job `agent-e2e`                           |
+| Sub-layer                                             | Pull requests | End-to-end checks                                                                            | Where the checks run                         |
+| ----------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| [LA1 Run skeleton](LA1-run-skeleton.md)               | PR1 to PR11   | L2-AC1, AC3, AC4, AC5, AC7, AC8, AC9, AC13, AC14, AC16; L3-AC1, AC2, AC3, AC4; gate step 4.2 | `pnpm run verify`, CI job `check`            |
+| [LA2 Credential boundary](LA2-credential-boundary.md) | PR 1, PR 2    | L2-AC2, AC6                                                                                  | CI job `agent-e2e`                           |
+| [LA3 Run ends](LA3-run-ends.md)                       | PR 1 to PR 4  | L2-AC10, AC11, AC12, AC15; L3-AC5                                                            | `pnpm run verify`, CI job `check`            |
+| [LA4 Consumer migration](LA4-consumer-migration.md)   | PR 1 to PR 3  | L1 AC20, AC28, AC29                                                                          | `pnpm run verify`, CI jobs `check` and `e2e` |
+| [LA5 Evaluation runner](LA5-evaluation-runner.md)     | PR 1 to PR 5  | L4-AC1 to AC10                                                                               | CI job `agent-e2e`                           |
 
 - LA1 ships `run agent` with each credential rule of L2 that needs no Linux job: the `--auth` reader, the run directory, the pi directory, the ambient removal with the proxy names, the `env_proxy` refusal and the confinement. LA1 also holds the end-to-end checks of these rules.
 - LA2 adds the Linux job `agent-e2e` and the two checks that need the network namespace or the test user.
@@ -146,13 +146,14 @@ The gate runs on the engine `main` after LA5 PR 5 and the set build. `kanthord` 
 ### Gate step 4.1. The checks
 
 1. Command: `pnpm run verify` in `engine` on macOS. Then read the scheduled CI run of the engine `main` after LA5 PR 5. The schedule event passes `--full` to `scripts/suite-pass.mjs`, so the jobs `check` and `e2e` skip no recorded pass.
-2. Pass: `pnpm run verify` exits `0`. The jobs `check`, `e2e` and `agent-e2e` of that run pass. The name of each end-to-end test starts with its check id. The test log of the three jobs lists each of these ids as passed, and none as skipped: L1 AC20, AC28 and AC29; L2-AC1 to AC15; L3-AC1 to AC5; L4-AC1 to AC10.
+2. Pass: `pnpm run verify` exits `0`. The jobs `check`, `e2e` and `agent-e2e` of that run pass. The name of each end-to-end test starts with its check id. The test log of the three jobs lists each of these ids as passed, and none as skipped: L1 AC20, AC28 and AC29; L2-AC1 to AC16; L3-AC1 to AC5; L4-AC1 to AC10.
 
 ### Gate step 4.2. The real-credential run
 
 1. Ulrich gives the pi provider id, the model id and the level of an entry in his pi `auth.json`.
 2. Aelita runs the commands of [L2 Gate procedure](L2-agent-cli.md#gate-procedure-the-real-credential-run) with those values.
 3. Pass: the six conditions of that procedure.
+4. Step 4.2 runs twice: first at the end of [LA1](LA1-run-skeleton.md#exit-gate), then again in the final gate on the build of LA5 PR 5.
 
 ### Gate step 4.3. The agent evaluation
 
@@ -193,7 +194,7 @@ Only Ulrich can do these actions: give the entry of step 4.2; provision the `ant
 
 ## Decisions
 
-1. **LA-D1.** LA has five sub-layers with 24 engine pull requests, then the evaluation set build and the agent gate. Constraint: each pull request is one engine pull request and one root pointer pull request; `main` works after each pull request; the pull request lists of the sub-layer pages are the one build order.
+1. **LA-D1.** LA has five sub-layers with 25 engine pull requests, then the evaluation set build and the agent gate. Constraint: each pull request is one engine pull request and one root pointer pull request; `main` works after each pull request; the pull request lists of the sub-layer pages are the one build order.
 2. **LA-D2.** The lint rule comes in LA1 PR1 with an empty file list. Constraint: each later pull request adds its in-scope files to the list and fixes their sites; no pull request adds an entry to `eslint-suppressions.json`.
 3. **LA-D3.** L3-AC1 runs in LA1 PR10, the first pull request that makes `run agent` write a session file. Constraint: LA1 PR4 makes the redaction rules pass before LA1 PR10.
 4. **LA-D4.** The Project Service moves to the contract in LA4 PR 1. Constraint: it needs no worker change; it gives the Project Service the exit redaction before the worker round; the Workbench keeps `openSession` until the rebase.

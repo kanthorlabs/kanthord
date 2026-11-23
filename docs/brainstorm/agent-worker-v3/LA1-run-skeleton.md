@@ -4,7 +4,7 @@ Status: `draft`. Base: engine `c864130e`. Parent: [LA](LA-agent-build.md#sub-lay
 
 ## Goal
 
-LA1 ships `kanthord run agent` on the agent contract of [L3](L3-agent.md#input-and-output-contract). A human runs one profile on one workspace with one `--auth` entry. The run writes a `0600` session file at the caller path and reports one result. The session file holds no known secret in an input entry. LLM output stays unchanged, and the result text holds the redaction marker in the place of a known secret. LA1 ends when the thirteen end-to-end checks of [LA1 checks](#end-to-end-checks) pass in `pnpm run verify`.
+LA1 ships `kanthord run agent` on the agent contract of [L3](L3-agent.md#input-and-output-contract). A human runs one profile on one workspace with one `--auth` entry. The run writes a `0600` session file at the caller path and reports one result. The session file holds no known secret in an input entry. LLM output stays unchanged, and the result text holds the redaction marker in the place of a known secret. LA1 ends when the fourteen end-to-end checks of [LA1 checks](#end-to-end-checks) pass in `pnpm run verify`.
 
 ### Entry state
 
@@ -23,6 +23,13 @@ LA1 ships `kanthord run agent` on the agent contract of [L3](L3-agent.md#input-a
 - One SIGINT during the turn aborts the session with no time limit, as `stopOnSignal` of today does (`src/apps/cli/worker-tasks.ts:287-292`). The run writes the result with the end `stopped`, removes R and exits `2`.
 - `worker tasks run` still works. [LA4](LA-agent-build.md#sub-layers) deletes it.
 - These parts come later: the Linux test job with L2-AC2 and L2-AC6 ([LA2](LA2-credential-boundary.md)); the start preconditions, the class `retryable` with exit `75`, the cost budget, SIGTERM, the time limit of the shutdown, the forced stop and the second signal ([LA3](LA3-run-ends.md#entry-state)).
+
+### Exit gate
+
+LA1 ends when both steps pass:
+
+1. The checks of [End-to-end checks](#end-to-end-checks) pass in `pnpm run verify` and in the CI job `check`.
+2. Gate step 4.2, [the real-credential run](LA-agent-build.md#gate-step-42-the-real-credential-run), passes on the build of PR11. Ulrich gives the entry. The final agent gate runs step 4.2 again on the build of LA5.
 
 ## Scope
 
@@ -113,6 +120,11 @@ Each pull request is one engine pull request and one root pull request that move
     - Rules: the terminal cases and the `open_failed` case of L2 unit-level rule 10 in `run-agent-exit.test.ts`; [L1 U9](L1-model.md#unit-level-rules); the thirteen checks of [End-to-end checks](#end-to-end-checks).
     - `main` works: `run agent` is a new command, and `worker tasks run` keeps its behavior.
 
+11. **PR11. The play setup**.
+    - Files: `scripts/play-run-agent.mjs` and `scripts/play-run-agent.test.mjs` ([L2 Play setup](L2-agent-cli.md#play-setup)); the script `play:agent` and both files in `test`, `format`, `lint` and `format:check` of `package.json`; the section "Try it" of `engine/docs/cli/run.md`, with the setup and the command of `run.sh`.
+    - Rules: [L2-AC16](L2-agent-cli.md#checks).
+    - `main` works: the script is a new file that no command calls.
+
 ## End-to-end checks
 
 (LA1 ends when these pass)
@@ -140,6 +152,7 @@ Each check keeps the fixture, the command and the pass condition of its source t
 | [L2-AC9](L2-agent-cli.md#checks): a prompt value is text or a file                                                 | `src/apps/cli/e2e-run-agent.test.ts`          | text `ok`                                           |
 | [L2-AC13](L2-agent-cli.md#checks): the model selection reaches the request                                         | `src/apps/cli/e2e-run-agent.test.ts`          | text `ok`                                           |
 | [L2-AC14](L2-agent-cli.md#checks): a confined profile reads nothing outside its root                               | `src/apps/cli/e2e-run-agent-boundary.test.ts` | four blocked calls, one `read` of F, then a text    |
+| [L2-AC16](L2-agent-cli.md#checks): the play setup gives a workspace, a placeholder prompt and a run that works     | `scripts/play-run-agent.test.mjs`             | text `ok`                                           |
 | [L3-AC1](L3-agent.md#acceptance-checks): no input entry holds a known secret                                       | `src/apps/cli/e2e-run-agent-contract.test.ts` | run 1: `read`, text `done`; run 2: HTTP 400 with K  |
 | [L3-AC2](L3-agent.md#acceptance-checks): each profile composes the prompt chain                                    | `src/apps/cli/e2e-run-agent-contract.test.ts` | text `ok` per profile                               |
 | [L3-AC3](L3-agent.md#acceptance-checks): the full tool set, and an absent declared tool                            | `src/apps/cli/e2e-run-agent-contract.test.ts` | one scripted call per profile, text `done`          |
@@ -156,6 +169,7 @@ Build details that the source texts leave open:
 7. **L2-AC5.** `<marker>` is a path in `$TEST`. The test reads it with `lstat` and expects `ENOENT`.
 8. **L2-AC7, variant 2.** The commit of W holds `.pi/extensions/x.ts` and `AGENTS.md` before the run. M7 and M9 are paths in `$TEST`.
 9. **L2-AC14.** The marker file lies in `$TEST`, outside W. A block result is a `toolResult` entry of S with `isError` `true`.
+10. **L2-AC16.** The test sets `XDG_STATE_HOME` of the script to X and starts the stub of `e2e-llm-stub-test-support.ts`. It fails at once when `dist/main.js` is absent.
 
 ## Unit-level rules
 
@@ -211,6 +225,7 @@ Each row names a credential rule that LA1 touches. "Today" is `worker tasks run`
 | Allowlist and confinement          | Only in sessions that `agentPort` opens                                                                       | In each `openAgent` session, by profile. Proof: L1 U6, L2-AC14                                                                                                        | Stricter                            |
 | KanthorD credential                | `tasks run` declares no `--token`                                                                             | `run agent` refuses `--token` before each other check                                                                                                                 | Same                                |
 | Stop on a signal                   | `stopOnSignal` handles SIGINT (`src/apps/cli/worker-tasks.ts:287-292`)                                        | One SIGINT aborts the session; the run removes R and writes the result                                                                                                | Same; LA3 makes it stricter         |
+| Play setup                         | No play setup                                                                                                 | `play-run-agent.mjs` passes the `--auth` path only; it reads, copies and prints no credential. Proof: L2-AC16                                                         | Same                                |
 | Run bound                          | The wall time of the seed (`wallDeadlineOfPlan`)                                                              | The wall budget, default `2h`; a `usd` value is refused                                                                                                               | Same                                |
 
 Proof: each row of "Stricter" or "Same" has a unit rule of [Unit-level rules](#unit-level-rules) or a check of [End-to-end checks](#end-to-end-checks) in LA1. LA2 adds the end-to-end proof of the rules that need the network namespace or the test user: L2-AC2 and L2-AC6.
@@ -231,8 +246,9 @@ Proof: each row of "Stricter" or "Same" has a unit rule of [Unit-level rules](#u
 ## Decisions
 
 1. **LA1-D1.** LA1 builds the `--auth` reader, R, the pi directory checks, the ambient removal with the proxy names, the `env_proxy` refusal, the wall half of `run-budget.ts`, the base of `run-outcome.ts` and the SIGINT stop of today. Constraint: LA1 checks no start precondition and refuses a `usd` budget; LA2 adds the Linux job with L2-AC2 and L2-AC6; LA3 extends the budget, the outcome and the signal handler.
-2. **LA1-D2.** LA1 has ten pull requests. PR9 holds the input modules with no caller, and PR10 connects the command. Constraint: the end-to-end checks land in PR10; PR1 to PR9 pass with unit tests and the end-to-end tests of today.
+2. **LA1-D2.** LA1 has eleven pull requests. PR9 holds the input modules with no caller, PR10 connects the command, and PR11 adds the play setup. Constraint: the end-to-end checks of the command land in PR10 and L2-AC16 lands in PR11; PR1 to PR9 pass with unit tests and the end-to-end tests of today.
 3. **LA1-D3.** The LA1 checks run in `pnpm run verify` on macOS and in the CI job `check`. Constraint: no LA1 check needs a network namespace or a test user.
 4. **LA1-D4.** `run agent` holds its own copy of each check that it takes over from `tasks run`. Constraint: LA1 changes no file of `tasks run`; LA4 deletes the old copies.
 5. **LA1-D5.** The harness starts the built `bin/kanthord.mjs` ([LA-D10](LA-agent-build.md#decisions)). Constraint: the harness fails at once when `dist/main.js` is absent.
 6. **LA1-D6.** The e2e support has two files: the LLM stub `src/apps/cli/e2e-llm-stub-test-support.ts` and the harness `src/apps/cli/e2e-run-agent-test-support.ts`. The test files are `src/apps/cli/e2e-run-agent.test.ts`, `src/apps/cli/e2e-run-agent-contract.test.ts` and `src/apps/cli/e2e-run-agent-boundary.test.ts`. Constraint: LA2, LA3 and LA5 use the same stub and harness; the build excludes `*test-support.ts` from `dist` (`tsconfig.build.json`).
+7. **LA1-D7.** The first real-LLM run is gate step 4.2 at the end of LA1, on the play setup of PR11 (Ulrich, 2026-11-23). Constraint: no automated check calls a real model; the CI holds no model credential.
