@@ -69,13 +69,14 @@ The rulings:
 1. **`SpanStatus`.** It leaves the runtime. The trace belongs to the consumer ([L1 Statelessness](L1-model.md#statelessness), check 4). `SessionTrace` moves with `agent-port.ts` to the worker layer, and the worker sets the span status from the [output](#output).
 2. **`SecretShape`.** `credentialSecrets` and `mergedSecrets` read a pi `CredentialStore` that the consumer holds. They move to `src/agent/known-secrets.ts` ([LA1-D8](LA1-run-skeleton.md#decisions)). The runtime takes `KnownSecrets` as input and imports no custody module.
 3. **The worker contract.** Each import leaves with the moves of the [file assignment](#file-assignment). The catalog owns the names of the worker tools. `HostTool` of `src/worker/contract.ts` keeps its values, and a unit rule of L6 asserts that they equal the catalog names.
-4. **`ProviderFailure` (new design).** `ProviderFailure` stays in `src/scheduler/contract.ts` ([LA1-D8](LA1-run-skeleton.md#decisions)). `run-outcome.ts` imports `providerFailureOf` from `src/scheduler/contract.ts`, where it now lives ([LA1-D13](LA1-run-skeleton.md#decisions)). The entry `src/llm/provider-failure.ts` is superseded: `scheduler/contract.ts` is in the allowed set as a service contract.
+4. **`ProviderFailure` (new design).** `ProviderFailure` stays in `src/scheduler/contract.ts` ([LA1-D8](LA1-run-skeleton.md#decisions)). `run-outcome.ts` imports `providerFailureOf` from `src/scheduler/contract.ts`, where it now lives ([LA1-D13](LA1-run-skeleton.md#decisions)). `src/scheduler/contract.ts` is in the allowed set below.
 
 Change: the import check of [L1-D5](L1-model.md#decisions) uses an allowed set. The import closure of each runtime module, type imports included, holds only these modules:
 
 - the built-in modules of Node;
 - `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core` and `zod`;
 - the modules of `src/kernel/`. The closure stops at a kernel module: a package that a kernel module imports is allowed, for example `simple-git` of `src/kernel/git-environment.ts`. No kernel module imports a module of a service today;
+- `src/scheduler/contract.ts`, for `ProviderFailure` and `providerFailureOf`. Its closure holds only `zod` and modules of `src/kernel/`;
 - the runtime modules of `src/agent/`;
 - after the rebase of `feature/workbench-v2`: `@anthropic-ai/sandbox-runtime`, for `bash-sandbox.ts` ([Constraints on the Workbench branch at rebase](#constraints-on-the-workbench-branch-at-rebase)).
 
@@ -783,7 +784,7 @@ The catalog split changes the field reads of each consumer of `getAgentDeclarati
 | `completed`  | Each other end of the agent loop, `endAfterTurn` included                                                                                                                                                       |
 
 - **Class.** For a provider error, the class is `retryable` when `isContextOverflow(last, model.contextWindow)` is `false` and `isRetryableAssistantError(last)` is `true` (`@earendil-works/pi-ai`, `dist/utils/overflow.d.ts:57`, `dist/utils/retry.d.ts:57`). Else it is `terminal`. The failure `internal` is `terminal` ([L2 Classes](L2-agent-cli.md#classes), rule 3).
-- **Failure kind.** `providerFailureOf(errorMessage)` of the redacted error text (`src/llm/provider-failure.ts`). An unknown text gives `unavailable`. The failure kind does not decide the class.
+- **Failure kind.** `providerFailureOf(errorMessage)` of the redacted error text (`src/scheduler/contract.ts`). An unknown text gives `unavailable`. The failure kind does not decide the class.
 - **Reason.** `RunFailure.reason` is the `errorMessage` of the last `assistant` message, or the message of the error, after `exitText`.
 - The contract retries nothing. The retries of pi stay, with the in-memory settings of `sessionParts`.
 - Change: today the worker builds the provider failure from the session messages (`providerFailure`, `src/worker/unit/native-agent.ts:77`), and the Project Service throws `session.state.errorMessage` (`src/project/environment-agent.ts:331`).
@@ -1041,7 +1042,7 @@ These are order hints. [LA](LA-agent-build.md) fixes the order.
     - `src/agent/prompt-render.ts`: 2, 1 and 0. The step of `prompt-chain.ts` edits `finalPrompt`.
     - `src/workbench/service.ts`: 0, 2 and 0. The agent build edits the call of `finalPrompt` and the catalog reads.
     - `src/agent/agent-session.ts`: 2, 0 and 0. L3 names the members of `SessionRedactionInput`.
-    - `src/scheduler/contract.ts`: out of scope. `ProviderFailure` stays in it and no V3 step adds or edits a declaration there.
+    - `src/scheduler/contract.ts`: out of scope. `ProviderFailure` stays in it. LA1 PR7 adds only the function `providerFailureOf`, with no object type ([LA1-D13](LA1-run-skeleton.md#decisions)).
 
 ### To L6
 
@@ -1081,7 +1082,7 @@ No change is open. L3-D28 to L3-D36 and L3-D42 to L3-D45 record the changes that
 ## Decisions
 
 1. **L3-D1.** The runtime and the server part of `src/agent/` separate by file as [File assignment](#file-assignment) states. Constraint: the import closure of each runtime module stays in the allowed set of [Import rule](#import-rule), and the closure stops at a kernel module. `agent-port.ts`, `session-directory.ts`, `review-roots.ts` and `capabilities/` move unchanged to `src/worker/unit/`.
-2. **L3-D2.** `SpanStatus` leaves the runtime with the trace. `credentialSecrets` and `mergedSecrets` move to `src/agent/known-secrets.ts` ([LA1-D8](LA1-run-skeleton.md#decisions)). `ProviderFailure` stays in `src/scheduler/contract.ts`; PR7 resolves the import-boundary question for `run-outcome.ts`. The code constant of the pi tool install moves to `pi-tools.ts` with its value `worker.start.tool_missing`. Reason: each import serves a consumer concern.
+2. **L3-D2.** `SpanStatus` leaves the runtime with the trace. `credentialSecrets` and `mergedSecrets` move to `src/agent/known-secrets.ts` ([LA1-D8](LA1-run-skeleton.md#decisions)). `ProviderFailure` and `providerFailureOf` stay in `src/scheduler/contract.ts`, and `run-outcome.ts` imports them ([LA1-D13](LA1-run-skeleton.md#decisions)). The code constant of the pi tool install moves to `pi-tools.ts` with its value `worker.start.tool_missing`. Reason: each import serves a consumer concern.
 3. **L3-D3.** The agent contract is `openAgent(input)` with the input, the run handle and the output of [Input and output contract](#input-and-output-contract). Constraint: each new consumer opens sessions only through it, and no consumer of it gets the `AgentSession`.
 4. **L3-D4.** The runtime catalog in `catalog.ts` lists every profile that opens a session. `declarations.ts` of the server part lists only the configuration owners. Constraint: `guard@1` stays a server declaration, because it opens no session.
 5. **L3-D5.** `AgentTools` of the branch is the field shape. `main` holds `builtin`, `host` and `environment`; the Workbench branch adds `operation` and `workbench` at its rebase. Constraint: a field exists only with its reader. `offer_action` and `request_owner_act` join `workbench`.
