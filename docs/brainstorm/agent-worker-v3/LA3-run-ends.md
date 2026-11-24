@@ -191,6 +191,22 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 14. **`--budget` option tests.** `parseBudget` of `run-agent-budget.ts` owns each `--budget` refusal of [L2 unit-level rule 1](L2-agent-cli.md#unit-level-rules). Their tests are in `run-agent-budget.test.ts`.
 
+### PR 4 build
+
+1. **`finishTurn` aborted-signal guard.** The `finishTurn` override of `agent-contract.ts` checks `inputSignal.aborted` and returns `{ action: "end" }`. Reason: without this guard, after a bash tool call ends under a signal abort, pi loops and starts the next LLM request with the already-aborted signal. That request fails with an AbortError, the last assistant message gets `stopReason = "error"`, and `loopEnd` returns `end: failed`. With the guard, pi exits the loop without a second request, and `loopEnd` returns `end: stopped`. PR 3 build item 12 gives the same pattern for `budgetReached`.
+
+2. **`OpenRunOptions` interface.** `run-agent.ts` extracts `signal`, `promptText` and `onAgentOpened` into `OpenRunOptions`. This reduces `openAndRunAgent` from 4 params to 2 and satisfies the `max-params: 3` rule.
+
+3. **`ResultContext` and `emitRunResult`.** `run-agent.ts` extracts the 10 result fields into `ResultContext` and the result emission into `emitRunResult(ctx, turnEnd)`. This reduces the complexity of `runAgent` from 13 to 10 and satisfies the `complexity: 10` rule.
+
+4. **LLM stub `closedRequestCount`.** `e2e-llm-stub-test-support.ts` adds `closedRequestCount` to `LlmStub`. The stub registers a `close` listener on each response. When the connection closes before `res.writableEnded`, it increments the counter. L2-AC11 Variant 2 asserts that the stub recorded one closed connection, which proves the signal fired before the stub finished writing.
+
+5. **`spawnCliAndSignal` test support.** `e2e-run-agent-test-support.ts` adds `spawnCliAndSignal(args, env, onReady, signal)`. It waits for `onReady` to report true, then sends the given signal to the CLI process. The 4-param signature is in a `*test-support.ts` file, which is excluded from the `max-params: 3` rule.
+
+6. **L2-AC11 named constants.** `SIGTERM_SIGNAL`, `SIGINT_SIGNAL`, `NO_TOOL_CALLS`, `NO_REQUESTS`, `ASSISTANT_ROLE`, and `NO_STDERR_LINES` satisfy the `no-restricted-syntax` rule that prohibits string literals in comparisons and in `assert.equal` arguments. `ASSISTANT_ROLE` replaces the string literal `"assistant"` in five places across `e2e-run-agent-ends.test.ts`.
+
+7. **`StopHandlers` interface.** `run-agent-signal.ts` exports `StopHandlers { release, setForceStop, forcedWithoutResult }`. `run-agent.ts` calls `setForceStop` after `openAgent` opens and uses `forcedWithoutResult` to skip result emission on a second signal. `setForceStop` holds `forceResolve` of the force-stop race.
+
 ## Decisions
 
 1. **LA3-D1.** LA3 requires the [Entry state](#entry-state) from LA1. Constraint: LA1 ships the wall half of `run-budget.ts`, the base of `run-outcome.ts` with the class `terminal` only, and the SIGINT-only stop of today; LA1 refuses a `usd` budget.
