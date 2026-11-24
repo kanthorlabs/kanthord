@@ -55,17 +55,17 @@ Each pull request is one engine pull request into `feature/agent-v2` ([LA How ea
 - The job `agent-e2e` runs on `ubuntu-latest` with the Node version of `.nvmrc`. Its steps:
   1. Install the dependencies. Run `pnpm run build` and `pnpm run pi-tools:fetch`.
   2. Run `sudo useradd --create-home --home-dir /home/kanthord-e2e kanthord-e2e`. The home of this user is H of L2-AC6.
-  3. Run `sudo ip netns add kanthord-n` and `sudo ip -n kanthord-n link set lo up`.
+  3. Run `sudo ip netns add kanthord-n`, `sudo ip -n kanthord-n link set lo up` and `sudo ip -n kanthord-n route add local 0.0.0.0/0 dev lo` (BD1).
   4. Load an nft table in N with a dynamic set `connections` of `ipv4_addr . inet_service`. One output rule adds each new connection to the set.
-  5. Give the test user read access to the checkout with `setfacl`.
-  6. Run `sudo ip netns exec kanthord-n sudo -u "$USER" --preserve-env=PATH pnpm --silent run test:agent-e2e`.
+  5. Give the test user read access with `setfacl` to the checkout, the pnpm store and the Node directory, and search access to each parent directory (BD2).
+  6. Run `sudo ip netns exec kanthord-n sudo -u "$(id -un)" env "PATH=$PATH" pnpm --silent run test:agent-e2e` (BD3).
 - `test:agent-e2e` runs `test:files` on `src/**/*.linux-test.ts` with `--test-concurrency=1`.
 - The Linux support uses the stub and the fixtures of LA1. It adds three functions:
-  - start `bin/kanthord.mjs` as `kanthord-e2e` with `sudo -n -u` and an explicit environment;
-  - write a fixture file as that user with mode `0600`;
-  - read the set `connections` with `nft -j`.
-- Makes pass: the self-test. The stub answers a scripted request in N. A connection to `192.0.2.1:443` fails, and the set holds it. `os.userInfo().homedir` of the test user is H.
-- Verify: `pnpm run verify` on macOS; the job `agent-e2e` on the PR. The self-test also proves that the runner allows `ip netns`, `nft`, `useradd` and `setfacl` through `sudo`.
+  - start `bin/kanthord.mjs` as `kanthord-e2e` with `sudo -n -u` and an explicit environment (BD4);
+  - write a fixture file as that user with mode `0600` (BD5);
+  - read the set `connections` with `nft -j` (BD6).
+- Makes pass: the self-test (BD7). The stub answers a scripted request in N, and the set holds the address and port of the stub. A connection to `192.0.2.1:443` fails, and the set holds it. `os.userInfo().homedir` of the test user is H. The test user starts `bin/kanthord.mjs`, reads each pi tool and writes a fixture file with mode `0600`.
+- Verify: `pnpm run verify` on macOS; the job `agent-e2e` on the PR. The self-test passes only when the runner allows `ip netns`, `nft`, `useradd` and `setfacl` through `sudo`: it runs in N, reads the set, and starts Node as the test user from the checkout.
 - `main` works: the PR adds test infrastructure only. `pnpm run verify` does not run a `.linux-test.ts` file, and the build does not emit it.
 
 ### PR 2. The Linux end-to-end checks
@@ -132,8 +132,21 @@ No PR of LA2 weakens a rule.
 
 ## Build details
 
-### PR 1 build notes (engine commit `1a667028`)
+### PR 1
 
-**BD1. Blackhole default route in step 3.** The design page lists two commands for step 3: `ip netns add kanthord-n` and `ip -n kanthord-n link set lo up`. The job adds a third: `ip -n kanthord-n route add blackhole 0.0.0.0/0`. Reason: when a network namespace has no route to a destination, the kernel's routing lookup fails before the nf OUTPUT hook fires, so the nft set receives no entry. With the blackhole route, the routing lookup succeeds; the kernel sends the TCP SYN through the nf OUTPUT chain (which adds to the set), then `dst_discard_out` drops it silently. The connection attempt to `192.0.2.1:443` returns a timeout, and the nft set holds the entry.
+1. **BD1. N has a local default route on loopback.** Step 3 adds `local 0.0.0.0/0 dev lo`. Each IPv4 address is then local to N. A connection attempt passes the nft output hook, the set records it, and the attempt fails at once with `ECONNREFUSED` when no process listens. Constraint: without a route, or with a `blackhole` route, `connect` fails before the output hook, and the set records nothing. Only loopback is up, as LA2-D3 states.
+2. **BD2. The test user reads three trees.** Step 5 gives `kanthord-e2e` the ACL `rX` on the checkout, on the directory that `pnpm store path` prints, and on the Node directory of `process.execPath`. It gives the ACL `x` on each parent directory of the three. Constraint: the step runs after the build and after `pi-tools:fetch`, so `dist`, `node_modules` and `.pi-tools` are in the grant. The grant is read-only.
+3. **BD3. Step 6 passes `PATH` through `env`.** `sudo` finds a command only in its `secure_path`, so `sudo ... --preserve-env=PATH pnpm` does not find pnpm. Step 6 runs `env "PATH=$PATH" pnpm` as the runner user, and names the user with `id -un`.
+4. **BD4. The CLI of the test user starts through `env -i`.** `spawnBinAsTestUser` runs `sudo -n -u kanthord-e2e env -i NAME=value ... <process.execPath> bin/kanthord.mjs`. The process gets exactly the given names, with no name that `sudo` adds. `spawnCliAsTestUser` calls it with the arguments and the environment of the LA1 harness (`runAgentArguments`, `cliEnvironment`). Constraint: an environment value is visible in the argument list, so a check passes only a marker there. The credential K stays in a file.
+5. **BD5. A fixture file never has a wider mode.** `writeFileAsTestUser` runs `sh` as the test user with `umask 077`. It makes the parent directories, writes the standard input to the path, and sets the mode `0600`.
+6. **BD6. The set is a list of address and port.** `nftConnections` parses the output of `sudo -n nft -n -j list set ip kanthord connections` and returns each element as `{ address, port }`. A check compares the exact pair.
+7. **BD7. The self-test has six tests.** They are: the stub request in N with the stub pair in the set; the refused connection to `192.0.2.1:443` with its pair in the set; `os.userInfo().homedir` from Node as the test user; `bin/kanthord.mjs --version` as the test user; read and execute access to `fd` and `rg`; a fixture file with mode `0600`, owner and text.
+8. **BD8. The job installs `nftables` and `acl` when the runner lacks `nft` or `setfacl`.**
+9. **BD9. Two more places treat a Linux test file as a test file.** `workerTestFiles` of `eslint.config.js` holds the `*.linux-test.ts` patterns of the worker directories. `scripts/health.mjs` counts a `.linux-test.ts` file as a test file, not as a production file.
+10. **BD10. PR 1 changes the LA1 harness.** `e2e-run-agent-test-support.ts` exports `ENGINE_ROOT`, `BIN_PATH`, `runAgentArguments` and `cliEnvironment`. `spawnCli` uses them, so the Linux support holds no second copy of the command line (LA2-D5).
 
-**BD2. Homedir check uses Python3, not Node.js.** The design says the self-test proves "`os.userInfo().homedir` of the test user is H". The test runs as the CI runner user (not `kanthord-e2e`); spawning node as `kanthord-e2e` requires the nvm bin directory to be accessible to `kanthord-e2e`, which the `setfacl` step does not cover. The test instead uses `sudo -n -u kanthord-e2e python3 -c 'import pwd, os; print(pwd.getpwuid(os.getuid()).pw_dir)'`. `pwd.getpwuid(os.getuid()).pw_dir` reads from the same NSS user database as Node.js `os.userInfo().homedir`. The test name: "user database gives kanthord-e2e the homedir /home/kanthord-e2e".
+### To PR 2
+
+- L2-AC6 writes a credential JSON to the standard input of the process. `spawnBinAsTestUser` closes the standard input today. PR 2 adds the input to `TestUserStart`.
+- W, S, D, X and T of L2-AC6 must be writable by `kanthord-e2e`. `buildFixtures` makes them as the runner user under a `0700` directory. PR 2 makes them as the test user.
+- N has no name resolution, and the rule records TCP only. A connection attempt by host name fails before `connect`, so the set does not show it.
