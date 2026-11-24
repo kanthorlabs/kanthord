@@ -320,7 +320,7 @@ The diagnosis reads one dev run and writes findings. It decides no pass.
    - `diff.patch` and `check.txt` of the run;
    - `check.json`, the check line of the run;
    - `task.md` of the case, and in stage 2 the kind prompt of the case kind;
-   - `transcript.md`, which `evaluation.mjs` writes from the entries of `session.jsonl`. Each entry has its id, its role and its text. Each tool result is cut to 4,000 characters. Reason: pi `read` returns no line above 50 KB (`dist/core/tools/read.js:136-139`), and `re@1` has no `bash`.
+   - `transcript.md`, which `evaluation.mjs` writes from the entries of `session.jsonl`. Each entry has its id, its role and its text. The text of an assistant entry holds each tool call, with the tool name and the arguments. Each tool result is cut to 4,000 characters. Reason: pi `read` returns no line above 50 KB (`dist/core/tools/read.js:136-139`), and `re@1` has no `bash`.
 3. **Command.** `$RUNNER` is `scripts/evaluation/agent/` of the engine. `$JUDGE_USD` is `judge_usd × r(judge_model)` ([Price ratio](#price-ratio), rule 3).
 
    ```sh
@@ -331,8 +331,8 @@ The diagnosis reads one dev run and writes findings. It decides no pass.
      --output "$RESULTS/results.jsonl" --prompt "$RUNNER/judge-task.md" 2> "$RUN/judge-$N-stderr.txt"
    ```
 
-4. **Credential.** The credential refresh, the digest check and the credential count of [Credential](#credential) apply to the diagnosis run as to a run of `swe@1`. A breach of rule 1 or 2 of [Breach rules](#breach-rules) stops the evaluation.
-5. **Output.** `judge.md` defines each goal aspect and the output form. The final answer is exactly one JSON object `{"findings": [...]}` with at most 20 findings. Each finding holds exactly:
+4. **Credential.** The credential refresh, the digest check and the credential count of [Credential](#credential) apply to the diagnosis run as to a run of `swe@1`. After the refresh, the runner also counts the credential values in each file of `j`, before the call. A breach of rule 1 or 2 of [Breach rules](#breach-rules) stops the evaluation. The runner appends a check line with the breach for the run, and the last check line of a run counts.
+5. **Output.** `judge.md` defines each goal aspect and the output form. The final answer is exactly one JSON object `{"findings": [...]}` with at most 20 findings, and no other text. Each finding holds exactly:
    - `aspect`: one of `A1` to `A9`;
    - `evidence`: a text of 1 to 500 characters that quotes a file of `j` and names the file, with the entry id for `transcript.md`;
    - `severity`: `high`, `medium` or `low`.
@@ -590,7 +590,7 @@ report.sh --evaluation <id>
 
 4. It writes `report.md` in the results directory:
    - the head: the evaluation id, the stage, the set, the set commit, and, with a parent, the parent, the target aspect and the hypothesis;
-   - the goal table: for A1 to A4, the count of good runs; for A5 to A7, the count of findings of each severity and the count of good runs; for A8, the median and the sum of the base cost, and the median `duration_ms`, `model_calls` and `tool_calls`; for A9, the count of breaches and the name of each breach rule; the count of runs for each `end`;
+   - the goal table: for A1 to A4, the count of good runs; for A5 to A7, the count of findings of each severity and the count of good runs; on the dev set, for each other aspect, the count of findings of each severity; for A8, the median and the sum of the base cost, and the median `duration_ms`, `model_calls` and `tool_calls`; for A9, the count of breaches and the name of each breach rule; the count of runs for each `end`;
    - the passes and the planned runs, and the count of invalid diagnoses;
    - on the dev set, one line for each case: the passes, and the good runs for each aspect A1 to A7;
    - on the dev set, the set-difficulty line: the count of ceiling cases, where each run passes, and of floor cases, where no run passes, of the case count;
