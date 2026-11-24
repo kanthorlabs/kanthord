@@ -121,6 +121,7 @@ No PR of LA2 weakens a rule.
 ### To LA5
 
 - The job `agent-e2e`, its support and the test user `kanthord-e2e` run the L4 checks.
+- The nft table of the job is `ip` only, so N records no IPv6 connection. When an L4 check needs IPv6, the job uses an `inet` table.
 
 ## Decisions
 
