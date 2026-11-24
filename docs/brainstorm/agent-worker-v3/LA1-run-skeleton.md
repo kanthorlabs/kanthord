@@ -165,13 +165,16 @@ Build details that the source texts leave open:
 1. **L2-AC1, variant 2.** The test compares stdout with the [text layout](L2-agent-cli.md#--output-stdout) line by line. The `duration` row matches `^  duration   \d+\.\d s$`. Each other row is exact.
 2. **L2-AC8.** The stub serves the three runs in order. The test reads `input_digest` and `system_prompt_digest` from the three lines of O.
 3. **L2-AC9.** The child process starts with the current directory C1.
-4. **L3-AC1, run 2.** The stub answers each request with HTTP 400, so pi makes no retry: `isRetryableAssistantError` accepts no status 400 text. The test asserts exit `5` and one request.
+4. **L3-AC1, run 2.** The stub answers each request with HTTP 400, so pi makes no retry: `isRetryableAssistantError` accepts no status 400 text. The test asserts exit `5` and one request. The `failure` field in the output record holds the full provider error message (e.g. `"openai-compatible API error (400): {…}"`), not a short classification string. The test checks `failure !== null` and that the redaction marker appears in it.
 5. **L3-AC2.** The test reads each expected file from `static/prompt/` of the engine at test time, so a prompt change needs no test change.
 6. **"T holds no file".** The test lists T with `readdir` after the exit and expects an empty list.
 7. **L2-AC5.** `<marker>` is a path in `$TEST`. The test reads it with `lstat` and expects `ENOENT`.
 8. **L2-AC7, variant 2.** The commit of W holds `.pi/extensions/x.ts` and `AGENTS.md` before the run. M7 and M9 are paths in `$TEST`.
 9. **L2-AC14.** The marker file lies in `$TEST`, outside W. A block result is a `toolResult` entry of S with `isError` `true`.
-10. **L2-AC16.** The test sets `XDG_STATE_HOME` of the script to X and starts the stub of `e2e-llm-stub-test-support.ts`. It fails at once when `dist/main.js` is absent.
+10. **L3-AC4, `assistantHasK`.** The test accumulates across all assistant messages with `||=`; using plain `=` overwrites on the second (text-only) message, giving a false negative.
+11. **L3-AC4, `blockCount`.** A blocked tool call is stored in the session as `{type: "message", message: {role: "toolResult", content: [{type: "text", text: "<reason>"}], ...}}`. The entry type is `"message"`, not `"function_call_output"`, and the content is a nested array. The test checks `entry.type === "message" && msg.role === "toolResult" && JSON.stringify(msg).includes(BLOCK_TEXT)`.
+12. **Import closure and boundary.** `credentialSecrets` is not re-exported from `agent-contract.ts` because that pulls `known-secrets.ts` into the runtime import closure, which the `import-check` test rejects. `run-agent.ts` imports it directly from `known-secrets.ts`. The `apps-cli` boundary policy in `eslint.config.js` lists `known-secrets` in the allowed `agent` files.
+13. **L2-AC16.** The test sets `XDG_STATE_HOME` of the script to X and starts the stub of `e2e-llm-stub-test-support.ts`. It fails at once when `dist/main.js` is absent.
 
 ## Unit-level rules
 
