@@ -161,6 +161,30 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 10. **`provider_retryable` unit test.** `run-agent-exit.test.ts` holds the test of `printPostResultDiagnostic` for a retryable failure ([L2 unit-level rule 10](L2-agent-cli.md#unit-level-rules)).
 
+### PR 3 build
+
+1. **`UsdTracker` class.** `src/agent/run-budget.ts` gains `UsdTracker`. It holds `limit: number | null` and `reached: BudgetLimit | null`. `check(listPriceUsd, onReached)` fires `onReached` once when `listPriceUsd >= limit`. The internal `reached` guard prevents a second fire (the first-limit rule). `budgetReached()` returns the limit kind or `null`.
+
+2. **`RunContext.usdTracker`.** `agent-contract.ts` adds `usdTracker: UsdTracker` to `RunContext`. In the `message_end` subscriber, after `addMessageTotals`, it calls `usdTracker.check(totals.listPriceUsd, callback)`. The callback sets `budgetReached = BudgetLimit.Usd` and aborts the session if `sending` is true. The first-limit guard in `check` means the callback ignores a second fire. The subscriber already guards `budgetReached !== null` before the abort to implement the first-limit rule at the `agent-contract` level.
+
+3. **`loopEnd` order fix (carry-over from PR2 S2).** `loopEnd` checks `budgetReached !== null` BEFORE `failureOf`. Reason: when wall budget fires during a pi retry wait, the last assistant message carries `stopReason: "error"`. `failureOf` would classify that as `failed`. The earlier `budgetReached` check correctly returns `budget_end` instead.
+
+4. **`ParsedBudget.usd` field.** `run-agent-budget.ts` changes `usdText: string | null` to `usd: number | null`. `parseBudget` parses the amount with `Number(value.slice(0, -USD_SUFFIX_LEN))` and rejects zero. `run-agent-digest.ts` reads `parsed.usd` directly in `budgetDigestField`. `run-agent.ts` passes `usd: parsedBudget.usd` to `RunBudget` and to `checkBudgetUnpriced`.
+
+5. **`checkBudgetUnpriced` extraction.** `run-agent.ts` extracts the unpriced check to a named function `checkBudgetUnpriced(usd, modelObj)`. Reason: the inline block raised `runAgent` complexity from 10 to 15 (the ESLint `complexity` rule counts `&&` operators). The extraction keeps `runAgent` at 10. The output file open (`openOutputFile`) moves to after `checkBudgetUnpriced`, so a refused unpriced run does not create O.
+
+6. **`USD_SUFFIX_LEN`, `ZERO_USD`, `FREE_COST` constants.** `USD_SUFFIX_LEN = 3` replaces the magic number `-3` in `slice`. `ZERO_USD = 0` and `FREE_COST = 0` replace literal `0` in comparisons, satisfying `no-restricted-syntax` and `no-magic-numbers`.
+
+7. **`BudgetResultFields` interface.** `budgetResultFields` returns a named interface instead of an inline object type (`kanthord/no-inline-object-type` scope). The return now includes `usd: parsed.usd`.
+
+8. **`USD_PATTERN` decimal limit.** The pattern changes to `/^[0-9]+(\.[0-9]{1,6})?usd$/` to enforce at most 6 decimal places, as L2 unit-level rule 9 states.
+
+9. **L2-AC15 and S file.** `fixtures.S` does not exist on a refusal of step 9 because the agent never opens. `fixtures.O` does not exist because `openOutputFile` runs after `checkBudgetUnpriced`.
+
+10. **L3-U6 wall-during-retry test.** `agent-contract.test.ts` adds the test "wall budget ends during a pi retry wait and the end is budget_end with wall". The scripted provider returns a retryable error. The wall deadline fires before the pi retry wait ends. The abort from the wall timer reaches the session. The test asserts `end: budget_end`, `budget_reached: wall`.
+
+11. **Test named constants.** `ONCE = 1` in `run-budget.test.ts`; `FIVE_USD = 5`, `QUARTER_USD = 0.25` in `run-agent-budget.test.ts`; `OPTION_BUDGET = "--budget"` in `e2e-run-agent-ends.test.ts` satisfy `no-restricted-syntax`.
+
 ## Decisions
 
 1. **LA3-D1.** LA3 requires the [Entry state](#entry-state) from LA1. Constraint: LA1 ships the wall half of `run-budget.ts`, the base of `run-outcome.ts` with the class `terminal` only, and the SIGINT-only stop of today; LA1 refuses a `usd` budget.
