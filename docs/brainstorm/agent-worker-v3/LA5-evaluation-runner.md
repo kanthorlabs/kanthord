@@ -205,6 +205,26 @@ Each credential rule of [L4 Credential](L4-agent-evaluation.md#credential) is ne
 - Gate step 4.1 reads the job `agent-e2e` of the scheduled CI run of `main` after PR 5, with each check L4-AC1 to L4-AC10 by id ([LA Agent gate](LA-agent-build.md#agent-gate)).
 - Gate step 4.3 runs `run.sh` and `report.sh` from the engine checkout after `pnpm run build`.
 
+## Build details
+
+### PR 1 build
+
+Commit: `59bf4173` on `feature/agent-v2-la5-held-out`. Verify: 6526 pass, 0 fail, 0 cancelled.
+
+1. **`findPatternText` not imported in PR 1.** `evaluation.mjs` does not import `findPatternText` in PR 1. The import is deferred to PR 5, which builds unit-level rule 17 (the secret scan). PR 1 uses `countCredentialInText` for the credential breach check, which counts occurrences of extracted credential values directly. LA5-D4 says the import must not create a second copy; since rule 17 is not in PR 1 scope, importing `findPatternText` now would be an unused import that the linter rejects.
+
+2. **`checkProtectedPaths` and `runGrading` not in PR 1.** `checkProtectedPaths` is for PR 3 (breach rule `protected_path`). `runGrading` was drafted but replaced by inlined grading in `runEvaluation`. Both were removed before commit to satisfy `no-unused-vars`.
+
+3. **`checkResultKeys(swe1Lines)` signature.** The plan named `iterationJson` as a second parameter, but the function body does not use it. The parameter was removed. The unit test at L4-U11 and the call in `runReport` use the one-parameter form.
+
+4. **`checkScope` conflict-marker fix.** The inner check for conflict markers read `line.startsWith("<<<<<<< ")` inside a `line.startsWith("+")` block. A diff added line like `+<<<<<<< HEAD` starts with `+`, so the check never matched. Fixed to `line.slice(1).startsWith("<<<<<<< ")`. L4-U4 test for the closing marker (`+>>>>>>> branch`) caught this during verify.
+
+5. **`caseKindMap` module-level variable.** `writeReport` reads `caseKindMap` to map each case to a kind. In PR 1, `runEvaluation` does not populate `caseKindMap` (no `case.json` read per case). The report therefore uses `"backend"` as the default kind for all check lines. `runReport` populates `caseKindMap` correctly. PR 2 and later PRs populate it in `runEvaluation` too.
+
+6. **`existsSync` guard for `copyHiddenTests`.** The grading section had `try { copyHiddenTests(...) } catch {}`. ESLint `no-empty` rejects empty catch blocks, and code comments are forbidden. Replaced with `if (existsSync(checkTestsDir)) { copyHiddenTests(...); }`.
+
+7. **L4-AC4: only CI proves the check.** Podman is available on this machine (libkrun VM, running) but the agent-e2e job requires Linux-only tools: `ip netns`, `nft`, `setfacl` and `useradd`. The macOS kernel cannot provide these even via the podman VM. Only the CI job `agent-e2e` proves L4-AC4.
+
 ## Decisions
 
 1. **LA5-D1.** The L4 checks run only in the Linux job `agent-e2e`, in `src/apps/cli/e2e-evaluation.linux-test.ts`, as the test user `kanthord-e2e`. Constraint: no L4 check writes into the home of the user that starts the tests.
