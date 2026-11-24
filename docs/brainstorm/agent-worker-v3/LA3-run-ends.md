@@ -119,6 +119,20 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 - **To LA4.** `endAfterTurn`, its `finishTurn` wrap and the `endAfterTurn` cases of L3-U6, and `deadline: null` for the Project Service ([L3 Project Service](L3-agent.md#project-service)). The start preconditions of `env@1` (`workspace_directory` only) hold for the Project Service when it opens through `openAgent`.
 - **To LA5.** The runner of L4 reads the exits `0`, `2`, `4`, `5` and `75`, the `end`, `class` and `budget_reached` fields, and passes `--budget <usd>usd` with a priced model.
 
+## Build details
+
+### PR 1 build
+
+1. **`checkPreconditions` signature.** The ESLint rule `kanthord/max-params` (max 3) requires a single input object. `checkPreconditions` takes `PreconditionInput { preconditions, cwd, roots, inputEnv, timeoutMs? }`. The `timeoutMs` field is optional and defaults to `RUNTIME_SETUP_DEADLINE_MS`. The page constraint (each `git` command gets `isolatedGitEnvironment(childEnvironment(...))`) holds unchanged.
+
+2. **`makeInput` git workspace.** `agent-contract.test.ts`'s `makeInput` now initializes a git workspace (one commit, `--quiet` on init and commit). Tests that called `openAgent` with the old empty directory now use a valid, clean worktree. Tests that intentionally need a dirty workspace add an uncommitted file before calling `openAgent`. The key.txt redaction test commits the file before calling `openAgent`.
+
+3. **`import-check.test.mjs` RUNTIME_MODULES.** `src/agent/start-preconditions.ts` joins the RUNTIME_MODULES list in `scripts/import-check.test.mjs`, between `sensitive-text.ts` and `tool-table.ts`. Its import closure uses only node builtins, `src/kernel/`, and existing RUNTIME_MODULES entries.
+
+4. **L3-AC5 variant 6.** The test writes to `.git/config` with `appendFileSync` to set `core.fsmonitor` and `core.hooksPath`. `simpleGit.raw(["config", ...])` refuses unsafe config without `allowUnsafeFsMonitor: true` in its options. Direct file append bypasses `simpleGit` and sets the config that the test must prove `isolatedGitEnvironment` overrides.
+
+5. **"no stderr" test restructuring.** The "no runtime module writes to process.stdout or process.stderr" test calls `makeInput` before setting up the mock. The git operations in `makeInput` trigger stderr writes (from git or `simpleGit`) that happen outside the runtime boundary the test checks.
+
 ## Decisions
 
 1. **LA3-D1.** LA3 requires the [Entry state](#entry-state) from LA1. Constraint: LA1 ships the wall half of `run-budget.ts`, the base of `run-outcome.ts` with the class `terminal` only, and the SIGINT-only stop of today; LA1 refuses a `usd` budget.
