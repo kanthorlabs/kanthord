@@ -223,7 +223,13 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 15. **`finishTurn` unit test.** `agent-contract.test.ts` aborts the signal while a `bash` child runs. Pass condition: the end `stopped`, no failure, one model call at the scripted provider and no live child. L2-AC11 variant 1 also asserts one request at Stub.
 
-16. **Open after the review.** (a) `main.ts` sets `process.exitCode` and waits for the event loop. After a forced stop, a handle of a hung pi can keep the process alive after the result. (b) When a provider answers the abort of a signal with an error, `loopEnd` gives `failed`, because the failure check runs before the `stopped` check. Aelita rules on both.
+16. **Open after the review.** (a) `main.ts` sets `process.exitCode` and waits for the event loop. After a forced stop, a handle of a hung pi can keep the process alive after the result. (b) When a provider answers the abort of a signal with an error, `loopEnd` gives `failed`, because the failure check runs before the `stopped` check. Aelita rules on both. **Resolved by PR 4b.**
+
+### PR 4b build
+
+1. **S7: bounded exit after a forced stop.** `run-agent-signal.ts` exports `FORCED_EXIT_BOUND_MS = 1000` and adds `scheduleBoundedExit(exitCode)` and `wasForceStopped` to `StopHandlers`. `scheduleBoundedExit` calls `setTimeout(() => process.exit(exitCode), FORCED_EXIT_BOUND_MS).unref()`. The timer does not keep the event loop alive. `run-agent.ts` extracts `applyForcedExitBound(stopHandlers)` and calls it after `ignoreSignals()`. `applyForcedExitBound` calls `scheduleBoundedExit(RunExitCode.Stopped)` when `wasForceStopped` is true. Normal ends make no `process.exit` call. L2 Shutdown rule 2 and unit-level rule 11 state the bound. Test file: `src/apps/cli/run-agent-signal.test.ts`.
+
+2. **S8: stop before a provider failure.** `agent-contract.ts` adds `failedBeforeStop`. The `addAbortListener` callback sets it to `true` when the last `assistant` message is already a provider error at the instant the input signal fires, else `false`. The `loopEnd` condition adds `(!inputSignal.aborted || failedBeforeStop)`: a signal abort ends `failed` only when the failure came first; otherwise it ends `stopped`. The mechanism mirrors `failedBeforeLimit` of the budget path. `failedBeforeStop` resets to `false` at the start of each `send`. L3 Budget "Stop and failure" states the rule. Test file: `src/agent/agent-contract.test.ts`.
 
 ## Decisions
 
