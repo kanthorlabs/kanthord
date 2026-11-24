@@ -71,7 +71,8 @@ Each pull request is one engine pull request into `feature/agent-v2` ([LA How ea
 
 ### PR 2. The diagnosis and the dev evaluation
 
-- Files: `evaluation.mjs`, `evaluation.test.mjs`, `judge.md`, `judge-task.md`, `e2e-evaluation.linux-test.ts`.
+- Files: `evaluation.mjs`, `evaluation.test.mjs`, `judge.md`, `judge-task.md`, `e2e-evaluation.linux-test.ts`, `e2e-llm-stub-test-support.ts`.
+- The stub records the selected role and task of each request ([Harness](#harness)).
 - `evaluation.mjs` builds step 8 of the run: the judge workspace `j` in the grading root, `transcript.md`, the `re@1` call, the credential rules of the diagnosis run, the parse, `diagnoses.jsonl`, the attempt number `judge-<n>.jsonl`, the reserve `judge_usd` of the cap. `report.sh` gets the dev lines: the line for each case, the set-difficulty line, the count of invalid diagnoses, the findings for each aspect and severity, and the verdict `complete`. Stage 2 passes the kind prompt with `--system-prompt`.
 - `run.sh --set dev` runs.
 - Makes pass: L4 unit-level rules 6 and 19; the `judge_usd` reserve of rule 9; rule 11 for the `re@1` keys and the set-difficulty line; rule 12 for the join of the last `re@1` line.
@@ -100,7 +101,7 @@ Each pull request is one engine pull request into `feature/agent-v2` ([LA How ea
 ### PR 5. The iteration, the A/A pair and the set tools
 
 - Files: `evaluation.mjs`, `evaluation.test.mjs`, `e2e-evaluation.linux-test.ts`.
-- `evaluation.mjs` builds `--parent`, `--aspect`, `--hypothesis` and `--replicate`; the comparability check and the one-change check of [L4 Iteration](L4-agent-evaluation.md#iteration), rules 1 and 4; the parent `re@1` digest check; the noise rule; the iteration line; the A/A line; the subcommands `scan` and `validate`.
+- `evaluation.mjs` builds `--parent`, `--aspect`, `--hypothesis` and `--replicate`; the comparability check and the one-change check of [L4 Iteration](L4-agent-evaluation.md#iteration), rules 1 and 4; the parent `re@1` digest check; the noise rule; the iteration line; the A/A line; the pass shares of the last passed stage 1 gate in the gate line of stage 2 ([LA5-D12](#decisions)); the subcommands `scan` and `validate`, with the import of `findPatternText` ([LA5-D7](#decisions)).
 - Makes pass: L4 unit-level rules 7, 17 and 18; rule 11 in full; the rules of `--parent`, `--aspect`, `--hypothesis` and `--replicate` of rule 13.
 - Makes pass: [L4-AC8 and L4-AC10](L4-agent-evaluation.md#checks).
 - Verify: as PR 1.
@@ -115,7 +116,7 @@ Each pull request is one engine pull request into `feature/agent-v2` ([LA How ea
 - **Place.** The checks live in `src/apps/cli/e2e-evaluation.linux-test.ts`. Only `test:agent-e2e` runs them, in the job `agent-e2e` ([LA2-D2](LA2-credential-boundary.md#decisions)). Each check writes and reads the `auth.json` file at the default `--auth` path. `run agent` and the refresh take that path from the home that the user database gives. On the machine of a developer, that path holds the real credential.
 - **Process.** The test starts `scripts/evaluation/agent/run.sh` and `report.sh` as the test user, with `sudo -n -u kanthord-e2e` and an explicit environment: `PATH`, `XDG_DATA_HOME="$XD"` and `XDG_STATE_HOME="$XS"`. The runner calls the built CLI `bin/kanthord.mjs` of the same checkout ([LA5-D3](#decisions)). The job runs `pnpm run build` before the tests.
 - **Stub.** The stub of LA1 with the responder of the [L4 fixtures](L4-agent-evaluation.md#l4-fixtures): the Role heading of `swe@1` or `re@1` in the system prompt, and the text `task d1`, `task d2` or `task h1` in the user message, select the scripted turns. Each turn reports a `usage` of 1000 input and 100 output tokens. The stub records each request with the selected role and task.
-- **Set.** `src/apps/cli/e2e-evaluation-test-support.ts` builds E, `config.json`, the binding prompts and the cases `d1`, `d2` and `h1` of the L4 fixtures. It runs each command as the test user, so E, `$XD` and `$XS` belong to that user. It makes `repo.bundle` with `git bundle create` of C only, with the author of [L4 content rule 2](L4-agent-evaluation.md#content-rules).
+- **Set.** `src/apps/cli/e2e-evaluation-test-support.ts` builds E, `config.json`, the binding prompts and the cases `d1`, `d2` and `h1` of the L4 fixtures. It runs each command as the test user, so E, `$XD` and `$XS` belong to that user. They lie under the home of the test user, and the test reads each file as the test user ([LA5-D13](#decisions)). It makes `repo.bundle` with `git bundle create` of C only, with the author of [L4 content rule 2](L4-agent-evaluation.md#content-rules).
 - **Auth.** The harness writes `/home/kanthord-e2e/.config/kanthord/auth.json` with mode `0600` as the test user, with K, the `openai-compatible` entry of the [L2 fixtures](L2-agent-cli.md#l2-fixtures) and `OPENAI_COMPATIBLE_MODELS` with `stub-1`. Each check removes the file at its end.
 - **Own paths.** Each check and each variant gets its own `$XD`, `$XS` and E, except L4-AC3, which reuses the paths of L4-AC1.
 - **Timeout.** Each test has a timeout of 300 seconds. Reason: variant 1 of L4-AC6 waits for three attempts with three pi retries each, about 42 seconds ([L4 Handoffs](L4-agent-evaluation.md#handoffs-to-later-layers)).
@@ -183,11 +184,11 @@ Each credential rule of [L4 Credential](L4-agent-evaluation.md#credential) is ne
 
 - **Price read with no credential file** (L4-D18). PR 1. `ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsPath: null, allowModelNetwork: false, refreshOnCreate: false })`. `ModelRuntime` is an export of `@earendil-works/pi-coding-agent` (`dist/index.d.ts:15`), and `InMemoryCredentialStore` is an export of `@earendil-works/pi-ai` (`dist/index.d.ts:16`, `dist/auth/credential-store.d.ts`). Unit-level rule 16 proves that the read creates no entry in `<home>/.config/kanthord`.
 - **OAuth refresh** (L4-D17). PR 1, before each `run agent` call; PR 2 adds the diagnosis call. `ModelRuntime.create({ authPath, modelsPath: null, allowModelNetwork: false, refreshOnCreate: false })` and `getAuth(provider, { minOAuthValidityMs })` (`dist/core/model-runtime.d.ts:56,89`). `authPath` comes from `os.userInfo().homedir`. A thrown error or an `undefined` result stops the evaluation with no error text of pi. Unit-level rule 15.
-- **No proxy.** PR 1. The start checks refuse `NODE_USE_ENV_PROXY` and `--use-env-proxy` in `NODE_OPTIONS`, before the refresh. `evaluation.mjs` sets no global dispatcher. Unit-level rule 13.
+- **No proxy.** PR 1. The start checks refuse `NODE_USE_ENV_PROXY`, and `--use-env-proxy` in `NODE_OPTIONS` and in `process.execArgv`, before the refresh ([LA5-D9](#decisions)). `evaluation.mjs` sets no global dispatcher. Unit-level rule 13.
 - **No core dump.** PR 1. `run.sh` runs `ulimit -c 0` before it starts Node. The review of `run.sh` checks the line ([L4 Rules with no check](L4-agent-evaluation.md#rules-with-no-check-and-the-reason)).
-- **Credential state of `auth.json`.** PR 1. The SHA-256 digest and the mode `0600` after the refresh and after each `run agent` call, and no new entry in `<home>/.config/kanthord`. A change is the breach `auth_file`. Unit-level rule 14, L4-AC5 variant 2.
+- **Credential state of `auth.json`.** PR 1. The SHA-256 digest and the mode `0600` after the refresh and after each `run agent` call, and no new entry in `<home>/.config/kanthord` since the start of the call ([LA5-D9](#decisions)). A change is the breach `auth_file`. Unit-level rule 14, L4-AC5 variant 2.
 - **Credential counts.** PR 1 for the session file, `diff.patch` and `check.txt`; PR 2 for the diagnosis session file and before the copy into `j`. stdout holds only the count. A count other than `0` is the breach `credential`, and the runner removes `diff.patch` and `check.txt`. Unit-level rule 5, L4-AC5 variants 2 and 4.
-- **Clones with no remote and no reflog** (L4-D19). PR 1. The four clone steps, and the copy of `.git/config` outside the clone. L4-AC5 variant 3 proves that a session sees no path of E.
+- **Clones with no remote and no reflog** (L4-D19). PR 1. The four clone steps, and the copy of `.git/config` in memory ([LA5-D8](#decisions)). L4-AC5 variant 3 proves that a session sees no path of E.
 - **Isolated git environment.** PR 1. Each `git` command of the runner, on a case clone, on E and on the engine checkout, runs with `isolatedGitEnvironment`. The diff steps restore `.git/config`, remove `.git/info/attributes` and use `--no-renames --no-ext-diff --no-textconv --no-color`. Unit-level rule 20.
 - **Grading root.** PR 1. The runner makes the grading root after the `run agent` call ends, with a new name of 16 random lowercase letters. So the session cannot name it. L4-AC1 proves that no root remains.
 - **No credential in a record.** PR 1 and PR 2. No line of `results.jsonl`, `checks.jsonl`, `diagnoses.jsonl` or `calls.jsonl`, no `iteration.json`, no file of `j` and no report holds a credential value. The report holds no session text, no `check.txt` text and no finding evidence. L4-AC5 variant 2 asserts it over each record.
@@ -209,21 +210,15 @@ Each credential rule of [L4 Credential](L4-agent-evaluation.md#credential) is ne
 
 ### PR 1 build
 
-Commit: `59bf4173` on `feature/agent-v2-la5-held-out`. Verify: 6526 pass, 0 fail, 0 cancelled.
+Branch: `feature/agent-v2-la5-held-out`.
 
-1. **`findPatternText` not imported in PR 1.** `evaluation.mjs` does not import `findPatternText` in PR 1. The import is deferred to PR 5, which builds unit-level rule 17 (the secret scan). PR 1 uses `countCredentialInText` for the credential breach check, which counts occurrences of extracted credential values directly. LA5-D4 says the import must not create a second copy; since rule 17 is not in PR 1 scope, importing `findPatternText` now would be an unused import that the linter rejects.
-
-2. **`checkProtectedPaths` and `runGrading` not in PR 1.** `checkProtectedPaths` is for PR 3 (breach rule `protected_path`). `runGrading` was drafted but replaced by inlined grading in `runEvaluation`. Both were removed before commit to satisfy `no-unused-vars`.
-
-3. **`checkResultKeys(swe1Lines)` signature.** The plan named `iterationJson` as a second parameter, but the function body does not use it. The parameter was removed. The unit test at L4-U11 and the call in `runReport` use the one-parameter form.
-
-4. **`checkScope` conflict-marker fix.** The inner check for conflict markers read `line.startsWith("<<<<<<< ")` inside a `line.startsWith("+")` block. A diff added line like `+<<<<<<< HEAD` starts with `+`, so the check never matched. Fixed to `line.slice(1).startsWith("<<<<<<< ")`. L4-U4 test for the closing marker (`+>>>>>>> branch`) caught this during verify.
-
-5. **`caseKindMap` module-level variable.** `writeReport` reads `caseKindMap` to map each case to a kind. In PR 1, `runEvaluation` does not populate `caseKindMap` (no `case.json` read per case). The report therefore uses `"backend"` as the default kind for all check lines. `runReport` populates `caseKindMap` correctly. PR 2 and later PRs populate it in `runEvaluation` too.
-
-6. **`existsSync` guard for `copyHiddenTests`.** The grading section had `try { copyHiddenTests(...) } catch {}`. ESLint `no-empty` rejects empty catch blocks, and code comments are forbidden. Replaced with `if (existsSync(checkTestsDir)) { copyHiddenTests(...); }`.
-
-7. **L4-AC4: only CI proves the check.** Podman is available on this machine (libkrun VM, running) but the agent-e2e job requires Linux-only tools: `ip netns`, `nft`, `setfacl` and `useradd`. The macOS kernel cannot provide these even via the podman VM. Only the CI job `agent-e2e` proves L4-AC4.
+1. **Imports.** `evaluation.mjs` imports `isolatedGitEnvironment` and `directories` from `dist/` ([LA5-D7](#decisions)).
+2. **Run steps.** `evaluateRun` does the steps 1 to 7 and 9 of one run. It takes the refresh and the `run agent` call as functions. The unit tests pass a function that writes the session file, the result line and the workspace change.
+3. **Start checks.** `startRun` returns the refusal text or the plan of the call. It writes `iteration.json` and the call line only after each check passes ([LA5-D10](#decisions)).
+4. **Run directory.** Each run uses the run directory `<case-id>/<repeat>-1`. PR 4 adds the next free attempt number.
+5. **Report.** `buildReport` gives the text and the verdict. `run.sh` writes the report with no key check. `report.sh` checks the keys first and writes no report at a refusal.
+6. **Check result.** The result of each mode is the exit code of its `check.sh` call. The runner never reads a result from `check.txt` ([LA5-D11](#decisions)).
+7. **L4-AC4.** Only the job `agent-e2e` runs the check. A machine of a developer has no network namespace and no test user.
 
 ## Decisions
 
@@ -233,3 +228,10 @@ Commit: `59bf4173` on `feature/agent-v2-la5-held-out`. Verify: 6526 pass, 0 fail
 4. **LA5-D4.** `evaluation.mjs` imports `findPatternText`, `isolatedGitEnvironment` and `directories` from `dist/`. Constraint: the runner adds no second copy of the secret patterns, the git isolation or the XDG rule; `evaluation.test.mjs` fails at once when `dist/` is absent.
 5. **LA5-D5.** LA5 has 5 PRs in this order: the held-out evaluation with the credential rules, the diagnosis, the breach rules, stop and resume with the cap, the iteration with the set tools. Constraint: PR 1 holds each credential rule of a `swe@1` run; PR 1 refuses `--set dev` until PR 2.
 6. **LA5-D6.** The job `agent-e2e` makes the test user the owner of the checkout root and of its `.git` directory, with no recursion, and gives the job user an access entry with write. Constraint: the runner keeps `isolatedGitEnvironment` on the engine checkout, with no `safe.directory` entry; Git accepts the engine checkout for the test user.
+7. **LA5-D7.** PR 1 imports `isolatedGitEnvironment` and `directories`. PR 5 adds the import of `findPatternText` with the subcommand `scan`. Constraint: the credential count of PR 1 searches the exact values of the `auth.json` entries and holds no secret pattern.
+8. **LA5-D8.** The runner holds the copy of `.git/config` in memory, and replaces the entry at `.git/config` before the restore. Constraint: no file of the workspace root holds the copy, because the session can write each file of that root; the restore never writes through a symbolic link.
+9. **LA5-D9.** The credential rules of the runner are these. Constraint: the runner refuses `--use-env-proxy` in `process.execArgv` also, as `run agent` does; after each refresh the mode is `0600` and the configuration directory holds the entries of the call start, and only the digest can differ; the digest, the mode and the entries after the `run agent` call equal the state after the refresh; the runner reads the credential values again after each refresh and counts each value that it read in the call; the breach `credential` comes before the breach `auth_file`.
+10. **LA5-D10.** The start checks run in this order: the proxy settings, the options, the engine tree, the configuration with the base price, the set commit, each `case.json` of the set, the options of `iteration.json`, the fixed `gate_share`, and the `auth.json` file. Constraint: a call with a case that breaks the schema, or with no regular `auth.json` file, starts no run and writes no call line; the base model has an `input`, an `output` and a `cacheRead` price above 0; `usd` and `judge_usd` have at most 2 fraction digits.
+11. **LA5-D11.** The grading is strict where the diff or the check output comes from the session. Constraint: A3 fails a `diff --git` header that does not have the form `a/<path> b/<path>` with one path, so no path of `allowed` holds a character that Git quotes; `allowed` globs match with `path.matchesGlob` of Node; the copy of the hidden tests replaces each path part that is no directory, also a symbolic link; a failed copy fails A1 and A2; the frontend rule for a CSS file reads the `new file mode` line; a class helper gives only its string arguments with no `${`.
+12. **LA5-D12.** The gate line holds the pass share of each kind that has a planned run. An earlier held-out evaluation is a held-out evaluation of the same stage whose `iteration.json` is older. Constraint: a set with no case of a kind gives no share for that kind; PR 5 adds the pass shares of the last passed stage 1 gate to the gate line of stage 2.
+13. **LA5-D13.** The L4 fixtures of the checks lie under `/home/kanthord-e2e/l4-<time>/`, and the test reads each file as the test user. Constraint: no L4 path lies in the temporary directory of the job user, because the test user cannot enter it; each check removes its folder and `/home/kanthord-e2e/.config` at its end.

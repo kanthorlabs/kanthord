@@ -232,12 +232,12 @@ Each clone of a case repository uses these commands, with `$DIR` the new clone:
 
 Reason: the clone writes the absolute path of the bundle into the remote and the reflog. After the last two commands, the clone holds no path of the case folder.
 
-- The runner keeps a copy of `$DIR/.git/config` after the clone steps, outside `$DIR` in the same root.
+- The runner keeps a copy of `$DIR/.git/config` after the clone steps, in memory. Reason: the session can write each file of the workspace root.
 - Each runner `git` command runs with `isolatedGitEnvironment` of `src/kernel/git-environment.ts` ([L3 Start preconditions](L3-agent.md#start-preconditions)).
 
 ### Diff steps
 
-1. Restore `w/.git/config` from the copy of the clone steps, and remove `w/.git/info/attributes`. Reason: a filter driver or a diff driver in the configuration of the agent can run a command or change the diff.
+1. Restore `w/.git/config` from the copy of the clone steps, after the removal of the entry at that path, and remove `w/.git/info/attributes`. Reason: a filter driver or a diff driver in the configuration of the agent can run a command or change the diff.
 2. Run `git -C w add -A`.
 3. Write `git -C w diff --cached --binary --no-renames --no-ext-diff --no-textconv --no-color "$C"` to `$RUN/diff.patch`.
 
