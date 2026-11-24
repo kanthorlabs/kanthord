@@ -92,9 +92,9 @@ Each check runs the built `kanthord run agent` as a process, with a real file sy
 | ------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | [L3-U4](L3-agent.md#unit-level-rules) Start preconditions                       | `src/agent/start-preconditions.ts`                           | `src/agent/start-preconditions.test.ts`                                |
 | [L3-U5](L3-agent.md#unit-level-rules), the class cases                          | `src/agent/run-outcome.ts`                                   | `src/agent/run-outcome.test.ts`                                        |
-| [L3-U6](L3-agent.md#unit-level-rules), the `usd` and first-limit cases          | `src/agent/run-budget.ts`                                    | `src/agent/run-budget.test.ts`                                         |
+| [L3-U6](L3-agent.md#unit-level-rules), the `usd` and first-limit cases          | `src/agent/run-budget.ts`, `src/agent/agent-contract.ts`     | `src/agent/run-budget.test.ts`, `src/agent/agent-contract.test.ts`     |
 | L3-U7, the refusal bullet                                                       | `src/agent/agent-contract.ts`                                | `src/agent/agent-contract.test.ts`                                     |
-| [L2 rule 1](L2-agent-cli.md#unit-level-rules), `--budget`                       | `src/apps/cli/run-agent-options.ts`                          | `src/apps/cli/run-agent-options.test.ts`                               |
+| [L2 rule 1](L2-agent-cli.md#unit-level-rules), `--budget`                       | `src/apps/cli/run-agent-budget.ts`                           | `src/apps/cli/run-agent-budget.test.ts`                                |
 | [L2 rule 9](L2-agent-cli.md#unit-level-rules) Budget                            | `src/apps/cli/run-agent-budget.ts`                           | `src/apps/cli/run-agent-budget.test.ts`                                |
 | [L2 rule 10](L2-agent-cli.md#unit-level-rules), the class and `retryable` cases | `src/agent/run-outcome.ts`, `src/apps/cli/run-agent-exit.ts` | `src/agent/run-outcome.test.ts`, `src/apps/cli/run-agent-exit.test.ts` |
 | [L2 rule 10](L2-agent-cli.md#unit-level-rules), a signal during the open        | `src/apps/cli/run-agent-exit.ts`                             | `src/apps/cli/run-agent-exit.test.ts`                                  |
@@ -165,25 +165,31 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 1. **`UsdTracker` class.** `src/agent/run-budget.ts` gains `UsdTracker`. It holds `limit: number | null` and `reached: BudgetLimit | null`. `check(listPriceUsd, onReached)` fires `onReached` once when `listPriceUsd >= limit`. The internal `reached` guard prevents a second fire (the first-limit rule). `budgetReached()` returns the limit kind or `null`.
 
-2. **`RunContext.usdTracker`.** `agent-contract.ts` adds `usdTracker: UsdTracker` to `RunContext`. In the `message_end` subscriber, after `addMessageTotals`, it calls `usdTracker.check(totals.listPriceUsd, callback)`. The callback sets `budgetReached = BudgetLimit.Usd` and aborts the session if `sending` is true. The first-limit guard in `check` means the callback ignores a second fire. The subscriber already guards `budgetReached !== null` before the abort to implement the first-limit rule at the `agent-contract` level.
+2. **`RunContext.usdTracker`.** `agent-contract.ts` adds `usdTracker: UsdTracker` to `RunContext`. In the `message_end` subscriber, after `addMessageTotals`, it calls `usdTracker.check(totals.listPriceUsd, ...)`. The wall timer and the tracker call one function `reach(limit)`. `reach` ignores a second limit, sets `budgetReached` and aborts the session when a `send` runs.
 
-3. **`loopEnd` order fix (carry-over from PR2 S2).** `loopEnd` checks `budgetReached !== null` BEFORE `failureOf`. Reason: when wall budget fires during a pi retry wait, the last assistant message carries `stopReason: "error"`. `failureOf` would classify that as `failed`. The earlier `budgetReached` check correctly returns `budget_end` instead.
+3. **Limit and failure in `loopEnd`.** `reach` records `failedBeforeLimit`: the last `assistant` message is a provider error at the instant of the limit. `loopEnd` gives `failed` for a provider error when no limit fired or when `failedBeforeLimit` is `true`. Else a reached limit gives `budget_end` ([L3 Budget](L3-agent.md#budget)). Each `send` clears `failedBeforeLimit` at its start. During the wait of a pi retry, pi omits the error message from `session.messages`, so a limit in that wait gives `budget_end` (PR 2 build, item 8).
 
 4. **`ParsedBudget.usd` field.** `run-agent-budget.ts` changes `usdText: string | null` to `usd: number | null`. `parseBudget` parses the amount with `Number(value.slice(0, -USD_SUFFIX_LEN))` and rejects zero. `run-agent-digest.ts` reads `parsed.usd` directly in `budgetDigestField`. `run-agent.ts` passes `usd: parsedBudget.usd` to `RunBudget` and to `checkBudgetUnpriced`.
 
-5. **`checkBudgetUnpriced` extraction.** `run-agent.ts` extracts the unpriced check to a named function `checkBudgetUnpriced(usd, modelObj)`. Reason: the inline block raised `runAgent` complexity from 10 to 15 (the ESLint `complexity` rule counts `&&` operators). The extraction keeps `runAgent` at 10. The output file open (`openOutputFile`) moves to after `checkBudgetUnpriced`, so a refused unpriced run does not create O.
+5. **`checkBudgetUnpriced`.** `run-agent-budget.ts` owns `checkBudgetUnpriced(usd, cost)`, and `run-agent-budget.test.ts` holds its unit tests. `cost` has the type `Model<Api>["cost"]` of pi. `run-agent.ts` calls it at step 9, after `resolveModel`. The output file open stays at step 6 ([L2 Run order](L2-agent-cli.md#run-order)).
 
-6. **`USD_SUFFIX_LEN`, `ZERO_USD`, `FREE_COST` constants.** `USD_SUFFIX_LEN = 3` replaces the magic number `-3` in `slice`. `ZERO_USD = 0` and `FREE_COST = 0` replace literal `0` in comparisons, satisfying `no-restricted-syntax` and `no-magic-numbers`.
+6. **`USD_SUFFIX_LEN` and `ZERO_USD` constants.** `USD_SUFFIX_LEN = 3` names the length of the suffix in `slice`. `ZERO_USD = 0` names the zero in each comparison of an amount or a price, as the `no-restricted-syntax` rule for a literal in a comparison requires.
 
 7. **`BudgetResultFields` interface.** `budgetResultFields` returns a named interface instead of an inline object type (`kanthord/no-inline-object-type` scope). The return now includes `usd: parsed.usd`.
 
 8. **`USD_PATTERN` decimal limit.** The pattern changes to `/^[0-9]+(\.[0-9]{1,6})?usd$/` to enforce at most 6 decimal places, as L2 unit-level rule 9 states.
 
-9. **L2-AC15 and S file.** `fixtures.S` does not exist on a refusal of step 9 because the agent never opens. `fixtures.O` does not exist because `openOutputFile` runs after `checkBudgetUnpriced`.
+9. **L2-AC15, S and O.** S does not exist after a refusal of step 9, because the agent never opens. O exists with no line, because step 6 opens O. This is the state of O after `start_refused` (PR 1 build, item 7).
 
 10. **L3-U6 wall-during-retry test.** `agent-contract.test.ts` adds the test "wall budget ends during a pi retry wait and the end is budget_end with wall". The scripted provider returns a retryable error. The wall deadline fires before the pi retry wait ends. The abort from the wall timer reaches the session. The test asserts `end: budget_end`, `budget_reached: wall`.
 
 11. **Test named constants.** `ONCE = 1` in `run-budget.test.ts`; `FIVE_USD = 5`, `QUARTER_USD = 0.25` in `run-agent-budget.test.ts`; `OPTION_BUDGET = "--budget"` in `e2e-run-agent-ends.test.ts` satisfy `no-restricted-syntax`.
+
+12. **No call after a limit.** The `finishTurn` wrap of `agent-contract.ts` returns `{ action: "end" }` when `budgetReached` is not `null`. Reason: after an abort, the pi agent loop still starts the next model call with the aborted signal when the last message holds tool calls. That call adds an aborted `assistant` entry and one count to `model_calls`.
+
+13. **Cost limit tests with a catalog price.** `scriptedProvider` of `src/agent/test-support.ts` takes a model definition with a `cost`. It then sets `usage.cost` of each response with `calculateCost` of pi. `makeInput` of `agent-contract.test.ts` gives the `cost` of the catalog model `anthropic/claude-sonnet-4-5` with `listPrice: true`. Three tests of `agent-contract.test.ts` use it or the wall timer: the `usd` limit ends the run with one model call; a provider error before the limit gives `failed`; a provider error after the limit gives `budget_end`.
+
+14. **`--budget` option tests.** `parseBudget` of `run-agent-budget.ts` owns each `--budget` refusal of [L2 unit-level rule 1](L2-agent-cli.md#unit-level-rules). Their tests are in `run-agent-budget.test.ts`.
 
 ## Decisions
 

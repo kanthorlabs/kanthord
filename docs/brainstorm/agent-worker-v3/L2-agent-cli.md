@@ -735,7 +735,7 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
 15. **L2-AC15. A cost budget on a model with no price starts nothing.**
     - Fixture: Auth, Stub, W, H, X, T, D. The model `stub-1` of `openai-compatible` has no price ([Budget](#budget), rule 6).
     - Command: Run with `--budget 1usd`.
-    - Assert: refused with `cli.run.agent.budget_unpriced`, with the row `option: --budget`. Stub receives no request. No file exists at S. O does not exist. T holds no file.
+    - Assert: refused with `cli.run.agent.budget_unpriced`, with the row `option: --budget`. Stub receives no request. No file exists at S. O holds no line, because step 6 opens O before the refusal of step 9. T holds no file.
 16. **L2-AC16. The play setup gives a workspace, a placeholder prompt and a run that works.**
     - Fixture: Auth, Stub, H, X. The state directory of KanthorD is under X.
     - Command: `pnpm run play:agent -- --model openai-compatible/stub-1:off --auth "$AUTH" --no-refresh --no-build` (first call, no prompt); then a second call on the same day with a text prompt, keeping `--no-refresh --no-build`.
