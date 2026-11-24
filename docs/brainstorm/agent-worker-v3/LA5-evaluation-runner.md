@@ -220,6 +220,20 @@ Branch: `feature/agent-v2-la5-held-out`.
 6. **Check result.** The result of each mode is the exit code of its `check.sh` call. The runner never reads a result from `check.txt` ([LA5-D11](#decisions)).
 7. **L4-AC4.** Only the job `agent-e2e` runs the check. A machine of a developer has no network namespace and no test user.
 
+### PR 2 build
+
+Branch: `feature/agent-v2-la5-diagnosis`. Commit: `443afe30`.
+
+1. **Diagnosis flow.** `evaluateInRoots` calls `runDiagnosis` after `gradeWorkspace` for the dev set. `runDiagnosis` creates a fresh root (pushed to `roots[]` for cleanup), builds workspace `j`, refreshes for the judge provider, runs `re@1` via `deps.runAgent`, counts credential in the judge session, checks auth file, parses the result line's `text` and `end` via `parseDiagnosis`, and appends to `diagnoses.jsonl`.
+2. **Judge workspace.** `runDiagnosis` writes `transcript.md`, copies `diff.patch` and `check.txt` if present, writes `check.json` (last check line for the run), copies `task.md`, and copies the kind binding at stage 2.
+3. **Transcript.** `writeTranscript` reads `session.jsonl`, writes one `## <id> / Role: <role>` section per message entry, cuts `toolResult` content at 4000 chars.
+4. **parseDiagnosis.** Validates the re@1 output: `end === "completed"`, exactly one JSON object in text, only `findings` key, ≤ 20 findings, each with exactly `aspect`/`evidence`/`severity` and valid values. Returns `{ valid, findings }`.
+5. **baseCostSum two-r.** `baseCostSum` now takes `(resultsPath, sweR, judgeR)`. Lines with `agent === "re@1"` use `judgeR`; all others use `sweR`. `writeReport` reads `diagnoses.jsonl` and passes `judgeR` to `buildReport`.
+6. **Dev report.** `devCaseLines` builds per-case lines, the set-difficulty line (ceiling and floor case counts), A5/A6/A7 good-run counts, findings by aspect and severity, and the invalid diagnosis count. The verdict is `complete` when all planned runs and diagnoses have entries.
+7. **`--set dev` refusal removed.** `parseRunOptions` no longer refuses `--set dev`. Unit-level rule 13 test for it is removed.
+8. **Stub records role and task.** `StubRequestRecord` gains `selectedRole` and `selectedTask`. The responder type returns `StubTurn & { selectedRole?, selectedTask? }`. The server handler stores them from the responder result into the last request record.
+9. **L4-AC1, L4-AC2, L4-AC3, L4-AC9.** Added to `e2e-evaluation.linux-test.ts`. L4-AC3 runs a stage 1 evaluation first (same fixture) then stage 2 and checks binding inclusion and differing `input_digest`.
+
 ## Decisions
 
 1. **LA5-D1.** The L4 checks run only in the Linux job `agent-e2e`, in `src/apps/cli/e2e-evaluation.linux-test.ts`, as the test user `kanthord-e2e`. Constraint: no L4 check writes into the home of the user that starts the tests.
