@@ -8,7 +8,7 @@ LA4 moves the last agent consumers of `main` onto the result of LA1 to LA3. The 
 
 ## Entry state
 
-LA4 starts after [LA1](LA1-run-skeleton.md), [LA2](LA2-credential-boundary.md) and [LA3](LA3-run-ends.md). Each of their checks passes.
+LA4 starts after [LA1](LA1-run-skeleton.md), [LA2](LA2-credential-boundary.md), [LA3](LA3-run-ends.md), [LA5](LA5-evaluation-runner.md) and the agent evaluation of [gate step 4.3](LA-agent-build.md#gate-step-43-the-agent-evaluation) ([LA-D11](LA-agent-build.md#decisions)). Each of their checks passes.
 
 1. **Contract.** `openAgent` of `src/agent/agent-contract.ts` takes `RunBudget { deadline, usd }`, checks the start preconditions of the profile and gives each end with its class. `deadline` `null` gives no wall timer, and the command limit of `bash` is `COMMAND_LIMIT_MS` ([L3 Budget](L3-agent.md#budget)).
 2. **No `endAfterTurn`.** The run handle has no `endAfterTurn`, and the contract does not wrap `finishTurn`. Reason: the Project Service is the only reader, and it arrives in PR 1.

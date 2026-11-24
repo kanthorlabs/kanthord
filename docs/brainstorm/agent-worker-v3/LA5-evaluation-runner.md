@@ -8,8 +8,8 @@ LA5 adds the runner of [L4](L4-agent-evaluation.md#runner) to the engine: `run.s
 
 ### Entry state
 
-- LA1 to LA4 are done. `kanthord run agent` applies each rule of L2 and L3: the `--auth` file checks, the pi directory checks, R, the ambient removal, the proxy refusal, the start preconditions, the wall and cost budgets, the classes `terminal` and `retryable`, the exits `0`, `1`, `2`, `4`, `5` and `75`, and the signal handler.
-- `worker tasks run`, `tasks seed` and `tasks compare` are deleted ([LA4](LA-agent-build.md#sub-layers)). So the runner of the Worker V2 evaluation set has no command to call.
+- LA1 to LA3 are done ([LA-D11](LA-agent-build.md#decisions)). `kanthord run agent` applies each rule of L2 and L3: the `--auth` file checks, the pi directory checks, R, the ambient removal, the proxy refusal, the start preconditions, the wall and cost budgets, the classes `terminal` and `retryable`, the exits `0`, `1`, `2`, `4`, `5` and `75`, and the signal handler.
+- `worker tasks run`, `tasks seed` and `tasks compare` still exist. LA4 PR 2 deletes them. The runner calls only `kanthord run agent`.
 - The Linux job `agent-e2e` runs `src/**/*.linux-test.ts` in the network namespace `kanthord-n` with the test user `kanthord-e2e` and its home `/home/kanthord-e2e` ([LA2 PR 1](LA2-credential-boundary.md#pr-1-the-linux-test-job), [LA2-D2 and LA2-D4](LA2-credential-boundary.md#decisions)).
 - The LLM stub `src/apps/cli/e2e-llm-stub-test-support.ts` serves a list of scripted turns in order ([LA1 Harness](LA1-run-skeleton.md#harness), [LA3](LA3-run-ends.md#scope)).
 - `scripts/evaluation/` does not exist.
