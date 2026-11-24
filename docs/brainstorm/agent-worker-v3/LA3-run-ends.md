@@ -139,6 +139,22 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 8. **Proof of L3-AC5 variant 6.** With no `isolatedGitEnvironment`, the variant fails on `$TEST/M10`. With no `--no-optional-locks`, the variant fails on the digest listing of W.
 
+### PR 2 build
+
+1. **`providerFailureClass` in `run-outcome.ts`.** The function takes `last: AssistantMessage` and `contextWindow: number`. It calls `isContextOverflow(last, contextWindow)` from `@earendil-works/pi-ai/utils/overflow` and `isRetryableAssistantError(last)` from `@earendil-works/pi-ai/utils/retry`. When the message is not a context overflow and is a retryable error, it returns `FailureClass.Retryable`; otherwise `FailureClass.Terminal`. `agent-contract.ts` already imported both predicates directly in `failureOf`; PR 2 moves the logic into `run-outcome.ts` and removes the imports from `agent-contract.ts`.
+
+2. **`FailureClass` import in `agent-contract.ts`.** After removing the inline predicates, `FailureClass` was no longer used directly in `agent-contract.ts` (it is re-exported via `export { ... } from "./run-outcome.ts"`). ESLint reported it as an unused import. The fix removes `FailureClass` from the named import while keeping the re-export.
+
+3. **Stub delayed answer and closed-connection safety.** `StubTextTurn` gains `delayMs?: number`. `llmStub` accepts `LlmStubOptions { fixedStatus? }`. For the wall-budget test, the stub delays the response 30 s via `setTimeout`. The wall fires after 5 s and closes the connection. The stub adds `res.on("error", () => {})` and `if (res.writableEnded) return;` so the late `setTimeout` callback exits silently. `NO_DELAY_MS = 0` is the named constant for the no-delay default; `if (delayMs > NO_DELAY_MS)` satisfies the `no-restricted-syntax` rule.
+
+4. **Stub fixed status.** `fixedStatus?: { status: number; body: string }` in `LlmStubOptions` overrides every request with the same HTTP error. For the 429 test, all 4 requests (3 pi retries + 1 initial) receive `429 Too Many Requests`. The turn list is empty when `fixedStatus` is set.
+
+5. **401 test uses `http_error` turn kind.** The 401 case passes a single `StubHttpErrorTurn` with the body `{ error: { message: "Unauthorized: TEST_K" } }`. It uses the existing `http_error` turn path, not `fixedStatus`, because the test needs exactly one request and no retry. The body holds `TEST_K` to prove redaction.
+
+6. **L2-AC10 named constants.** `ONE_LINE = 1`, `AC10_RETRY_REQUESTS = 4`, `AC10_SINGLE_REQUEST = 1`, `DURATION_BUDGET_MIN_MS = 5000`, `DURATION_BUDGET_MAX_MS = 30000` satisfy the `no-restricted-syntax` rule that prohibits numeric literals in comparisons. `CLASS_RETRYABLE`, `FAILURE_RATE_LIMITED`, `FAILURE_UNAUTHORIZED`, `BUDGET_REACHED_WALL`, `BUDGET_5S`, `PROVIDER_RETRYABLE_CODE` and `PROVIDER_FAILED_CODE` are the string constants for the new tests.
+
+7. **Wall-budget duration assertion.** The test asserts `duration_ms >= 5000 && duration_ms < 30000`. The lower bound proves the wall fired at or after the 5 s budget. The upper bound is a reasonable ceiling for the test machine.
+
 ## Decisions
 
 1. **LA3-D1.** LA3 requires the [Entry state](#entry-state) from LA1. Constraint: LA1 ships the wall half of `run-budget.ts`, the base of `run-outcome.ts` with the class `terminal` only, and the SIGINT-only stop of today; LA1 refuses a `usd` budget.
