@@ -129,3 +129,11 @@ No PR of LA2 weakens a rule.
 3. **LA2-D3.** The job `agent-e2e` runs the test command inside the network namespace `kanthord-n`, with only loopback up. Constraint: an nft set in N records each new connection by address and port; L2-AC2 reads the set.
 4. **LA2-D4.** The test user is `kanthord-e2e` with the home `/home/kanthord-e2e`. Constraint: the harness starts the CLI and writes the fixture files of L2-AC6 as that user.
 5. **LA2-D5.** The Linux support extends the LA1 stub and harness and holds no second stub. Constraint: its file name ends in `test-support.ts`, so the build excludes it.
+
+## Build details
+
+### PR 1 build notes (engine commit `1a667028`)
+
+**BD1. Blackhole default route in step 3.** The design page lists two commands for step 3: `ip netns add kanthord-n` and `ip -n kanthord-n link set lo up`. The job adds a third: `ip -n kanthord-n route add blackhole 0.0.0.0/0`. Reason: when a network namespace has no route to a destination, the kernel's routing lookup fails before the nf OUTPUT hook fires, so the nft set receives no entry. With the blackhole route, the routing lookup succeeds; the kernel sends the TCP SYN through the nf OUTPUT chain (which adds to the set), then `dst_discard_out` drops it silently. The connection attempt to `192.0.2.1:443` returns a timeout, and the nft set holds the entry.
+
+**BD2. Homedir check uses Python3, not Node.js.** The design says the self-test proves "`os.userInfo().homedir` of the test user is H". The test runs as the CI runner user (not `kanthord-e2e`); spawning node as `kanthord-e2e` requires the nvm bin directory to be accessible to `kanthord-e2e`, which the `setfacl` step does not cover. The test instead uses `sudo -n -u kanthord-e2e python3 -c 'import pwd, os; print(pwd.getpwuid(os.getuid()).pw_dir)'`. `pwd.getpwuid(os.getuid()).pw_dir` reads from the same NSS user database as Node.js `os.userInfo().homedir`. The test name: "user database gives kanthord-e2e the homedir /home/kanthord-e2e".
