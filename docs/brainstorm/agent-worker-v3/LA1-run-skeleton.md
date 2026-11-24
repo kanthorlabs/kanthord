@@ -31,6 +31,8 @@ LA1 ends when both steps pass:
 1. The checks of [End-to-end checks](#end-to-end-checks) pass in `pnpm run verify` and in the CI job `check`.
 2. Gate step 4.2, [the real-credential run](LA-agent-build.md#gate-step-42-the-real-credential-run), passes on the build of PR11. Ulrich gives the entry. The final agent gate runs step 4.2 again on the build of LA5.
 
+Result (2026-11-24): both steps pass on the engine `d870d579`. Step 1: the CI job `check` of each LA1 pull request passes. Step 2: an `anthropic` `oauth` entry of `~/.config/kanthord/auth.json`, model `anthropic/claude-sonnet-5-5:medium`. Each of the six pass conditions holds. With an `oauth` entry, pi puts the line "You are Claude Code, Anthropic's official CLI for Claude." before the system prompt of KanthorD (`dist/api/anthropic-messages.js` of `@earendil-works/pi-ai`). An `api_key` entry gets only the system prompt of KanthorD.
+
 ## Scope
 
 ### Files
