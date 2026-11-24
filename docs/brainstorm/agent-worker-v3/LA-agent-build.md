@@ -28,7 +28,7 @@ LA is a build plan. It holds no acceptance check of its own ([index](index.md#re
 1. Each pull request is one engine pull request with the base branch `feature/agent-v2`. The engine `feature/agent-v2` starts from `c864130e`.
 2. One implementation sub-agent writes the pull request. Then one review sub-agent reviews the diff and applies each finding with `action:YES`.
 3. Aelita opens the pull request. When CI is green, Aelita merges it into `feature/agent-v2` with a squash merge. When CI fails, a new sub-agent fixes the failure, and CI runs again.
-4. The root branch `feature/agent-v2` holds the design pages. It moves the submodule pointer after the exit gate of each sub-layer, with the subject `chore: point to the engine with <sub-layer>`.
+4. The root branch `feature/agent-v2` holds the design pages. It keeps the submodule pointer at `c864130e` until the engine `feature/agent-v2` merges into the engine `main`. Then it moves the pointer once, with the subject `chore: point to the engine main with Agent V2`. Constraint: the root pre-commit hook (`.githooks/pre-commit`) accepts a submodule pointer only when the submodule is on `main`.
 5. After the agent gate, each `feature/agent-v2` merges into its `main` through one pull request. The root merge comes after the engine merge.
 6. A pull request uses the account `kanthorlabs`: `GH_TOKEN=$(gh auth token --user kanthorlabs) gh pr create ...`.
 7. Each pull request passes `pnpm run verify` in `engine`, with the corepack pnpm `11.24.0`, and the CI jobs `check` and `e2e`. From LA2 PR 1, each pull request also passes the CI job `agent-e2e`.
