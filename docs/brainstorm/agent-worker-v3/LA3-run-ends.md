@@ -123,7 +123,7 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 ### PR 1 build
 
-1. **`checkPreconditions` signature.** The ESLint rule `kanthord/max-params` (max 3) requires a single input object. `checkPreconditions` takes `PreconditionInput { preconditions, cwd, roots, inputEnv, timeoutMs? }`. The `timeoutMs` field is optional and defaults to `RUNTIME_SETUP_DEADLINE_MS`. The page constraint (each `git` command gets `isolatedGitEnvironment(childEnvironment(...))`) holds unchanged.
+1. **`checkPreconditions` signature.** `checkPreconditions` is asynchronous. It takes `PreconditionInput { preconditions, cwd, roots, inputEnv, timeoutMs? }` and gives `Promise<StartRefusal | null>`. Each `git` command runs through `execFile`, so a check does not block the event loop of a consumer. `timeoutMs` defaults to `RUNTIME_SETUP_DEADLINE_MS`. Each `git` command gets `isolatedGitEnvironment(childEnvironment(...))`.
 
 2. **`makeInput` git workspace.** `agent-contract.test.ts`'s `makeInput` now initializes a git workspace (one commit, `--quiet` on init and commit). Tests that called `openAgent` with the old empty directory now use a valid, clean worktree. Tests that intentionally need a dirty workspace add an uncommitted file before calling `openAgent`. The key.txt redaction test commits the file before calling `openAgent`.
 
@@ -131,7 +131,13 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 4. **L3-AC5 variant 6.** The test writes to `.git/config` with `appendFileSync` to set `core.fsmonitor` and `core.hooksPath`. `simpleGit.raw(["config", ...])` refuses unsafe config without `allowUnsafeFsMonitor: true` in its options. Direct file append bypasses `simpleGit` and sets the config that the test must prove `isolatedGitEnvironment` overrides.
 
-5. **"no stderr" test restructuring.** The "no runtime module writes to process.stdout or process.stderr" test calls `makeInput` before setting up the mock. The git operations in `makeInput` trigger stderr writes (from git or `simpleGit`) that happen outside the runtime boundary the test checks.
+5. **Stream silence test.** The test "no runtime module writes to process.stdout or process.stderr" calls `makeInput` first, then mocks the two streams, then calls `openAgent`, `send` and `close`. Reason: the Node test runner writes its own report events to stdout while `makeInput` waits for a `git` process.
+
+6. **`start_refused` diagnostic.** `run-agent.ts` throws a `Diagnostic` with the code `cli.run.agent.start_refused` and the `reason` row. `runCLI` prints it and exits `1`, and the `finally` block removes R. PR 1 does not change `run-agent-exit.ts`.
+
+7. **Open output file.** A start refusal comes after step 6, so O exists with no line. L2-AC12 and L3-AC5 assert that O holds no line.
+
+8. **Proof of L3-AC5 variant 6.** With no `isolatedGitEnvironment`, the variant fails on `$TEST/M10`. With no `--no-optional-locks`, the variant fails on the digest listing of W.
 
 ## Decisions
 
