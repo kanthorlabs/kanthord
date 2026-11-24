@@ -508,27 +508,25 @@ pi auth print-bearer-token --provider "$PROVIDER" --min-expiry 20m > /dev/null
 
 pi refreshes a token that expires within the minimum, writes the entry back and prints the token (`resolveCredentialForPrint` in `dist/cli/credential-print.js`). The redirect discards the token. `20m` covers the wall budget `10m`, the refresh window of 5 minutes and a margin. An `api_key` entry needs no refresh step.
 
+The run uses the [play setup](#play-setup) on the build of the engine. `$REPO` is a git repository. The play setup clones it into the workspace. `run.sh` sets `ulimit -c 0` and reads `~/.pi/agent/auth.json`. The digest of `auth.json` is taken after the refresh, so `--no-refresh` keeps `run.sh` from a second refresh.
+
 ```sh
-ulimit -c 0
-mkdir -m 700 -p "$GATE"
-git -C "$REPO" worktree add --detach "$GATE/w" "$C"
+pnpm run build
+pnpm run play:agent -- --repo "$REPO" --model "$PROVIDER/$MODEL:$LEVEL" --budget 10m --no-refresh
+GATE=<the play directory that the script prints>
 shasum -a 256 ~/.pi/agent/auth.json > "$GATE/auth.before"
 stat -f %Lp ~/.pi/agent/auth.json >> "$GATE/auth.before"
-kanthord run agent swe@1 --model "$PROVIDER/$MODEL:$LEVEL" --budget 10m \
-  --auth ~/.pi/agent/auth.json --workspace "$GATE/w" --session "$GATE/session.jsonl" \
-  --output "$GATE/result.jsonl" \
-  --prompt "Run git log -1 --format=%H with bash. Reply with the commit id only." \
-  2> "$GATE/stderr.txt"
+"$GATE/run.sh" "Run git log -1 --format=%H with bash. Reply with the commit id only." 2> "$GATE/stderr.txt"
 ```
 
 The run passes when each condition holds:
 
-1. The exit code is `0`. `result.jsonl` is one JSON line with `end` `completed`, `class` `null`, `tool_calls` of 1 or more, and `text` that holds the output of `git -C "$GATE/w" rev-parse HEAD`.
-2. A session file exists at `$GATE/session.jsonl` with mode `0600`. It holds one or more `message` entries with the role `assistant`.
-3. The session file holds no credential value of the entry. The check prints only a count: `grep -cFf <(jq -r --arg p "$PROVIDER" '.[$p] | (.key, .access, .refresh) // empty' ~/.pi/agent/auth.json) "$GATE/session.jsonl"` prints `0`.
+1. The exit code is `0`. `$GATE/result.jsonl` is one JSON line with `end` `completed`, `class` `null`, `tool_calls` of 1 or more, and `text` that holds the output of `git -C "$GATE/workspace" rev-parse HEAD`.
+2. One session file exists in `$GATE/sessions/` with mode `0600`. It holds one or more `message` entries with the role `assistant`.
+3. The session file holds no credential value of the entry. The check prints only a count: `grep -cFf <(jq -r --arg p "$PROVIDER" '.[$p] | (.key, .access, .refresh) // empty' ~/.pi/agent/auth.json) "$GATE"/sessions/*.jsonl` prints `0`.
 4. `~/.pi/agent/auth.json` has the same SHA-256 digest and the same mode as in `auth.before`. The commands are the macOS forms, because the `auth.json` of Ulrich is on his macOS machine.
 5. `stderr.txt` holds no line with `cli.run.agent.secret_exposed`.
-6. `git -C "$GATE/w" status --porcelain` prints nothing.
+6. `git -C "$GATE/workspace" status --porcelain` prints nothing.
 
 ## Requirements on L3
 
