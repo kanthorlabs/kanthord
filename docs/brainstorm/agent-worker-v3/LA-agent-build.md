@@ -131,13 +131,13 @@ The set lies in `<data>/evaluation/agent/`, outside the engine repository ([L4 L
 | ----------------------------------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------- |
 | The set repository, `.gitignore` with `config.json`, the pre-commit hook `node evaluation.mjs scan`         | Aelita                          | A commit with a secret pattern fails the hook                                            |
 | 10 dev cases (5 `backend`, 5 `frontend`), each with `check/reference.patch`                                 | A sub-agent, reviewed by Aelita | `node evaluation.mjs validate <case>` exits `0` for each case                            |
-| 6 held-out cases (3 and 3), each with `check/reference.patch`                                               | A separate sub-agent            | `validate` exits `0`; Aelita reads only the `validate` output                            |
+| 20 held-out cases (10 and 10), each with `check/reference.patch`; the `backend` cases are new todoapp tasks | A separate sub-agent            | `validate` exits `0`; Aelita reads only the `validate` output                            |
 | `binding/backend.md` and `binding/frontend.md`: the repository prompt of each fixture, conventions included | The sub-agent of the dev cases  | Each text names the conventions that `check.sh conventions` checks                       |
 | `config.json` with `cap_usd` 15, `gate_share` 0.6, `judge_usd` `0.1usd` and `base_model`                    | Aelita                          | The configuration rules of [L4 Configuration](L4-agent-evaluation.md#configuration) pass |
 | The `anthropic` entry in `<home>/.config/kanthord/auth.json`                                                | Ulrich                          | [L4 Credential](L4-agent-evaluation.md#credential), rule 7                               |
 
 - The set build starts after LA5 PR 5, because `validate` and `scan` are commands of `evaluation.mjs`.
-- The backend cases come from the task texts of the Worker V2 seeds, and the frontend cases from the synthetic React and Tailwind fixture ([L4 Evaluation set](L4-agent-evaluation.md#evaluation-set)).
+- The backend dev cases come from the task texts of the Worker V2 seeds, the backend held-out cases are new todoapp tasks, and the frontend cases come from the synthetic React and Tailwind fixture ([L4 Evaluation set](L4-agent-evaluation.md#evaluation-set)).
 
 ## Agent gate
 
