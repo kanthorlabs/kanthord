@@ -150,3 +150,13 @@ No PR of LA2 weakens a rule.
 - L2-AC6 writes a credential JSON to the standard input of the process. `spawnBinAsTestUser` closes the standard input today. PR 2 adds the input to `TestUserStart`.
 - W, S, D, X and T of L2-AC6 must be writable by `kanthord-e2e`. `buildFixtures` makes them as the runner user under a `0700` directory. PR 2 makes them as the test user.
 - N has no name resolution, and the rule records TCP only. A connection attempt by host name fails before `connect`, so the set does not show it.
+
+### PR 2
+
+1. **BD11. DNS recording.** PR 2 adds `ip protocol udp udp dport 53 add @connections { ip daddr . udp dport }` to the nft output chain. The existing TCP rule already covers TCP port 53. The self-test sends a UDP datagram to `192.0.2.53:53` and asserts the pair appears in the set.
+2. **BD12. nft set snapshot before the run.** The set accumulates entries across all tests in the job. L2-AC2 takes a snapshot of the set before each two-run block and diffs after to identify new connections. It asserts only the stub's address and port appear in the delta.
+3. **BD13. L2-AC2 uses `spawnCli`.** The CLI runs as the test runner user inside N (the whole job is in N). `hostiletEnv` builds the hostile environment from markers and stub2's URL. `withoutAmbientCredentials` strips all markers and proxy names from `process.env` before the LLM client initialises.
+4. **BD14. L2-AC6 uses `spawnBinAsTestUser`.** Each variant creates its own W and D as the test user via `mkdirAsTestUser` and `buildWorkspaceAsTestUser`. The auth file at `H/.config/kanthord/auth.json` holds K. `defaultAuthPath()` reads `userInfo().homedir` = `/home/kanthord-e2e` regardless of `HOME` or `XDG_CONFIG_HOME` in the environment.
+5. **BD15. Session files are root-readable.** L2-AC6 reads session files owned by `kanthord-e2e` via `sudo cat` (GitHub Actions runners have NOPASSWD sudo). The test asserts no decoy key appears in any session file.
+6. **BD16. `noAuth` option on `RunOptions`.** PR 2 adds `noAuth?: boolean` to `RunOptions` and updates `runAgentArguments` to skip `--auth` when `noAuth` is true. L2-AC6 uses it via `spawnBinAsTestUser` directly (no `--auth` arg, so `defaultAuthPath()` applies).
+7. **BD17. L2-AC2 bash tool check.** The stub returns a tool call `bash { command: "env; cat ~/.aws/credentials" }` for each of the two runs. L2-AC2 reads the `toolResult` entries in both session files and asserts no marker text appears in any bash output block. The child HOME is `R/home` (the run directory home), not `H`, so `~/.aws/credentials` resolves to a non-existent path and the marker file at `H/.aws/credentials` is not reachable from the bash tool.
