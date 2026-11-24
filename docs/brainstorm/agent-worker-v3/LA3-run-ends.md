@@ -197,7 +197,7 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 2. **`OpenRunOptions` interface.** `run-agent.ts` extracts `signal`, `promptText` and `onAgentOpened` into `OpenRunOptions`. This reduces `openAndRunAgent` from 4 params to 2 and satisfies the `max-params: 3` rule.
 
-3. **`ResultContext` and `emitRunResult`.** `run-agent.ts` extracts the 10 result fields into `ResultContext` and the result emission into `emitRunResult(ctx, turnEnd)`. This reduces the complexity of `runAgent` from 13 to 10 and satisfies the `complexity: 10` rule.
+3. **`ResultContext` and `emitRunResult`.** `run-agent.ts` extracts the 11 result fields into `ResultContext` and the result emission into `emitRunResult(ctx, turnEnd)`. This reduces the complexity of `runAgent` from 13 to 10 and satisfies the `complexity: 10` rule.
 
 4. **LLM stub `closedRequestCount`.** `e2e-llm-stub-test-support.ts` adds `closedRequestCount` to `LlmStub`. The stub registers a `close` listener on each response. When the connection closes before `res.writableEnded`, it increments the counter. L2-AC11 Variant 2 asserts that the stub recorded one closed connection, which proves the signal fired before the stub finished writing.
 
@@ -205,7 +205,25 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 6. **L2-AC11 named constants.** `SIGTERM_SIGNAL`, `SIGINT_SIGNAL`, `NO_TOOL_CALLS`, `NO_REQUESTS`, `ASSISTANT_ROLE`, and `NO_STDERR_LINES` satisfy the `no-restricted-syntax` rule that prohibits string literals in comparisons and in `assert.equal` arguments. `ASSISTANT_ROLE` replaces the string literal `"assistant"` in five places across `e2e-run-agent-ends.test.ts`.
 
-7. **`StopHandlers` interface.** `run-agent-signal.ts` exports `StopHandlers { release, setForceStop, forcedWithoutResult }`. `run-agent.ts` calls `setForceStop` after `openAgent` opens and uses `forcedWithoutResult` to skip result emission on a second signal. `setForceStop` holds `forceResolve` of the force-stop race.
+7. **`StopHandlers` interface.** `run-agent-signal.ts` exports `StopHandlers { release, setForceStop, forcedWithoutResult }`. `run-agent.ts` calls `setForceStop` after `openAgent` opens and uses `forcedWithoutResult` to skip result emission on a second signal. `setForceStop` holds the call of `forceStop()` of the open run.
+
+8. **Step 11 ignores a signal.** `StopHandlers.ignoreSignals()` stops the time limit and makes each later signal a no-op. The handlers stay installed, so the default action of the signal does not end the process. `runAgent` calls it after `send` returns, before the removal of R and the result write ([L2 Shutdown](L2-agent-cli.md#shutdown), rule 4). `release()` removes the handlers as the last step of the cleanup, after the removal of R.
+
+9. **Signals after a forced stop.** The forced stop keeps the handlers and ignores each later signal. Reason: a third signal with no handler ends the process before the removal of R ([Credentials](#credentials), rule 3).
+
+10. **Handlers before R.** `runAgent` installs the handlers before it makes R. Reason: a signal between step 6 and step 9 then follows rule 5, with the removal of R.
+
+11. **Signal after a completed open.** When the signal is aborted after `openAgent` returns, `openAndRunAgent` closes the opened run and exits `2`. It makes this check before the refusal check.
+
+12. **Carry-over S7: closed.** Two process-level tests in `e2e-run-agent-ends.test.ts` prove rule 5. A `git` script first in `PATH` writes a marker and holds the first `git` command of the start preconditions for 3 seconds. The test sends the signal after the marker exists. Pass condition: exit `2`, empty stdout, no line in O, T holds no file, no request at Stub, no `open_failed` line and no `start_refused` line. `cli.run.agent.open_failed` itself has no process-level test: no command line of L2 makes `openAgent` throw with no signal. `run-agent-exit.test.ts` and `agent-contract.test.ts` cover it.
+
+13. **Carry-over S9: the signal wins.** A changed workspace plus an aborted signal gives exit `2` and no `cli.run.agent.start_refused` line (rule 5). The second test of item 12 proves it with a changed tracked file in W. S holds no file.
+
+14. **Carry-over S8: the order matches L2.** At step 11, `runAgent` removes R, then writes the result, then exits. L2-AC11 asserts the line in O and an empty T.
+
+15. **`finishTurn` unit test.** `agent-contract.test.ts` aborts the signal while a `bash` child runs. Pass condition: the end `stopped`, no failure, one model call at the scripted provider and no live child. L2-AC11 variant 1 also asserts one request at Stub.
+
+16. **Open after the review.** (a) `main.ts` sets `process.exitCode` and waits for the event loop. After a forced stop, a handle of a hung pi can keep the process alive after the result. (b) When a provider answers the abort of a signal with an error, `loopEnd` gives `failed`, because the failure check runs before the `stopped` check. Aelita rules on both.
 
 ## Decisions
 
