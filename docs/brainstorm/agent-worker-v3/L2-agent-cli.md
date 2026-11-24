@@ -500,31 +500,37 @@ A Commander syntax error, for example an unknown option, writes the Commander me
 
 ### Gate procedure: the real-credential run
 
-Round order step 4.2 needs the credential of Ulrich, so it is a gate step and no automated check. Ulrich gives the pi provider id of the entry in his pi `auth.json`, the model id and the level. The run reads that file with `--auth`. For an `oauth` entry, Ulrich first refreshes the entry with pi:
+Round order step 4.2 needs the credential of Ulrich, so it is a gate step and no automated check. Ulrich gives the pi provider id of the entry in his pi `auth.json`, the model id and the level. The run reads that file with `--auth`. The play setup refreshes the entry before the run. An `api_key` entry needs no refresh step; `--refresh-only` still exits `0` after preparing the directory.
+
+The run uses the [play setup](#play-setup) on the build of the engine. `$REPO` is a git repository. The play setup clones it into the workspace. `$AUTH` is the `auth.json` of Ulrich. `--refresh-only` refreshes the entry and returns the play directory; the digest of `$AUTH` is taken after the refresh.
 
 ```sh
-pi auth print-bearer-token --provider "$PROVIDER" --min-expiry 20m > /dev/null
+export AUTH="$HOME/.config/kanthord/auth.json"
+GATE="$(pnpm run play:agent -- --repo "$REPO" --model "$PROVIDER/$MODEL:$LEVEL" --auth "$AUTH" --budget 10m --refresh-only 2>/dev/null)"
+shasum -a 256 "$AUTH" > "$GATE/auth.before"
+stat -f %Lp "$AUTH" >> "$GATE/auth.before"
+pnpm run play:agent -- --repo "$REPO" --model "$PROVIDER/$MODEL:$LEVEL" --auth "$AUTH" --budget 10m --no-refresh --no-build 2>/dev/null | head -1
 ```
 
-pi refreshes a token that expires within the minimum, writes the entry back and prints the token (`resolveCredentialForPrint` in `dist/cli/credential-print.js`). The redirect discards the token. `20m` covers the wall budget `10m`, the refresh window of 5 minutes and a margin. An `api_key` entry needs no refresh step.
-
-The run uses the [play setup](#play-setup) on the build of the engine. `$REPO` is a git repository. The play setup clones it into the workspace. `run.sh` sets `ulimit -c 0` and reads `~/.pi/agent/auth.json`. The digest of `auth.json` is taken after the refresh, so `--no-refresh` keeps `run.sh` from a second refresh.
+The script runs the agent and prints the result. It exits with the agent exit code. The pass check runs after the script:
 
 ```sh
-pnpm run build
-pnpm run play:agent -- --repo "$REPO" --model "$PROVIDER/$MODEL:$LEVEL" --budget 10m --no-refresh
-GATE=<the play directory that the script prints>
-shasum -a 256 ~/.pi/agent/auth.json > "$GATE/auth.before"
-stat -f %Lp ~/.pi/agent/auth.json >> "$GATE/auth.before"
-"$GATE/run.sh" "Run git log -1 --format=%H with bash. Reply with the commit id only." 2> "$GATE/stderr.txt"
+grep -cFf <(jq -r --arg p "$PROVIDER" '.[$p] | (.key, .access, .refresh) // empty' "$AUTH") "$GATE"/sessions/*.jsonl
+```
+
+That command must print `0`. Capture stderr separately when needed by redirecting stderr on the full run:
+
+```sh
+pnpm run play:agent -- --model "$PROVIDER/$MODEL:$LEVEL" --auth "$AUTH" --budget 10m --no-refresh --no-build \
+  "Run git log -1 --format=%H with bash. Reply with the commit id only." 2> "$GATE/stderr.txt"
 ```
 
 The run passes when each condition holds:
 
-1. The exit code is `0`. `$GATE/result.jsonl` is one JSON line with `end` `completed`, `class` `null`, `tool_calls` of 1 or more, and `text` that holds the output of `git -C "$GATE/workspace" rev-parse HEAD`.
+1. The exit code is `0`. `$GATE/result.jsonl` holds a JSON line with `end` `completed`, `class` `null`, `tool_calls` of 1 or more, and `text` that holds the output of `git -C "$GATE/workspace" rev-parse HEAD`.
 2. One session file exists in `$GATE/sessions/` with mode `0600`. It holds one or more `message` entries with the role `assistant`.
-3. The session file holds no credential value of the entry. The check prints only a count: `grep -cFf <(jq -r --arg p "$PROVIDER" '.[$p] | (.key, .access, .refresh) // empty' ~/.pi/agent/auth.json) "$GATE"/sessions/*.jsonl` prints `0`.
-4. `~/.pi/agent/auth.json` has the same SHA-256 digest and the same mode as in `auth.before`. The commands are the macOS forms, because the `auth.json` of Ulrich is on his macOS machine.
+3. `grep -cFf <(jq -r --arg p "$PROVIDER" '.[$p] | (.key, .access, .refresh) // empty' "$AUTH") "$GATE"/sessions/*.jsonl` prints `0`.
+4. `$AUTH` has the same SHA-256 digest and the same mode as in `auth.before`. The commands are the macOS forms, because the `auth.json` of Ulrich is on his macOS machine.
 5. `stderr.txt` holds no line with `cli.run.agent.secret_exposed`.
 6. `git -C "$GATE/workspace" status --porcelain` prints nothing.
 
@@ -555,44 +561,54 @@ L2 needs these items from the agent contract. [L3](L3-agent.md#input-and-output-
 
 ## Play setup
 
-The script `scripts/play-run-agent.mjs` of the engine prepares a private place where a human runs `run agent` at once. The `package.json` script is `play:agent`.
+The script `scripts/play-run-agent.mjs` of the engine sets up a private play directory and runs the agent in one command. The `package.json` script is `play:agent`.
 
 ```sh
-pnpm run play:agent -- [--repo <path>] [--model <provider>/<model>:<level>] [--auth <path>] [--budget <duration>] [--no-refresh]
+pnpm run play:agent -- [--repo <path>] [--model <provider>/<model>:<level>] [--auth <path>] [--budget <duration>] [--no-refresh] [--no-build] [--refresh-only] ["<prompt>"]
 ```
 
-| Option         | Default                           | Effect                                                                    |
-| -------------- | --------------------------------- | ------------------------------------------------------------------------- |
-| `--repo`       | none                              | Clone this git repository as the workspace. With no value, use the sample |
-| `--model`      | `anthropic/claude-haiku-5-5:high` | The model of each run                                                     |
-| `--auth`       | `~/.pi/agent/auth.json`           | The `--auth` file of each run                                             |
-| `--budget`     | `15m`                             | The wall budget of each run                                               |
-| `--no-refresh` | refresh on                        | Skip the pi token refresh before each run                                 |
+| Option           | Default                              | Effect                                                                      |
+| ---------------- | ------------------------------------ | --------------------------------------------------------------------------- |
+| `--repo`         | none                                 | Clone this git repository as the workspace. With no value, use the sample   |
+| `--model`        | `anthropic/claude-sonnet-5-5:medium` | The model of each run                                                       |
+| `--auth`         | `~/.config/kanthord/auth.json`       | The `--auth` file of each run                                               |
+| `--budget`       | `15m`                                | The wall budget of each run                                                 |
+| `--no-refresh`   | refresh on                           | Skip the pi token refresh before each run                                   |
+| `--no-build`     | build check on                       | Skip the build check                                                        |
+| `--refresh-only` | run on                               | Refresh and prepare the play directory; print its path and exit `0`         |
+| `"<prompt>"`     | use `prompt.md`                      | Prompt text or a path to a file. With no value, use `prompt.md`             |
+
+The `--auth` default uses `userInfo().homedir` from `node:os`, not the `HOME` environment variable.
 
 The script does these steps:
 
-1. Set the umask `0o077`. Make the play directory `<state>/play/<UTC time>` with mode `0700`. `<state>` is the state directory of KanthorD.
-2. Make the workspace `workspace/`:
+1. Unless `--no-build`, check whether `dist/main.js` is absent or any file under `src/` is newer. When either is true, run `pnpm run build` with inherited stdio and stop on failure.
+2. Set the umask `0o077`. Determine the play directory `<state>/play/<YYYYMMDD>` (local date of the machine). `<state>` is the state directory of KanthorD.
+3. If the play directory exists, verify: it is not a symbolic link, its mode is `0700`, and the current user owns it. Refuse (exit `1`) when any check fails. If `--repo` is given, print one stderr notice that the existing workspace is used.
+4. If the play directory does not exist, create it with mode `0700`.
+5. If the play directory is new, make the workspace `workspace/`:
    - With no `--repo`, make the sample repository: `sum.mjs` with an off-by-one bug, `sum.test.mjs` with `node:test` cases that fail, one commit with a fixed author.
    - With `--repo`, run `git clone --quiet --no-hardlinks <path> workspace`, then remove the remote `origin`.
-3. Write the placeholder prompt `prompt.md`:
+6. If the play directory is new, write the placeholder prompt `prompt.md`:
    - Sample: "Fix the bug in `sum.mjs`. Run `node --test` before and after the fix. Reply with the root cause and the test result."
    - `--repo`: "Read this repository. Reply with five bullets that describe its structure and how to run its tests. Do not change any file."
-4. Write `run.sh` with mode `0700`, and print its path and the next command.
+7. Create `sessions/` if absent. Compute the session path `sessions/<UTC HHMMSS>.jsonl`. If that name exists, use the full UTC ISO timestamp instead.
+8. Unless `--no-refresh`, call `ModelRuntime.create({ authPath, modelsPath: null, allowModelNetwork: false, refreshOnCreate: false })` then `runtime.getAuth(provider, { minOAuthValidityMs })` with `minOAuthValidityMs = max(20m, budget + 10m)`. Discard the result. On a thrown error or `undefined`, print `play-run-agent: the token refresh failed` to stderr and exit `1`. Never print the token or pi error text. `authPath` is the absolute `--auth` path.
+9. Print the play directory. If `--refresh-only`, exit `0`.
+10. Write `run.sh` with mode `0700`. Print the path of `run.sh`. Spawn `run.sh` with the prompt as `$1`. Exit with its exit code.
 
 `run.sh [<prompt>]` does these steps:
 
 1. Set `ulimit -c 0`.
-2. Unless `--no-refresh` was given, run `pi auth print-bearer-token --provider <provider> --min-expiry 20m > /dev/null`. `<provider>` is the part of `--model` before the first `/`.
-3. Run `node <engine>/bin/kanthord.mjs run agent swe@1` with `--model`, `--budget`, `--auth`, `--workspace workspace`, `--session sessions/<UTC time>.jsonl`, `--output result.jsonl` and `--prompt`. The prompt is the argument of `run.sh`, else `prompt.md`.
-4. Print the exit code, the fields `end`, `class` and `text` of the last line of `result.jsonl`, and `git -C workspace status --short`.
+2. Run `node <engine>/bin/kanthord.mjs run agent swe@1` with `--model`, `--budget`, `--auth`, `--workspace workspace`, `--session <baked-in session path>`, `--output result.jsonl` and `--prompt`. The prompt is `$1` when given, else `prompt.md`.
+3. Print the exit code, the fields `end`, `class` and `text` of the last line of `result.jsonl`, and `git -C workspace status --short`.
 
 Constraints:
 
-- The script and `run.sh` never read, copy or print the `--auth` file. Only pi and `kanthord` read it. The refresh output goes to `/dev/null`.
+- The script never reads, copies or prints the `--auth` file. Only pi and `kanthord` read it.
 - The script makes no change outside the play directory. A clone of `--repo` has no remote.
-- The script refuses a missing `dist/main.js` of the engine with exit `1`.
-- Each run of `run.sh` has a new session path, because a session path must not exist ([Session file path](#session-file-path), rule 2).
+- Each invocation writes a new `run.sh` with a unique baked-in session path.
+- `ulimit -c 0` requires a shell. The script keeps `run.sh` as the runner and spawns it.
 
 ## Handoffs to later layers
 
@@ -709,8 +725,12 @@ L2 adds these details to the [shared fixtures of L1](L1-model.md#shared-fixtures
     - Assert: refused with `cli.run.agent.budget_unpriced`, with the row `option: --budget`. Stub receives no request. No file exists at S. O does not exist. T holds no file.
 16. **L2-AC16. The play setup gives a workspace, a placeholder prompt and a run that works.**
     - Fixture: Auth, Stub, H, X. The state directory of KanthorD is under X.
-    - Command: `pnpm run play:agent -- --model openai-compatible/stub-1:off --auth "$AUTH" --no-refresh`, then the printed `run.sh` with no argument.
-    - Assert: the script exits `0`. The play directory has mode `0700`. `workspace/` is a git repository with one commit, no remote and a clean status. `prompt.md` holds the sample placeholder. `run.sh` exits `0`. The request to Stub holds the text of `prompt.md`. `result.jsonl` holds one line with `end` `completed`. One `0600` file exists in `sessions/`. The output of the script and of `run.sh` holds no value of Auth.
+    - Command: `pnpm run play:agent -- --model openai-compatible/stub-1:off --auth "$AUTH" --no-refresh --no-build` (first call, no prompt); then a second call on the same day with a text prompt, keeping `--no-refresh --no-build`.
+    - Assert:
+      - Each call exits `0`. The play directory is `<X>/kanthord/play/<YYYYMMDD>` with mode `0700`. Both calls use the same play directory.
+      - After the first call: `workspace/` is a git repository with one commit, no remote and a clean status. `prompt.md` holds the sample placeholder. The request to Stub holds the text of `prompt.md`.
+      - After the second call: `workspace/` still has one commit (no reclone). Two `0600` session files exist in `sessions/`. The last request to Stub holds the text prompt. The last line of `result.jsonl` has `end` `completed`.
+      - The combined output of both calls holds no value of Auth.
 
 ### Unit-level rules
 
@@ -765,7 +785,7 @@ These rules hold with no process, no file system flow and no LLM stub, so their 
 23. **L2-D23.** Each end and each diagnostic code is `retryable` or `terminal` (Ulrich, 2026-11-22). Constraint: `retryable` means that the same input can succeed later with a new `--session` path and a workspace that passes the start preconditions; the class comes from `isContextOverflow` and `isRetryableAssistantError`; the failure kind comes from `providerFailureOf`; `run agent` retries nothing, and the retries of pi stay.
 24. **L2-D24.** A first signal stops the run gracefully, with the result `stopped`; a second signal ends it after the removal of R (Ulrich, 2026-11-22). Aelita decision: the graceful part has a limit of 10 seconds, then a forced stop. Constraint: SIGINT and SIGTERM have the same effect; the end `stopped` is `terminal`; step 11 ignores a signal.
 25. **L2-D25.** The run refuses a path-like `--prompt` or `--system-prompt` value that names an existing entry that is no regular UTF-8 text file, with `cli.file.not_regular` or `cli.file.encoding_invalid` (Ulrich, 2026-11-22). Constraint: only a path-like value that names no entry is used as text, with the notice `cli.run.agent.prompt_text_path`.
-26. **L2-D26.** The engine ships the play setup `scripts/play-run-agent.mjs` ([Play setup](#play-setup); Ulrich, 2026-11-23). Constraint: it reads no credential, changes nothing outside its play directory and runs only the shipped `run agent`.
+26. **L2-D26.** The engine ships the play setup `scripts/play-run-agent.mjs` ([Play setup](#play-setup); Ulrich, 2026-11-23; updated to one-command design, 2026-11-24). Constraints: it reads no credential, changes nothing outside its play directory and runs only the shipped `run agent`; the play directory is `<state>/play/<YYYYMMDD>` (local date) and is reused within a day; on reuse, the script verifies mode `0700`, no symbolic link and current-user ownership; `ulimit -c 0` requires a shell, so the script keeps `run.sh` as the runner and spawns it; the play setup refreshes with the method of L4-D17 (`ModelRuntime.create` + `getAuth` from `@earendil-works/pi-coding-agent`); the `--auth` default is `~/.config/kanthord/auth.json` (from `userInfo().homedir`); the `--model` default is `anthropic/claude-sonnet-5-5:medium`; `--no-build` skips the build check; `--refresh-only` refreshes and prepares the play directory without running the agent.
 
 ## Open questions for Ulrich
 
