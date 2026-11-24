@@ -145,7 +145,7 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 2. **`FailureClass` import in `agent-contract.ts`.** After removing the inline predicates, `FailureClass` was no longer used directly in `agent-contract.ts` (it is re-exported via `export { ... } from "./run-outcome.ts"`). ESLint reported it as an unused import. The fix removes `FailureClass` from the named import while keeping the re-export.
 
-3. **Stub delayed answer and closed-connection safety.** `StubTextTurn` gains `delayMs?: number`. `llmStub` accepts `LlmStubOptions { fixedStatus? }`. For the wall-budget test, the stub delays the response 30 s via `setTimeout`. The wall fires after 5 s and closes the connection. The stub adds `res.on("error", () => {})` and `if (res.writableEnded) return;` so the late `setTimeout` callback exits silently. `NO_DELAY_MS = 0` is the named constant for the no-delay default; `if (delayMs > NO_DELAY_MS)` satisfies the `no-restricted-syntax` rule.
+3. **Stub delayed answer and closed-connection safety.** `StubTextTurn` gains `delayMs?: number`. `llmStub` accepts `LlmStubOptions { fixedStatus? }`. For the wall-budget test, the stub delays the response 30 s via `setTimeout`. The wall fires after 5 s and closes the connection. The stub clears the timer at the `close` event of the response. The stub thus writes nothing to a closed connection, and no timer keeps the test process alive. `NO_DELAY_MS = 0` is the named constant for the no-delay default; `if (delayMs > NO_DELAY_MS)` satisfies the `no-restricted-syntax` rule.
 
 4. **Stub fixed status.** `fixedStatus?: { status: number; body: string }` in `LlmStubOptions` overrides every request with the same HTTP error. For the 429 test, all 4 requests (3 pi retries + 1 initial) receive `429 Too Many Requests`. The turn list is empty when `fixedStatus` is set.
 
@@ -153,7 +153,13 @@ Each rule below stays at the strength of LA1 and LA2 or becomes stricter.
 
 6. **L2-AC10 named constants.** `ONE_LINE = 1`, `AC10_RETRY_REQUESTS = 4`, `AC10_SINGLE_REQUEST = 1`, `DURATION_BUDGET_MIN_MS = 5000`, `DURATION_BUDGET_MAX_MS = 30000` satisfy the `no-restricted-syntax` rule that prohibits numeric literals in comparisons. `CLASS_RETRYABLE`, `FAILURE_RATE_LIMITED`, `FAILURE_UNAUTHORIZED`, `BUDGET_REACHED_WALL`, `BUDGET_5S`, `PROVIDER_RETRYABLE_CODE` and `PROVIDER_FAILED_CODE` are the string constants for the new tests.
 
-7. **Wall-budget duration assertion.** The test asserts `duration_ms >= 5000 && duration_ms < 30000`. The lower bound proves the wall fired at or after the 5 s budget. The upper bound is a reasonable ceiling for the test machine.
+7. **Wall-budget duration assertion.** The test asserts `duration_ms >= 5000 && duration_ms < 30000`, as L2-AC10 states. The lower bound proves that the wall ended the run. The upper bound proves that the run did not wait for the answer of the stub.
+
+8. **Wall budget during a pi retry.** A wall budget that ends during the wait of a pi retry gives the end `budget_end` and exit `4`, not exit `75`. pi removes the error message before each retry, so the last `assistant` message is no error at the abort. `docs/cli/run.md` states this in "Classes".
+
+9. **Overflow case of L3-U5.** The error text of the overflow test matches a pattern of `isRetryableAssistantError` and a pattern of `isContextOverflow`. The test thus fails when `providerFailureClass` omits the overflow predicate.
+
+10. **`provider_retryable` unit test.** `run-agent-exit.test.ts` holds the test of `printPostResultDiagnostic` for a retryable failure ([L2 unit-level rule 10](L2-agent-cli.md#unit-level-rules)).
 
 ## Decisions
 
