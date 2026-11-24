@@ -236,6 +236,21 @@ Branch: `feature/agent-v2-la5-diagnosis`.
 10. **L4-AC3.** The test runs `e1` and then `e3` in one fixture. It reads only the requests that the stub got after `e1`.
 11. **L4-AC9.** The test compares each check line with the fixed values of L4-AC1: `d1` passes each aspect, and `d2` fails A1 only.
 
+### PR 3 build
+
+Branch: `feature/agent-v2-la5-breach`.
+
+1. **Constants.** `BREACH_PROTECTED_PATH`, `BREACH_SET_CHANGE`, `PROTECTED_PATH_PARTS`, `PROTECTED_FILE_NAMES`, `PROTECTED_FILE_PREFIX` and `PATH_BOUNDARY_CHARS` are module-level constants. `PROTECTED_FILE_PREFIX` is `"judge-"`.
+2. **Path boundary.** `indexOfFileName(text, name)` scans `text` for `name` and accepts a match only when the character before it is start-of-text or one of the characters in `PATH_BOUNDARY_CHARS` (`/`, tab, newline, carriage return, space, `"`, `'`). `hasProtectedPath` calls it for each file name and for the `judge-` prefix; it calls `includes` for the exact strings.
+3. **`protectedPathStrings`.** Exported for unit tests. Returns `[evalSetDir, resultsDir, caseFolder, ...PROTECTED_PATH_PARTS]`. The caller passes `dirname(run.resultsPath)` for `resultsDir`.
+4. **`runBreachChecks` flag.** Each `call` object passed to `guardedAgentCall` holds `runBreachChecks: true` for the `swe@1` call and `runBreachChecks: false` for the diagnosis call. When `false`, rules 3 and 4 are skipped, as L4 states.
+5. **Breach order.** After the credential and `auth_file` checks, `guardedAgentCall` checks `protected_path` then `set_change` only when `call.runBreachChecks` is `true`. The order matches L4 rules 1 to 4.
+6. **Set change.** `checkSetChangeBreach(evalSetDir)` calls `gitOutput(evalSetDir, ["status", "--porcelain"])` and returns `true` when the output is non-null and non-empty.
+7. **Stub variables.** `LlmStubOptions` gains `variables?: Record<string, string>`. The stub applies each entry with `replaceAll` after the `$TEST` replacement, in `textTurnEvents` and `toolCallsTurnEvents`. The test passes a mutable object as `variables` and sets the fixture path after `buildEvaluationSet` returns, because the stub reads the object per request.
+8. **`answeredTurns`.** `L4ResponderChange` gains `answeredTurns?: Record<string, StubTurn>`. `sweTurn` returns `answeredTurns[task] ?? DONE_TURN` when `answered` is `true`. L4-AC5 variant 2 uses it to return a text with `TEST_K` after the `write` tool result.
+9. **L4-AC5 turns.** `READ_CHECK_TURN`, `GIT_INSPECT_TURN`, `COPY_AUTH_TURN` and `TOUCH_SET_TURN` are exported from `e2e-evaluation-test-support.ts`. Each is a `tool_calls` turn. `READ_CHECK_TURN` and `COPY_AUTH_TURN` use a path variable; `TOUCH_SET_TURN` uses `$XD` and splits `evaluation/agent` as `evalu''ation/agent` so no protected string is literal in the session file.
+10. **L4-AC5 variants.** Each variant uses `--set dev`. Variant 3 runs `report.sh` and asserts each check line has `breach` `null`. Variant 4 checks the absence of `diff.patch` and `check.txt` in the run directory with `find`. Variant 2 uses a byte search over listed files in R and over all files of E.
+
 ## Decisions
 
 1. **LA5-D1.** The L4 checks run only in the Linux job `agent-e2e`, in `src/apps/cli/e2e-evaluation.linux-test.ts`, as the test user `kanthord-e2e`. Constraint: no L4 check writes into the home of the user that starts the tests.
