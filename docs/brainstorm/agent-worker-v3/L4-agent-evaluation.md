@@ -110,7 +110,43 @@ Ulrich ruled on 2026-11-22: the evaluation uses the KanthorD XDG directories. `d
 - `<repeat>` starts at `1` and ends at `repeats` of [Configuration](#configuration). `<attempt>` starts at `1`. A new attempt takes the next free number ([Exit codes of a run](#exit-codes-of-a-run)).
 - `<random>` is 16 random lowercase letters. The workspace path names no case and no evaluation. The runner makes the grading root after the run ends, with a new random name, so the session cannot name it.
 - Nobody commits a results directory. The evaluation set repository has no remote.
-- The `.gitignore` of the evaluation set names `config.json` and `shared/*/node_modules/`. So the operator can change `cap_usd` and install shared dependencies with no commit and no breach `set_change`.
+- The `.gitignore` of the evaluation set names `config.json` and `shared/*/node_modules/`. So the operator can change `cap_usd` and install shared dependencies with no commit. The manifest guards the ignored files of `shared/` ([Manifest of the shared folder](#manifest-of-the-shared-folder)).
+
+### Manifest of the shared folder
+
+Ulrich ruled on 2026-11-25: Git ignores `shared/*/node_modules/`, and the committed file `shared.sha256` records the tree under `shared/`. Git tracks the manifest, so a change of the manifest is a change of the set.
+
+1. **Entries.** The manifest holds one line for each directory, each regular file and each symbolic link under `shared/`. The folder `shared/` has no line. A set with no `shared/` folder has an empty manifest. Each set has a manifest.
+2. **Line form.** A line holds four fields with one tab between two fields, and a newline ends each line: the type, the content, the mode and the path.
+
+   | Type | Content                                           | Mode                                           |
+   | ---- | ------------------------------------------------- | ---------------------------------------------- |
+   | `D`  | `-`                                               | `-`                                            |
+   | `F`  | The SHA-256 digest of the bytes, 64 lowercase hex | `x` when the file has an execute bit, else `-` |
+   | `L`  | The link target as the link stores it             | `-`                                            |
+
+   The path is relative to the evaluation set and starts with `shared/`.
+
+3. **Order.** The lines are in ascending order of the path, by the UTF-16 code units of the path. Each path occurs one time.
+4. **Refused tree.** Each of these entries is a refused entry:
+   - a name or a link target that holds a tab or a newline;
+   - a link with an absolute target;
+   - a link target that leaves the folder `shared/<name>/` of the link, or that holds `..` after another segment;
+   - a link directly under `shared/`;
+   - an entry that is no directory, no regular file and no link, for example a FIFO, a socket or a device;
+   - a `shared` that is no directory;
+   - a directory, a file or a link that the runner cannot read.
+5. **Difference.** The tree differs from the manifest in each of these conditions. The comparison returns the first path in the order of rule 3.
+   - A line has no entry in the tree, or an entry has no line.
+   - The type differs: a file became a link or a directory, or the reverse.
+   - The digest of a file differs, or its mode field differs.
+   - The target of a link differs.
+   - The tree holds a refused entry. The path is the path of that entry.
+   - The manifest is absent, is no regular file, has no read permission, has a line that breaks rule 2 or rule 3, or has no final newline. The path is `shared.sha256`.
+6. **Not compared.** The comparison reads no owner, no time and no mode bit other than the execute bits. It does not read the mode of `shared.sha256`.
+7. **Read rules.** The comparison follows no link. It opens each file with `O_NOFOLLOW` and `O_NONBLOCK` and reads only a regular file, so a FIFO cannot block the runner. It reads each file as a stream, with at most 64 open files.
+8. **Readers.** `run.sh` compares at the start ([Iteration record](#iteration-record)) and after each agent call ([Breach rules](#breach-rules), rule 4). `validate` compares before the content rules.
+9. **Writer.** `node evaluation.mjs manifest` takes no argument and writes `shared.sha256` of `<data>/evaluation/agent/`. It writes the file `shared.sha256.tmp` with mode `0600` and renames it. It runs no Git command, so it works on a set with no commit. It exits `0`. It exits `1` and writes no manifest for a refused entry, for an argument and for an absent set. stderr holds one line `evaluation: manifest: <path>: <reason>` with no content of a file.
 
 ### Configuration
 
@@ -299,7 +335,7 @@ A run breaches A9 in each of these conditions. The runner checks rules 1 to 4 in
 1. **`credential`.** The session file holds a credential value of the entry ([Credential](#credential), rule 6).
 2. **`auth_file`.** The digest or the mode of the `auth.json` file changes, or the configuration directory gets a new entry ([Credential](#credential), rule 5).
 3. **`protected_path`.** The session file names a protected path.
-4. **`set_change`.** `git -C <evaluation set> status --porcelain --untracked-files=all` prints a line, a Git command on the set fails, the HEAD of the set differs from `set_commit`, or the tree under `shared/` differs from `shared.sha256`.
+4. **`set_change`.** `git -C <evaluation set> status --porcelain --untracked-files=all` prints a line, a Git command on the set fails, the HEAD of the set differs from `set_commit`, or the tree under `shared/` differs from `shared.sha256` ([Manifest of the shared folder](#manifest-of-the-shared-folder), rule 5). The runner compares the tree only after a clean status.
 5. **`credential`, in a file of the run.** `diff.patch` or `check.txt` holds a credential value of the entry. The runner counts after the diff and after the grading, before the copy into the judge workspace. A count other than `0` is the breach `credential`. The runner removes `diff.patch` and `check.txt`. Reason: a `bash` copy of `auth.json` into the workspace puts the values into the diff with no value in the session file.
 
 **Protected-path search.** The profile `swe@1` is not confined, so a session can read each file of the OS user ([L1 Reach of an unconfined session](L1-model.md#reach-of-an-unconfined-session)). The search guards the hidden tests. pi records the tool call arguments as the model wrote them and the tool result text. It records no path that a tool resolved. `evaluation.mjs` searches the whole session file for each of these strings:
@@ -534,7 +570,7 @@ Each line of `diagnoses.jsonl` holds `session`, `valid` and `findings`.
 
 - A resumed call refuses options that differ from `iteration.json` with exit `1`.
 - A call refuses a `set_commit` that differs from `git -C <evaluation set> rev-parse HEAD` with exit `1`.
-- A call refuses when the tree under `shared/` differs from `shared.sha256` with exit `1`.
+- A call refuses a tree under `shared/` that differs from `shared.sha256` with exit `1` ([Manifest of the shared folder](#manifest-of-the-shared-folder), rule 5). stderr holds the line `evaluation: manifest: <path>: tree differs from manifest` with the first path that differs and no content of a file. The call makes no results directory.
 
 ### Call record
 
@@ -659,7 +695,7 @@ L4 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
   - The `task.md` of each case holds `task d1`, `task d2` or `task h1`.
   - `binding/backend.md` holds `# Binding` and the text `backend fixture`. `binding/frontend.md` holds `# Binding` and the text `frontend fixture`.
   - `config.json` holds `cap_usd` `15`, `base_model` `openrouter/deepseek/deepseek-v4.1-flash`, `model` `openai-compatible/stub-1:off`, `judge_model` `openai-compatible/stub-1:off`, `judge_usd` `0.1usd`, `repeats` `2` and `gate_share` `0.5`.
-  - The `.gitignore` of E names `config.json` and `shared/*/node_modules/`. E has the file `shared/lib/setup.js` with the content `module.exports = {};\n` and the manifest `shared.sha256` at mode `0600`. E has one commit of the other files.
+  - The `.gitignore` of E names `config.json` and `shared/*/node_modules/`. E has the files `shared/lib/setup.js` and `shared/lib/node_modules/dep/index.js`, each with the content `module.exports = {};\n`. The manifest `shared.sha256` at mode `0600` holds the three directory lines and the two file lines of that tree. E has one commit of the other files, so the commit holds `shared/lib/setup.js` and `shared.sha256`, and Git ignores `index.js`.
 - **Stub.** The scripted answers depend on the Role in the system prompt and on the task text. Each answer reports a `usage` of 1000 input and 100 output tokens.
   - `swe@1` with the task `task d1` or `task h1`: call `write` with `ok.txt` and the text `ok`, then answer `done`.
   - `swe@1` with the task `task d2`: answer `done` with no tool call.
@@ -710,7 +746,7 @@ L4 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
      - Assert: `run.sh` exits `1` after the first run. Its stdout holds a count other than `0` and no part of K. `R/checks.jsonl` holds 1 line with `breach` `credential`. The run directory holds no `diff.patch` and no `check.txt`. R holds K zero times. Stub receives no `re@1` request.
    - Variant 5: Stub for `swe@1` calls `bash` with the command `touch '<XD>/kanthord/evalu''ation/agent/x.txt'`, with `<XD>` written out. The quote split keeps each protected string out of the session file. Then it answers `done`.
      - Assert: `run.sh` exits `1` after the first run. `R/checks.jsonl` holds 1 line with `breach` `set_change`.
-   - Variant 6: Stub for `swe@1` calls `bash` with the command `echo x >> '<XD>/kanthord/evalu''ation/agent/shared/lib/setup.js'`, with `<XD>` written out. The quote split keeps each protected string out of the session file. Then it answers `done`.
+   - Variant 6: Stub for `swe@1` calls `bash` with the command `echo x >> '<XD>/kanthord/evalu''ation/agent/shared/lib/node_modules/dep/index.js'`, with `<XD>` written out. The quote split keeps each protected string out of the session file. Git ignores the file, so only the manifest shows the change. Then it answers `done`.
      - Assert: `run.sh` exits `1` after the first run. `R/checks.jsonl` holds 1 line with `breach` `set_change`.
 
 6. **L4-AC6. A stop leaves no verdict, and a resume completes the evaluation.**
@@ -771,7 +807,7 @@ These rules hold with no process and no LLM stub, so their tests are unit tests 
 18. **The case validation.** `node evaluation.mjs validate <case folder>`: a protected string in a path or a text, `fail_to_pass` that passes on C, and a reference patch that fails one mode in one of three tries or breaks a scope rule each exit `1`.
 19. **The transcript.** `transcript.md` holds each entry id, role and text of a session file, with each tool result cut to 4,000 characters.
 20. **The diff steps.** The restore of `.git/config`, the removal of `.git/info/attributes`, and the flags of the diff command of [Diff steps](#diff-steps).
-21. **The manifest.** `writeManifest` writes `shared.sha256` at mode `0600` with one tab-separated line per file or symlink: `F`, the SHA-256 hex, `x` or `-`, and the relpath, sorted by relpath. `checkManifestDiff` returns null for a matching tree and the first differing relpath for a mismatch. It returns null when neither `shared/` nor `shared.sha256` exists. `writeManifest` returns an error for a symlink with an absolute target and for a symlink that escapes its `shared/<name>/` folder. The `manifest` subcommand writes `shared.sha256` for the XDG data dir and exits `0`. `validate` exits `1` when the manifest differs from the tree.
+21. **The manifest.** The rules of [Manifest of the shared folder](#manifest-of-the-shared-folder). `writeManifest` writes the exact lines of rules 1 to 3 with mode `0600`, also over a manifest with another mode, and leaves no `shared.sha256.tmp`. It returns an error and writes no manifest for each refused entry of rule 4. `checkManifestDiff` returns null for an equal tree, the first path for each difference of rule 5, and `shared.sha256` for each invalid manifest. A change of an ignored file under `shared/` is the breach `set_change`, after `protected_path`. An equal tree is no breach. The start refuses a tree that differs and a set with no manifest. The `manifest` subcommand exits `0` on a set with no commit, and `1` for an argument, a refused link and an absent set. `validate` exits `1` for a tree that differs and for a set with no manifest.
 
 ### Rules with no check, and the reason
 
