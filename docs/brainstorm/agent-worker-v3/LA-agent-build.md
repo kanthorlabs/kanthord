@@ -213,6 +213,7 @@ Only Ulrich can do these actions: give the entry of step 4.2; provision the `ant
 10. **LA-D10.** Each end-to-end check starts the built CLI `bin/kanthord.mjs`. Constraint: the harness fails at once when `dist/main.js` is absent; `pnpm run verify` and each CI job that runs an end-to-end check run `pnpm run build` before the tests.
 11. **LA-D11.** LA5 comes before LA4 (Ulrich, 2026-11-24). The agent evaluation of gate step 4.3 measures the new agent before the consumers move to it. Constraint: LA5 starts after LA3 PR 4; the evaluation set build and step 4.3 run on `feature/agent-v2` before LA4 PR 1; `worker tasks run` exists during LA5, and the runner never calls it.
 12. **LA-D12.** The case authors of the evaluation set start during LA5 PR 4 (Ulrich, 2026-11-25). Constraint: the set repository holds no commit before LA5 PR 5 merges; the first commit runs through the pre-commit hook `node evaluation.mjs scan`; `validate` exits `0` for each case before that commit; the dev author and the held-out author are separate sub-agents, and the held-out author reads no dev case.
+13. **LA-D13.** The one-line titles of 15 held-out cases are known to Aelita and Ulrich (Ulrich, 2026-11-25). The set keeps these cases. Constraint: each prompt change cites a finding of a dev diagnosis; no agent that changes a prompt receives a held-out task title, task text, check output or session; a held-out author report names no task content.
 
 ## Open questions for Ulrich
 
