@@ -221,10 +221,11 @@ Ulrich ruled on 2026-11-25: Git ignores `shared/*/node_modules/`, and the commit
 6. No path of a case repository, no case text, no kind prompt and no path that `setup.sh` installs holds a string of the protected-path list. Reason: the same false match. A false match found during an evaluation needs a fix of the set and a new evaluation id.
 7. On the unchanged commit C with the hidden tests copied in, `check.sh <dir> fail_to_pass` exits other than `0`, and `pass_to_pass` and `conventions` exit `0`.
 8. **Reference solution.** On C with `reference.patch` applied, the grading steps 3 to 7 of [Grading](#grading) exit `0` in each mode three times in sequence, and the patch passes the [scope rules](#scope-rules). Reason: a hidden test that fails a correct solution, or that fails one time of three, gives a false A1 or A2 fail.
-9. `task.md` names each path and each exported name that the hidden tests use. It holds no convention of the case repository. The kind prompt holds the conventions.
+9. **Derivable contract.** Each assertion of the hidden tests follows from what the agent sees: `task.md`, the case repository at C after `setup.sh`, and the kind prompt. `task.md` states each path, exported name, signature, status code, error code, header, exact format and exact output text that a hidden test asserts and that the repository does not show. It holds no convention of the case repository. The kind prompt holds the conventions. When the task needs an installed package, `task.md` states that the package is installed. Reason: a hidden test that checks an unstated contract measures a guess, not the agent.
 10. `check.sh` names each test file of `check/tests/` explicitly. It reads no script and no runner configuration from a path of `allowed`.
 11. `allowed` holds no runner configuration, no lock file and no `.gitignore`. Reason: the scope rule is the only guard of the test configuration, and DeepSWE v1.1 found grading defects where test infrastructure lay under the control of the agent ([Grading method](#grading-method)).
 12. A kind prompt holds a heading, one blank line and the text.
+13. A hidden test closes each server, database handle and timer that it opens in a cleanup step that runs when an assertion fails. Reason: a wrong implementation then fails the test and does not hold the test process open until the script time limit.
 
 `node evaluation.mjs validate <case folder>` checks rules 6, 7 and 8 over the repository paths, the case texts, the kind prompts and the installed paths. The set author runs it for each case before each set commit.
 
@@ -818,7 +819,7 @@ These rules hold with no process and no LLM stub, so their tests are unit tests 
 - **The stage order.** Stage 2 starts after the stage gate of stage 1 passes. The order of the agent gate in the [hub](index.md#round-order) holds it.
 - **The blind held-out set.** It is a rule for the prompt author. The held-out report holds no line for one case (unit-level rule 11).
 - **A live refresh of an `oauth` entry.** It needs a real login. Unit-level rule 15 covers the refresh with no network request.
-- **The case content rules.** They are rules for the case author. The pre-commit hook of the evaluation set enforces rule 4, and `validate` checks rules 6, 7 and 8 (unit-level rule 18). Rules 1, 2, 3, 5 and 9 to 12 need a review of the case.
+- **The case content rules.** They are rules for the case author. The pre-commit hook of the evaluation set enforces rule 4, and `validate` checks rules 6, 7 and 8 (unit-level rule 18). Rules 1, 2, 3, 5 and 9 to 13 need a review of the case.
 - **Provisioning.** It needs a real login by Ulrich.
 - **The scaled budget and the base cost of a priced run.** No priced model reaches the stub, because only `openai-compatible` routes to a loopback URL. Unit-level rules 9 and 10 cover the rule. The live evaluation shows `budget.usd` and the base cost in the report.
 - **No core dump.** A core dump needs a crash of a process. The review of `run.sh` checks the `ulimit -c 0` line.
