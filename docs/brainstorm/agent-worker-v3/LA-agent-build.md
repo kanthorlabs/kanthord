@@ -34,6 +34,7 @@ LA is a build plan. It holds no acceptance check of its own ([index](index.md#re
 7. Each pull request passes `pnpm run verify` in `engine`, with the corepack pnpm `11.24.0`, and the CI jobs `check` and `e2e`. From LA2 PR 1, each pull request also passes the CI job `agent-e2e`.
 8. A pull request that changes a page of `engine/docs/cli/` changes it in the same engine pull request.
 9. **Lint scope.** Each pull request lists the files in the scope of [L3-D39](L3-agent.md#decisions) and adds them to the file list of `kanthord/no-inline-object-type`. The pull request fixes each site of the rule in those files. The sub-layer pages give the counts at `c864130e` as union members, property object types and string literal property types.
+10. **Watchdog.** Each sub-agent brief names the functions that change. A sub-agent commits a step with green tests at least every 60 minutes. It stops and reports after 30 minutes on one problem, after 15 test runs with no progress, or when the change spreads beyond the named functions. Aelita checks each running sub-agent every 20 minutes ([LA-D14](#decisions)) and stops one that passes a limit.
 
 ## Sub-layers
 
@@ -214,6 +215,7 @@ Only Ulrich can do these actions: give the entry of step 4.2; provision the `ant
 11. **LA-D11.** LA5 comes before LA4 (Ulrich, 2026-11-24). The agent evaluation of gate step 4.3 measures the new agent before the consumers move to it. Constraint: LA5 starts after LA3 PR 4; the evaluation set build and step 4.3 run on `feature/agent-v2` before LA4 PR 1; `worker tasks run` exists during LA5, and the runner never calls it.
 12. **LA-D12.** The case authors of the evaluation set start during LA5 PR 4 (Ulrich, 2026-11-25). Constraint: the set repository holds no commit before LA5 PR 5 merges; the first commit runs through the pre-commit hook `node evaluation.mjs scan`; `validate` exits `0` for each case before that commit; the dev author and the held-out author are separate sub-agents, and the held-out author reads no dev case.
 13. **LA-D13.** The one-line titles of the 20 held-out cases are known to Aelita and Ulrich (Ulrich, 2026-11-25). The set keeps these cases. Constraint: each prompt change cites a finding of a dev diagnosis; no agent that changes a prompt receives a held-out task title, task text, check output or session; a held-out author report names no task content.
+14. **LA-D14.** An outside watchdog limits each build sub-agent (2026-11-25). Constraint: the watchdog reads the sub-agent transcript and reports a stop for the total time (implementer 150, reviewer 120, fix 60 minutes), no commit (75, 75, 45 minutes), too many test runs since the last commit, probe or bisect calls, or 20 idle minutes. At the first stop, Aelita asks for a report within 10 minutes. At the second stop, Aelita stops the sub-agent, keeps its diff on a local `wip/` branch, and gives a smaller pull request or the diagnosis to a new sub-agent.
 
 ## Open questions for Ulrich
 
