@@ -137,7 +137,7 @@ The set lies in `<data>/evaluation/agent/`, outside the engine repository ([L4 L
 | `config.json` with `cap_usd` 15, `gate_share` 0.6, `judge_usd` `0.1usd` and `base_model`                    | Aelita                          | The configuration rules of [L4 Configuration](L4-agent-evaluation.md#configuration) pass |
 | The `anthropic` entry in `<home>/.config/kanthord/auth.json`                                                | Ulrich                          | [L4 Credential](L4-agent-evaluation.md#credential), rule 7                               |
 
-- The set build starts after LA5 PR 5, because `validate` and `scan` are commands of `evaluation.mjs`.
+- The case authors start during LA5 PR 4 ([LA-D12](#decisions)). The set repository gets its first commit after LA5 PR 5 merges, when the hook `scan` and the command `validate` exist.
 - The backend dev cases come from the task texts of the Worker V2 seeds, the backend held-out cases are new todoapp tasks, and the frontend cases come from the synthetic React and Tailwind fixture ([L4 Evaluation set](L4-agent-evaluation.md#evaluation-set)).
 
 ## Agent gate
@@ -208,6 +208,7 @@ Only Ulrich can do these actions: give the entry of step 4.2; provision the `ant
 9. **LA-D9.** The iterations commit on the engine branch `eval/swe-1`, made from `feature/agent-v2`. Constraint: a `revert` iteration leaves the branch; each kept change merges into `feature/agent-v2` through a pull request.
 10. **LA-D10.** Each end-to-end check starts the built CLI `bin/kanthord.mjs`. Constraint: the harness fails at once when `dist/main.js` is absent; `pnpm run verify` and each CI job that runs an end-to-end check run `pnpm run build` before the tests.
 11. **LA-D11.** LA5 comes before LA4 (Ulrich, 2026-11-24). The agent evaluation of gate step 4.3 measures the new agent before the consumers move to it. Constraint: LA5 starts after LA3 PR 4; the evaluation set build and step 4.3 run on `feature/agent-v2` before LA4 PR 1; `worker tasks run` exists during LA5, and the runner never calls it.
+12. **LA-D12.** The case authors of the evaluation set start during LA5 PR 4 (Ulrich, 2026-11-25). Constraint: the set repository holds no commit before LA5 PR 5 merges; the first commit runs through the pre-commit hook `node evaluation.mjs scan`; `validate` exits `0` for each case before that commit; the dev author and the held-out author are separate sub-agents, and the held-out author reads no dev case.
 
 ## Open questions for Ulrich
 

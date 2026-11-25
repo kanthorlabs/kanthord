@@ -198,7 +198,7 @@ Each credential rule of [L4 Credential](L4-agent-evaluation.md#credential) is ne
 
 ### To the evaluation set build
 
-- The set author uses `validate` and `scan` of PR 5. The set build starts after PR 5 merges ([LA Evaluation set build](LA-agent-build.md#evaluation-set-build)).
+- The set author uses `validate` and `scan` of PR 5. The first set commit comes after PR 5 merges ([LA Evaluation set build](LA-agent-build.md#evaluation-set-build)).
 - `judge.md` and `judge-task.md` ship in PR 2. Iterations do not change them ([L4 Diagnosis](L4-agent-evaluation.md#diagnosis), rule 7).
 
 ### To the agent gate
