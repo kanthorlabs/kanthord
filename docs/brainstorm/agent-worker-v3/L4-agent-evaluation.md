@@ -179,7 +179,7 @@ Ulrich ruled on 2026-11-22: the evaluation uses the KanthorD XDG directories. `d
 1. Each case is synthetic or owned by kanthorlabs. No case holds customer code, a `seed.json` of Worker V2 or a `.env` file. Reason: `seed.json` holds `effective_configuration.credential`, `ssh_public_key` and `known_hosts`.
 2. Each commit of a case repository has the author `Kanthor Eval <eval@kanthorlabs.invalid>`.
 3. `repo.bundle` holds no commit after C. Reason: a node branch of `.dev/v2-b3/trees` holds the reference solution, and a later commit in the object store gives the solution to the agent.
-4. A pre-commit hook of the evaluation set runs `node evaluation.mjs scan` over the staged files. The command applies the secret patterns of the engine (`findPatternText` of `src/agent/sensitive-text.ts`). A match stops the commit.
+4. A pre-commit hook of the evaluation set runs `node evaluation.mjs scan` over the staged files. With no file, the command reads the staged content of each staged file. The command applies the secret patterns of the engine (`findPatternText` of `src/agent/sensitive-text.ts`). A match stops the commit.
 5. `setup.sh` copies each file that it takes from the shared fixture folder. It makes no symbolic link into the evaluation set. Reason: a link puts the path of the set into a stack trace, and the [protected-path search](#breach-rules) then matches an honest run.
 6. No path of a case repository, no case text, no kind prompt and no path that `setup.sh` installs holds a string of the protected-path list. Reason: the same false match. A false match found during an evaluation needs a fix of the set and a new evaluation id.
 7. On the unchanged commit C with the hidden tests copied in, `check.sh <dir> fail_to_pass` exits other than `0`, and `pass_to_pass` and `conventions` exit `0`.
@@ -586,7 +586,7 @@ report.sh --evaluation <id>
    - the `re@1` lines have one `provider`, `model`, `reasoning_effort` and `system_prompt_digest`;
    - with a parent, rule 4 of [Iteration](#iteration) holds, the `re@1` lines of the parent have the same `system_prompt_digest`, and the one-change check of rule 1 holds.
 
-   It refuses a file that breaks a check. It exits `1` and names the first two lines, or the key of the iteration check.
+   It refuses a file that breaks a check. It exits `1` and names the first two lines, or the key of the iteration check. A refused call leaves no `report.md` in the results directory.
 
 4. It writes `report.md` in the results directory:
    - the head: the evaluation id, the stage, the set, the set commit, and, with a parent, the parent, the target aspect and the hypothesis;
@@ -763,7 +763,7 @@ These rules hold with no process and no LLM stub, so their tests are unit tests 
 14. **The credential state.** A changed digest, a changed mode, a mode other than `0600`, and a new entry in the configuration directory each give the breach `auth_file`.
 15. **The refresh.** With an `oauth` entry that expires far in the future, the refresh writes no file, keeps the digest of `auth.json` and writes nothing to stdout or stderr. A thrown error and an `undefined` result each give the stop, with no error text of pi. The refresh uses the provider of the `--model` of the call, and an absent entry gets no refresh.
 16. **The price read.** The price read of [Configuration](#configuration) creates no entry in `<home>/.config/kanthord` and reads no credential file. It gives the base prices 0.30, 1.20 and 0.006. It gives no model for `openai-compatible/stub-1`.
-17. **The secret scan.** `node evaluation.mjs scan <file>...` exits `1` when a listed file matches a secret pattern of the engine, and `0` else. The pre-commit hook passes the staged files.
+17. **The secret scan.** `node evaluation.mjs scan <file>...` exits `1` when a listed file matches a secret pattern of the engine, and `0` else. With no file, the command reads the staged content of each staged file of the repository of the current directory. The pre-commit hook runs the command with no file.
 18. **The case validation.** `node evaluation.mjs validate <case folder>`: a protected string in a path or a text, `fail_to_pass` that passes on C, and a reference patch that fails one mode in one of three tries or breaks a scope rule each exit `1`.
 19. **The transcript.** `transcript.md` holds each entry id, role and text of a session file, with each tool result cut to 4,000 characters.
 20. **The diff steps.** The restore of `.git/config`, the removal of `.git/info/attributes`, and the flags of the diff command of [Diff steps](#diff-steps).
