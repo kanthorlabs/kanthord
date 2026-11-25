@@ -139,6 +139,10 @@ The set lies in `<data>/evaluation/agent/`, outside the engine repository ([L4 L
 
 - The case authors start during LA5 PR 4 ([LA-D12](#decisions)). The set repository gets its first commit after LA5 PR 5 merges, when the hook `scan` and the command `validate` exist.
 - The backend dev cases come from the task texts of the Worker V2 seeds, the backend held-out cases are new todoapp tasks, and the frontend cases come from the synthetic React and Tailwind fixture ([L4 Evaluation set](L4-agent-evaluation.md#evaluation-set)).
+- The pre-commit hook of the set runs `node <engine worktree>/scripts/evaluation/agent/evaluation.mjs scan` with no file, so it reads the staged content. The engine worktree holds a current `pnpm run build`.
+- `scan` reads no object inside `repo.bundle`. So before each set commit, the set author runs `scan` over `git log --all -p --binary` of each bundle. No match is allowed.
+- Each commit of a case repository has the author and the committer `Kanthor Eval <eval@kanthorlabs.invalid>`, also for a base commit of a seed chain. A rewrite of a commit keeps its tree, its message and its dates, and `case.json` names the new commit.
+- `config.json` holds the start values of [L4 Configuration](L4-agent-evaluation.md#configuration), mode `0600`.
 
 ## Agent gate
 
