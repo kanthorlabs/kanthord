@@ -265,6 +265,20 @@ Branch: `feature/agent-v2-la5-resume`.
 9. **L4-AC6, variant 3, and L4-AC7.** The test commits its change of E as the test user before the call. So E has no uncommitted change, as the [L4 fixtures](L4-agent-evaluation.md#l4-fixtures) state.
 10. **L4-AC6, variant 2.** The test writes an `auth.json` file with no entry.
 
+### PR 5 build
+
+Branch: `feature/agent-v2-la5-iteration`.
+
+1. **Comparability.** `comparabilityError` checks `set_commit`, `CASE_KEYS` per case, and `system_prompt_digest`. An iteration pair must have different digests; a replicate pair may match ([LA5-D26](#decisions)).
+2. **`goodOnRunNoise`.** A1 to A4 read `check[lc]`. A5 to A7 use `diagnosis.valid` and findings severity. An invalid diagnosis is good in the parent and not good in the new evaluation.
+3. **A/A line.** `aaLineText` reads `isParent=false` for both sides. The two evaluations of a replicate pair are symmetric: neither is the parent.
+4. **Noise rule.** `noiseRuleVerdict` checks breach, then completeness and re@1 key difference, then gain versus noise, then pass loss versus noise ([LA5-D26](#decisions)).
+5. **`scan`.** Imports `findPatternText` from `dist/agent/sensitive-text.js`. Outputs `file:line:rule` and exits `1` on any match. The matched value never appears in output ([LA5-D27](#decisions)).
+6. **`validate`.** Clones the bundle into a temp dir, applies content rules 6, 7 and 8, and removes the temp dir in `finally` ([LA5-D28](#decisions)).
+7. **`iterReport` helper.** Uses `set: "held-out"` so the noise tests skip the dev-set diagnosis completeness check. The one test that checks completeness calls `buildReport` directly with `set: "dev"`.
+8. **L4-AC8.** Two runs on the same engine commit produce the same `system_prompt_digest`. `comparabilityError` refuses the pair. `report.sh` exits `BREACH_EXIT`; stderr names `system_prompt_digest`; no `report.md`.
+9. **L4-AC10.** `e10b` replicates `e10`. `report.sh` exits `SUCCESS_EXIT`. `report.md` holds the A/A line with `A1 2 2 diff 0 flips 0` and `passes 2 2 diff 0`.
+
 ## Decisions
 
 1. **LA5-D1.** The L4 checks run only in the Linux job `agent-e2e`, in `src/apps/cli/e2e-evaluation.linux-test.ts`, as the test user `kanthord-e2e`. Constraint: no L4 check writes into the home of the user that starts the tests.
@@ -292,3 +306,6 @@ Branch: `feature/agent-v2-la5-resume`.
 23. **LA5-D23.** The resume reads the records as the report does ([LA5-D17](#decisions)). A run is done when its case and repeat have a line in `checks.jsonl`, also a line with a breach. A dev run with a check line and no diagnosis gets only its diagnosis. Constraint: a run directory with no check line is not done; the resumed diagnosis uses the run directory of the last check line, passes the start gate with the reserve `judge_usd` and has each credential rule of [LA5-D14](#decisions); it reserves no `usd` of the case; a resume appends no check line with `breach` `null` for a run that has a breach line, so the breach stays in the report.
 24. **LA5-D24.** Each `swe@1` run and each diagnosis run counts its own exits `75` in one call of `run.sh`. The third exit `75` stops the evaluation with exit `1` and no new check line. Constraint: each attempt makes its own refresh and its own credential state; each breach rule runs on each attempt before the run action; `cli.run.agent.prompt_text_path` in stderr stops the evaluation also at exit `75`; each attempt passes the start gate with the reserve of its run, and the sum holds the cost of each earlier attempt; a new call of `run.sh` counts from 0.
 25. **LA5-D25.** A `run agent` call that ends before it makes its session file has no protected-path match and the credential count `0`. Constraint: the exit of that call decides the run action, so the evaluation stops and writes the report; the breach rules `auth_file` and `set_change` still run on that call.
+26. **LA5-D26.** The noise for the keep verdict is `max(newFlips, parentFlips)` of the same aspect. The noise for the revert-on-loss verdict is the same value. A breach in the new report gives revert before the noise check. An incomplete dev-set diagnosis and a re@1 key difference for A5 to A7 give no verdict before the noise check. Constraint: gain must be `>= noise` to keep; loss must be `< noise` to keep; a held-out set skips the completeness check; `reKeysDiffer` is true when any `RE_COMPARE_KEYS` field differs between the new and parent `iteration.json`.
+27. **LA5-D27.** The `scan` command imports `findPatternText` from `dist/agent/sensitive-text.js` and outputs `file:line:rule` only. It never prints the matched value. Constraint: `scan` is the only caller of `findPatternText` in the runner; no second copy of the secret patterns lives in the runner; `scan` exits `1` on any match and `0` when no file matches.
+28. **LA5-D28.** The `validate` command clones the case bundle into a temporary directory, applies each content check there, and removes the directory in the `finally` block. Constraint: no file remains in the case folder or the set after `validate`; `validate` exits `0` when every rule passes and `1` on the first failure, with one line naming the broken rule.
