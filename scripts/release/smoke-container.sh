@@ -133,40 +133,47 @@ JSON
 cli project binding apply "$project_id" --file "$home/bindings.json" >/dev/null ||
 	die "project binding apply failed"
 
-slot_ready=0
+slot_log="$home/state/kanthord/workers/smoke-1/stderr.log"
+refused=0
 for _ in $(seq 1 240); do
 	if cli worker registration list --project "$project_id" |
 		node -e '
 const { items } = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
 process.exit(items.some((item) => item.placement === "container" && item.draining === false) ? 0 : 1);
 '; then
-		slot_ready=1
+		die "a container slot registered. A slot runs without its sandbox probe. See $slot_log and $home/serve.log"
+	fi
+	if grep -q 'worker.slot.sandbox_unavailable' "$slot_log" 2>/dev/null; then
+		refused=1
 		break
 	fi
 	kill -0 "$server_pid" 2>/dev/null || break
 	sleep 0.5
 done
-[ "$slot_ready" = 1 ] || die "no container slot registered in 120 s. See $home/serve.log"
-log "container slot registered"
+[ "$refused" = 1 ] || die "no worker.slot.sandbox_unavailable line in $slot_log in 120 s. See $home/serve.log"
+log "container slot refused to start with worker.slot.sandbox_unavailable"
 
 created=$(comm -13 <(printf '%s\n' "$before") <(owned_names) | head -n 1)
-[ -n "$created" ] || die "no container with the label $owner_label exists"
-owner=$("$engine" inspect --format "{{index .Config.Labels \"$owner_label\"}}" "$created") ||
-	die "cannot read the owner label of $created"
-[ -n "$owner" ] || die "$created holds an empty $owner_label label"
-log "container $created holds owner $owner"
+if [ -n "$created" ]; then
+	owner=$("$engine" inspect --format "{{index .Config.Labels \"$owner_label\"}}" "$created") ||
+		die "cannot read the owner label of $created"
+	[ -n "$owner" ] || die "$created holds an empty $owner_label label"
+	log "container $created holds owner $owner"
+fi
 
 kill "$server_pid" && wait "$server_pid" 2>/dev/null
 server_pid=
-gone=0
-for _ in $(seq 1 40); do
-	if [ -z "$("$engine" ps --all --quiet --filter "label=$owner_label=$owner")" ]; then
-		gone=1
-		break
-	fi
-	sleep 0.5
-done
-[ "$gone" = 1 ] || die "a container with the owner label remained 20 s after the server stop"
-log "no container with the owner label remains after the server stop"
+if [ -n "$owner" ]; then
+	gone=0
+	for _ in $(seq 1 40); do
+		if [ -z "$("$engine" ps --all --quiet --filter "label=$owner_label=$owner")" ]; then
+			gone=1
+			break
+		fi
+		sleep 0.5
+	done
+	[ "$gone" = 1 ] || die "a container with the owner label remained 20 s after the server stop"
+	log "no container with the owner label remains after the server stop"
+fi
 
 log "container smoke passed for $binary"
