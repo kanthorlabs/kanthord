@@ -296,6 +296,7 @@ The grading grades only the agent diff, in a clone that the agent never saw.
 - stdout and stderr of each `check.sh` call go to `$RUN/check.txt`, each part after a line with the mode and its exit code.
 - The grading runs for each run, also for a run that ends `budget_end` or `failed`.
 - The order puts the environment before the patch: `setup.sh` runs on C only, so an agent diff fails its own run and never stops the evaluation.
+- Each case script runs in its own process group with a limit of 10 minutes. At the limit, the runner kills the group. After each call, the runner kills the group. A `check.sh` timeout fails the mode. A `setup.sh` timeout stops the evaluation.
 
 ### Grading method
 
@@ -808,6 +809,7 @@ These rules hold with no process and no LLM stub, so their tests are unit tests 
 19. **The transcript.** `transcript.md` holds each entry id, role and text of a session file, with each tool result cut to 4,000 characters.
 20. **The diff steps.** The restore of `.git/config`, the removal of `.git/info/attributes`, and the flags of the diff command of [Diff steps](#diff-steps).
 21. **The manifest.** The rules of [Manifest of the shared folder](#manifest-of-the-shared-folder). `writeManifest` writes the exact lines of rules 1 to 3 with mode `0600`, also over a manifest with another mode, and leaves no `shared.sha256.tmp`. It returns an error and writes no manifest for each refused entry of rule 4. `checkManifestDiff` returns null for an equal tree, the first path for each difference of rule 5, and `shared.sha256` for each invalid manifest. A change of an ignored file under `shared/` is the breach `set_change`, after `protected_path`. An equal tree is no breach. The start refuses a tree that differs and a set with no manifest. The `manifest` subcommand exits `0` on a set with no commit, and `1` for an argument, a refused link and an absent set. `validate` exits `1` for a tree that differs and for a set with no manifest.
+22. **The script time limit.** A `check.sh` call that times out writes `exit timeout` for its mode in `check.txt` and fails the mode. The call returns within a few seconds of the limit. After the call, a background process that the script left is gone. A `setup.sh` timeout stops the evaluation with the stop exit code. `validate` with a hanging `check.sh` fails within the limit.
 
 ### Rules with no check, and the reason
 
