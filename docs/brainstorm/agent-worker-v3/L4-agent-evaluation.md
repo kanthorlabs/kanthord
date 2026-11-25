@@ -96,6 +96,7 @@ Ulrich ruled on 2026-11-22: the evaluation uses the KanthorD XDG directories. `d
 | One case                                | `<data>/evaluation/agent/cases/<set>/<case-id>/`    | `0700` |
 | The binding prompts of stage 2          | `<data>/evaluation/agent/binding/<kind>.md`         | `0600` |
 | The shared fixture folder of the set    | `<data>/evaluation/agent/shared/`                   | `0700` |
+| The manifest of the shared folder       | `<data>/evaluation/agent/shared.sha256`             | `0600` |
 | The results directory of one evaluation | `<state>/evaluation/runs/<evaluation-id>/`          | `0700` |
 | The run directory of one run            | `<results directory>/<case-id>/<repeat>-<attempt>/` | `0700` |
 | The workspace root of one run           | `<state>/evaluation/work/<random>/`                 | `0700` |
@@ -109,7 +110,7 @@ Ulrich ruled on 2026-11-22: the evaluation uses the KanthorD XDG directories. `d
 - `<repeat>` starts at `1` and ends at `repeats` of [Configuration](#configuration). `<attempt>` starts at `1`. A new attempt takes the next free number ([Exit codes of a run](#exit-codes-of-a-run)).
 - `<random>` is 16 random lowercase letters. The workspace path names no case and no evaluation. The runner makes the grading root after the run ends, with a new random name, so the session cannot name it.
 - Nobody commits a results directory. The evaluation set repository has no remote.
-- The `.gitignore` of the evaluation set names `config.json`. So the operator can change `cap_usd` with no commit and no breach `set_change`.
+- The `.gitignore` of the evaluation set names `config.json` and `shared/*/node_modules/`. So the operator can change `cap_usd` and install shared dependencies with no commit and no breach `set_change`.
 
 ### Configuration
 
@@ -298,7 +299,7 @@ A run breaches A9 in each of these conditions. The runner checks rules 1 to 4 in
 1. **`credential`.** The session file holds a credential value of the entry ([Credential](#credential), rule 6).
 2. **`auth_file`.** The digest or the mode of the `auth.json` file changes, or the configuration directory gets a new entry ([Credential](#credential), rule 5).
 3. **`protected_path`.** The session file names a protected path.
-4. **`set_change`.** `git -C <evaluation set> status --porcelain --untracked-files=all` prints a line, a Git command on the set fails, or the HEAD of the set differs from `set_commit`.
+4. **`set_change`.** `git -C <evaluation set> status --porcelain --untracked-files=all` prints a line, a Git command on the set fails, the HEAD of the set differs from `set_commit`, or the tree under `shared/` differs from `shared.sha256`.
 5. **`credential`, in a file of the run.** `diff.patch` or `check.txt` holds a credential value of the entry. The runner counts after the diff and after the grading, before the copy into the judge workspace. A count other than `0` is the breach `credential`. The runner removes `diff.patch` and `check.txt`. Reason: a `bash` copy of `auth.json` into the workspace puts the values into the diff with no value in the session file.
 
 **Protected-path search.** The profile `swe@1` is not confined, so a session can read each file of the OS user ([L1 Reach of an unconfined session](L1-model.md#reach-of-an-unconfined-session)). The search guards the hidden tests. pi records the tool call arguments as the model wrote them and the tool result text. It records no path that a tool resolved. `evaluation.mjs` searches the whole session file for each of these strings:
@@ -533,6 +534,7 @@ Each line of `diagnoses.jsonl` holds `session`, `valid` and `findings`.
 
 - A resumed call refuses options that differ from `iteration.json` with exit `1`.
 - A call refuses a `set_commit` that differs from `git -C <evaluation set> rev-parse HEAD` with exit `1`.
+- A call refuses when the tree under `shared/` differs from `shared.sha256` with exit `1`.
 
 ### Call record
 
@@ -657,7 +659,7 @@ L4 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
   - The `task.md` of each case holds `task d1`, `task d2` or `task h1`.
   - `binding/backend.md` holds `# Binding` and the text `backend fixture`. `binding/frontend.md` holds `# Binding` and the text `frontend fixture`.
   - `config.json` holds `cap_usd` `15`, `base_model` `openrouter/deepseek/deepseek-v4.1-flash`, `model` `openai-compatible/stub-1:off`, `judge_model` `openai-compatible/stub-1:off`, `judge_usd` `0.1usd`, `repeats` `2` and `gate_share` `0.5`.
-  - The `.gitignore` of E names `config.json`. E has one commit of the other files.
+  - The `.gitignore` of E names `config.json` and `shared/*/node_modules/`. E has the file `shared/lib/setup.js` with the content `module.exports = {};\n` and the manifest `shared.sha256` at mode `0600`. E has one commit of the other files.
 - **Stub.** The scripted answers depend on the Role in the system prompt and on the task text. Each answer reports a `usage` of 1000 input and 100 output tokens.
   - `swe@1` with the task `task d1` or `task h1`: call `write` with `ok.txt` and the text `ok`, then answer `done`.
   - `swe@1` with the task `task d2`: answer `done` with no tool call.
@@ -707,6 +709,8 @@ L4 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
    - Variant 4: Stub for `swe@1` calls `bash` with the command `cp "$H/.config/kanthord/auth.json" leak.json`, with `$H` written out, then calls `write` with `ok.txt` and the text `ok`, then answers `done`.
      - Assert: `run.sh` exits `1` after the first run. Its stdout holds a count other than `0` and no part of K. `R/checks.jsonl` holds 1 line with `breach` `credential`. The run directory holds no `diff.patch` and no `check.txt`. R holds K zero times. Stub receives no `re@1` request.
    - Variant 5: Stub for `swe@1` calls `bash` with the command `touch '<XD>/kanthord/evalu''ation/agent/x.txt'`, with `<XD>` written out. The quote split keeps each protected string out of the session file. Then it answers `done`.
+     - Assert: `run.sh` exits `1` after the first run. `R/checks.jsonl` holds 1 line with `breach` `set_change`.
+   - Variant 6: Stub for `swe@1` calls `bash` with the command `echo x >> '<XD>/kanthord/evalu''ation/agent/shared/lib/setup.js'`, with `<XD>` written out. The quote split keeps each protected string out of the session file. Then it answers `done`.
      - Assert: `run.sh` exits `1` after the first run. `R/checks.jsonl` holds 1 line with `breach` `set_change`.
 
 6. **L4-AC6. A stop leaves no verdict, and a resume completes the evaluation.**
@@ -767,6 +771,7 @@ These rules hold with no process and no LLM stub, so their tests are unit tests 
 18. **The case validation.** `node evaluation.mjs validate <case folder>`: a protected string in a path or a text, `fail_to_pass` that passes on C, and a reference patch that fails one mode in one of three tries or breaks a scope rule each exit `1`.
 19. **The transcript.** `transcript.md` holds each entry id, role and text of a session file, with each tool result cut to 4,000 characters.
 20. **The diff steps.** The restore of `.git/config`, the removal of `.git/info/attributes`, and the flags of the diff command of [Diff steps](#diff-steps).
+21. **The manifest.** `writeManifest` writes `shared.sha256` at mode `0600` with one tab-separated line per file or symlink: `F`, the SHA-256 hex, `x` or `-`, and the relpath, sorted by relpath. `checkManifestDiff` returns null for a matching tree and the first differing relpath for a mismatch. It returns null when neither `shared/` nor `shared.sha256` exists. `writeManifest` returns an error for a symlink with an absolute target and for a symlink that escapes its `shared/<name>/` folder. The `manifest` subcommand writes `shared.sha256` for the XDG data dir and exits `0`. `validate` exits `1` when the manifest differs from the tree.
 
 ### Rules with no check, and the reason
 
