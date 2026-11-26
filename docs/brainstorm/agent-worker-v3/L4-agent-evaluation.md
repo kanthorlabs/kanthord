@@ -409,7 +409,7 @@ One evaluation of the dev set is one iteration. The first evaluation of a stage 
    - passes(parent) − passes(new) is less than noise;
    - no run of the new evaluation breaches A9.
 
-6. **Ceiling.** Before an iteration, the set author replaces the dev cases at the ceiling when more than half of the dev cases are at the ceiling. A replaced case gives a new set commit, so the next evaluation is a new baseline, with a new A/A measure.
+6. **Ceiling.** A dev case is at the ceiling when each run passes in the A/A pair and in the baseline of the stage. Before an iteration, the set author replaces the dev cases at the ceiling when more than half of the dev cases are at the ceiling (Ulrich, 2026-11-26). A replaced case gives a new set commit, so the next evaluation is a new baseline, with a new A/A measure.
 7. **Record.** Each iteration keeps its results directory, `iteration.json` and `report.md`. The report of a `revert` iteration stays. The prompt commit of a `revert` iteration leaves the engine.
 
 - **No verdict.** The iteration has no verdict when a planned run or a planned diagnosis of the two evaluations has no line, or when the target is A5, A6 or A7 and the `re@1` lines of the two evaluations differ in `provider`, `model` or `reasoning_effort`. A breach gives `revert`, also with a planned run with no line.
