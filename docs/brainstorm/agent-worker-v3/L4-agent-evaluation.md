@@ -244,7 +244,7 @@ The runner does each step for each run of `swe@1`.
    kanthord run agent swe@1 --model "$MODEL" \
      --budget "$WALL" --budget "$USD" \
      --workspace "$ROOT/w" --session "$RUN/session.jsonl" \
-     --output "$RESULTS/results.jsonl" --prompt "$CASE/task.md" 2> "$RUN/stderr.txt"
+     --output "$RUN/result.jsonl" --prompt "$CASE/task.md" 2> "$RUN/stderr.txt"
    ```
 
 5. **Breach rules.** Apply the [breach rules](#breach-rules) 1 to 4. A breach writes the check line with `breach` and stops the evaluation.
@@ -253,7 +253,7 @@ The runner does each step for each run of `swe@1`.
 8. **Diagnosis.** On the dev set, run the [diagnosis](#diagnosis) of the run.
 9. **Removal.** Remove the workspace root and the grading root. On the held-out set, remove `check.txt`. The runner also removes both roots when the evaluation stops at any step.
 
-- The run directory keeps `session.jsonl`, `stderr.txt` and `diff.patch`. On the dev set, it also keeps `check.txt` and, for each diagnosis attempt n from `1`, `judge-<n>.jsonl` and `judge-<n>-stderr.txt`. It keeps no other file.
+- The run directory keeps `session.jsonl`, `stderr.txt`, `diff.patch` and `result.jsonl`. On the dev set, it also keeps `check.txt` and, for each diagnosis attempt n from `1`, `judge-<n>.jsonl`, `judge-<n>-stderr.txt` and `judge-<n>-result.jsonl`. It keeps no other file.
 - `evaluation.mjs` does each step. `run.sh` and `report.sh` only start `evaluation.mjs` with their options.
 - The pi session file is the record of the work. The line in `results.jsonl` holds the identity, the end, the class and the totals of the run ([L2 The result](L2-agent-cli.md#the-result)).
 - The runner passes no `--auth`, so `run agent` reads the default `--auth` file ([Credential](#credential)).
@@ -369,7 +369,7 @@ The diagnosis reads one dev run and writes findings. It decides no pass.
      --budget 15m --budget "$JUDGE_USD" \
      --system-prompt "$RUNNER/judge.md" \
      --workspace "$GRADE/j" --session "$RUN/judge-$N.jsonl" \
-     --output "$RESULTS/results.jsonl" --prompt "$RUNNER/judge-task.md" 2> "$RUN/judge-$N-stderr.txt"
+     --output "$RUN/judge-$N-result.jsonl" --prompt "$RUNNER/judge-task.md" 2> "$RUN/judge-$N-stderr.txt"
    ```
 
 4. **Credential.** The credential refresh, the digest check and the credential count of [Credential](#credential) apply to the diagnosis run as to a run of `swe@1`. After the refresh, the runner also counts the credential values in each file of `j`, before the call. A breach of rule 1, 2 or 4 of [Breach rules](#breach-rules) stops the evaluation. Rule 3 does not apply, because the judge quotes the names of the run files. The runner appends a check line with the breach for the run, and the last check line of a run counts.
@@ -720,7 +720,7 @@ L4 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
      - `R/diagnoses.jsonl` holds 4 lines, each with `valid` `true` and one finding of `A5`.
      - `R/report.md` holds the verdict `complete`, A1 good in 2 of 4 runs, 4 findings of `A5` with the severity `medium`, and the set-difficulty line with 1 ceiling case and 1 floor case of 2.
      - The cost block holds the list price `0`, the `r` `none` and the base cost `0` for the `swe@1` lines and for the `re@1` lines, and the cap `15`.
-     - Each run directory holds `session.jsonl`, `stderr.txt`, `diff.patch`, `check.txt`, `judge-1.jsonl` and `judge-1-stderr.txt`, and no other file. The `diff.patch` of each `d2` run has 0 bytes.
+     - Each run directory holds `session.jsonl`, `stderr.txt`, `diff.patch`, `result.jsonl`, `check.txt`, `judge-1.jsonl`, `judge-1-stderr.txt` and `judge-1-result.jsonl`, and no other file. The `diff.patch` of each `d2` run has 0 bytes.
      - No workspace root remains under `$XS/kanthord/evaluation/work/`. `git -C E status --porcelain` prints nothing.
 
 2. **L4-AC2. The hidden tests replace the agent files of the same name, and a change outside the scope fails A3.**
