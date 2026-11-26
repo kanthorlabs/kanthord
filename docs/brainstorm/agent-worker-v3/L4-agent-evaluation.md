@@ -257,7 +257,7 @@ The runner does each step for each run of `swe@1`.
 - `evaluation.mjs` does each step. `run.sh` and `report.sh` only start `evaluation.mjs` with their options.
 - The pi session file is the record of the work. The line in `results.jsonl` holds the identity, the end, the class and the totals of the run ([L2 The result](L2-agent-cli.md#the-result)).
 - The runner passes no `--auth`, so `run agent` reads the default `--auth` file ([Credential](#credential)).
-- The runs go in sequence. Reason: a pi refresh writes the `auth.json` file, and a subscription has a rate limit.
+- Up to `jobs` agent calls run at the same time ([`run.sh`](#runsh)). Two repeats of one case never run at the same time. The lines of `results.jsonl`, `checks.jsonl` and `diagnoses.jsonl` are in completion order.
 
 ### Clone steps
 
@@ -339,6 +339,8 @@ A run breaches A9 in each of these conditions. The runner checks rules 1 to 4 in
 3. **`protected_path`.** The session file names a protected path.
 4. **`set_change`.** A Git command on the set fails, the HEAD of the set differs from `set_commit`, the tree of the set differs from the tree of `set_commit`, or the tree under `shared/` differs from `shared.sha256` ([Manifest of the shared folder](#manifest-of-the-shared-folder), rule 5). The runner compares the tree with `git ls-tree -r -z <set_commit>`, walks the set directory, and computes each file blob with `git hash-object --no-filters`. It skips only the directory `.git/` at the root, the regular file `config.json` at the root and each directory `shared/*/node_modules/`. It compares path, mode and blob for each entry; an extra, missing or different entry is `set_change`. An entry that is no regular file, no link and no directory is `set_change`, and a file that the runner cannot read is `set_change`. The comparison uses no git index and no exclude rule.
 5. **`credential`, in a file of the run.** `diff.patch` or `check.txt` holds a credential value of the entry. The runner counts after the diff and after the grading, before the copy into the judge workspace. A count other than `0` is the breach `credential`. The runner removes `diff.patch` and `check.txt`. Reason: a `bash` copy of `auth.json` into the workspace puts the values into the diff with no value in the session file.
+
+**Stop at a breach.** When any in-flight call finds a breach, the pool aborts: the runner starts no new call, and it kills each in-flight agent process and its process group directly. It writes no line in `results.jsonl`, `checks.jsonl` or `diagnoses.jsonl` for a killed call. A missing line gives `revert` or no verdict.
 
 **OS read-deny rule.** The runner starts each agent call under an OS rule that denies file read and file write under the real paths of the evaluation set, the results base directory and the work root. The rule allows, inside each denied root, only what the current call needs: the workspace of the run and the run folder of the call; for a diagnosis call, its own judge workspace and run folder. The `kanthord` process writes `--output` to a file inside the run folder of the current call. The runner appends that line to `results.jsonl` after the call. On macOS the rule is one SBPL policy: `(version 1)(allow default)(deny file-read* file-write* (subpath "<set>"))(deny file-read* file-write* (subpath "<results base>"))(deny file-read* file-write* (subpath "<work root>"))(allow file-read-metadata (literal "<ancestor>"))...(allow file-read* file-write* (subpath "<workspace>"))(allow file-read* file-write* (subpath "<run folder>"))...`. Each `deny` comes before each `allow`; the last matching rule wins. The metadata allows cover each denied root and each ancestor of each allowed path that falls under a denied root. On Linux the rule is `bwrap --dev-bind / / --tmpfs <set> --tmpfs <results base> --tmpfs <work root> --bind <allowed> <allowed> ... --die-with-parent <node> <bin> ...`; each `--bind` comes after the `--tmpfs` of its parent. Before the first agent call, the runner runs a start probe once: the probe must fail to read a file in each denied root and must succeed to read a file outside all roots. The runner reads `.git/HEAD` of the set itself before the probe; a failed read under the rule proves the set denial. For the results base and the work root the probe creates a temporary file in each root with mode `0600` and removes them after the probe. When the mechanism is absent or the probe fails, the runner stops with exit `1` before any agent call. There is no switch that turns the rule off. The agent call is the `swe@1` run and the `re@1` diagnosis. On macOS the runner escapes each `\` and each `"` of each path in the policy text. The task file and the kind prompt are files of the set. So the runner copies each `--prompt` file and each `--system-prompt` file into a new temporary directory with mode `0700` outside all denied roots, gives each copy mode `0600`, passes the copies to the call, and removes the directory after the call. On Linux the agent process sees an empty directory at each denied path, and a write there changes no file of the set or the results.
 
@@ -451,7 +453,7 @@ Ulrich fixes the stage gate before the first run (Ulrich, 2026-11-22). One evalu
 5. **Wall limit.** `wall` is at most `2h`, the default wall budget of `run agent`. A diagnosis run has the wall budget `15m`.
 6. **Base cost.** The base cost of a run of the model m is its `list_price_usd` divided by `r(m)`. So the list price of a model with a higher price is above its base cost.
 7. **One cap.** One cap `cap_usd` of [Configuration](#configuration) covers one evaluation. The sum is the base cost of each line of `results.jsonl` of the evaluation: each run of `swe@1`, each diagnosis run and each attempt.
-8. **Start gate.** Each run of `swe@1` reserves the `usd` of its case, and each diagnosis run reserves `judge_usd`, also when the runner passes no cost budget (rule 4). The runner starts a run only when the sum plus that reserve is at or below `cap_usd`. Else it writes the report and exits `4`. The cap is a start gate: the last run can pass the cap.
+8. **Start gate.** Each run of `swe@1` reserves the `usd` of its case, and each diagnosis run reserves `judge_usd`, also when the runner passes no cost budget (rule 4). The runner starts a run only when the sum of base costs so far, plus the sum of reserves of all calls currently in flight, plus the reserve of the new call, is at or below `cap_usd`. When the gate does not open, the runner writes the report and exits `4`. The cap is a start gate: the last run can pass the cap. When the gate closes while sibling calls are still in flight, the runner lets those calls finish and then writes the report.
 9. A subscription entry pays no list price, but the cap applies to the base cost ([L2 Budget](L2-agent-cli.md#budget), rule 5).
 
 ### Price ratio
@@ -557,7 +559,7 @@ Each line of `diagnoses.jsonl` holds `session`, `valid` and `findings`.
 
 ### Iteration record
 
-`run.sh` writes `iteration.json` in the results directory at the first call of an evaluation. It holds `stage`, `set`, `set_commit`, `engine_commit`, `repeats`, `gate_share`, `parent`, `replicate`, `aspect` and `hypothesis`.
+`run.sh` writes `iteration.json` in the results directory at the first call of an evaluation. It holds `stage`, `set`, `set_commit`, `engine_commit`, `repeats`, `jobs`, `gate_share`, `parent`, `replicate`, `aspect` and `hypothesis`.
 
 | Field           | Reader                                                                                                     |
 | --------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -566,13 +568,14 @@ Each line of `diagnoses.jsonl` holds `session`, `valid` and `findings`.
 | `set_commit`    | `git -C <evaluation set> rev-parse HEAD` at the first call. The comparability check                        |
 | `engine_commit` | The engine commit of the runner at the first call. The one-change check of [Iteration](#iteration), rule 1 |
 | `repeats`       | `repeats` of `config.json` at the first call. The planned runs                                             |
+| `jobs`          | `--jobs` of the first call, default 4. The pool size. `report.sh` refuses a parent or a replicate with a different `jobs` |
 | `gate_share`    | On the held-out set, `gate_share` of `config.json`, else `null`. The stage gate                            |
 | `parent`        | The evaluation id of the parent, or `null`. The noise rule                                                 |
 | `replicate`     | The evaluation id of the first baseline of an A/A pair, or `null`. The A/A line                            |
 | `aspect`        | The target aspect, or `null`. The noise rule                                                               |
 | `hypothesis`    | The hypothesis text, or `null`. The report                                                                 |
 
-- A resumed call refuses options that differ from `iteration.json` with exit `1`.
+- A resumed call refuses options that differ from `iteration.json` with exit `1`, including `--jobs`. An old record with no `jobs` field defaults to `1`.
 - A call refuses a `set_commit` that differs from `git -C <evaluation set> rev-parse HEAD` with exit `1`.
 - A call refuses a tree under `shared/` that differs from `shared.sha256` with exit `1` ([Manifest of the shared folder](#manifest-of-the-shared-folder), rule 5). stderr holds the line `evaluation: manifest: <path>: tree differs from manifest` with the first path that differs and no content of a file. The call makes no results directory.
 
@@ -593,25 +596,27 @@ The runner is a set of scripts in the engine repository: `scripts/evaluation/age
 ### `run.sh`
 
 ```text
-run.sh --evaluation <id> --stage <1|2> --set <dev|held-out> [--parent <id> --aspect <A1..A7> --hypothesis <text> | --replicate <id>]
+run.sh --evaluation <id> --stage <1|2> --set <dev|held-out> [--jobs <n>] [--parent <id> --aspect <A1..A7> --hypothesis <text> | --replicate <id>]
 ```
 
-| Option         | Question it answers                                | Rule                                                                                |
-| -------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `--evaluation` | Which evaluation do the results join?              | Required. The evaluation id                                                         |
-| `--stage`      | Which context do the runs get?                     | Required. `1` or `2` ([Stages](#stages))                                            |
-| `--set`        | Which cases run?                                   | Required. `dev` or `held-out`                                                       |
-| `--parent`     | Which evaluation does this iteration compare with? | Optional. Only with `--set dev`. It requires `--aspect` and `--hypothesis`          |
-| `--aspect`     | Which aspect does the prompt change target?        | Only with `--parent`. One of `A1` to `A7`                                           |
-| `--hypothesis` | What does the prompt change expect?                | Only with `--parent`. A text of 1 to 500 characters                                 |
-| `--replicate`  | Which baseline does this evaluation repeat?        | Optional. Only with `--set dev` and with no `--parent` ([A/A measure](#aa-measure)) |
+| Option         | Question it answers                                | Rule                                                                                            |
+| -------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `--evaluation` | Which evaluation do the results join?              | Required. The evaluation id                                                                     |
+| `--stage`      | Which context do the runs get?                     | Required. `1` or `2` ([Stages](#stages))                                                        |
+| `--set`        | Which cases run?                                   | Required. `dev` or `held-out`                                                                   |
+| `--jobs`       | How many agent calls run at one time?              | Optional. An integer from 1 to 8. Default 4. A value outside the range exits `2`               |
+| `--parent`     | Which evaluation does this iteration compare with? | Optional. Only with `--set dev`. It requires `--aspect` and `--hypothesis`                      |
+| `--aspect`     | Which aspect does the prompt change target?        | Only with `--parent`. One of `A1` to `A7`                                                       |
+| `--hypothesis` | What does the prompt change expect?                | Only with `--parent`. A text of 1 to 500 characters                                             |
+| `--replicate`  | Which baseline does this evaluation repeat?        | Optional. Only with `--set dev` and with no `--parent` ([A/A measure](#aa-measure))             |
 
 - The evaluation set and its configuration are the fixed paths of [Location](#location).
-- The run order is fixed: the cases in byte order of the case id, then the repeats. On the dev set, the diagnosis of a run follows the run.
+- The runs start in this order: the cases in byte order of the case id, then the repeats. On the dev set, the diagnosis of a run follows its own run. Within the pool, up to `jobs` agent calls run at the same time, two repeats of the same case never at the same time.
 - `--parent` names an evaluation that has `iteration.json` with the same stage and the set `dev`. Else the call exits `1` and starts no run.
 - The runner refuses `NODE_USE_ENV_PROXY` in its environment and `--use-env-proxy` in `NODE_OPTIONS` with exit `1` ([Credential](#credential), rule 4).
 - The runner runs `ulimit -c 0` before its first step ([Credential](#credential), rule 8).
-- The runner exits `0` when each planned run and diagnosis has a line, `1` at a stop or a breach, and `4` at the cap.
+- A resumed call refuses a `--jobs` value that differs from `iteration.json` with exit `1`.
+- The runner exits `0` when each planned run and diagnosis has a line, `1` at a stop or a breach, `2` when `--jobs` is outside the range 1 to 8, and `4` at the cap.
 
 ### `report.sh`
 
@@ -626,7 +631,8 @@ report.sh --evaluation <id>
    - the `swe@1` lines have one `provider`, `model` and `reasoning_effort`; the `swe@1` lines of each kind have one `system_prompt_digest`;
    - the `swe@1` lines of one case have one `input_digest` and one `budget`;
    - the `re@1` lines have one `provider`, `model`, `reasoning_effort` and `system_prompt_digest`;
-   - with a parent, rule 4 of [Iteration](#iteration) holds, the `re@1` lines of the parent have the same `system_prompt_digest`, and the one-change check of rule 1 holds.
+   - with a parent, rule 4 of [Iteration](#iteration) holds, the `re@1` lines of the parent have the same `system_prompt_digest`, and the one-change check of rule 1 holds;
+   - with a parent or a replicate, the `jobs` of the parent matches `jobs` of the new evaluation.
 
    It refuses a file that breaks a check. It exits `1` and names the first two lines, or the key of the iteration check. A refused call leaves no `report.md` in the results directory.
 
@@ -660,7 +666,8 @@ report.sh --evaluation <id>
 2. No credential value enters a case, a line of `results.jsonl`, `checks.jsonl`, `diagnoses.jsonl` or `calls.jsonl`, `iteration.json`, `diff.patch`, `check.txt`, a file of the judge workspace, a report or the evaluation set. Breach rule 5 counts the values in `diff.patch` and `check.txt`.
 3. **Refresh.** Before each `run agent` call with an `oauth` entry, `evaluation.mjs` refreshes the entry with the exported pi API and discards the result:
    - `ModelRuntime.create({ authPath, modelsPath: null, allowModelNetwork: false, refreshOnCreate: false })` (`dist/core/model-runtime.d.ts`);
-   - `listCredentials()` of that runtime (`dist/core/model-runtime.d.ts`). pi returns the provider id and the type of each entry and resolves no key value. `evaluation.mjs` reads the type from this list and never reads the file itself.
+   - `listCredentials()` of that runtime (`dist/core/model-runtime.d.ts`). pi returns the provider id and the type of each entry and resolves no key value. `evaluation.mjs` reads the type from this list and never reads a credential value from the file.
+   - Before calling `getAuth`, the runner reads the `expires` field of the provider entry of `auth.json` to decide whether the refresh can write. The write predicate is `now + max(5 min, minOAuthValidityMs) >= expires`. When the entry has no `expires` field, or the value is not a number, the runner treats the refresh as one that can write (fail-safe). When the write predicate holds, the runner drains the pool: it starts no new call and waits until every in-flight call and its post-call checks have finished, then calls `getAuth` and continues. When the write predicate does not hold, the runner calls `getAuth` at once; pi writes nothing.
    - `getAuth(provider, { minOAuthValidityMs })`, only when the entry of `provider` has the type `oauth`. `provider` is the provider of the `--model` of the call.
    - An `api_key` entry or an absent entry gets no refresh and no `getAuth` call. Reason: `getAuth` of pi runs a `!` command key and resolves a `$` key. `run agent` then applies its own checks and refuses such a key or an absent entry.
    - `authPath` is `<home>/.config/kanthord/auth.json`, and `<home>` is `homedir` of `os.userInfo()`. No environment variable selects the file.
@@ -739,7 +746,7 @@ L4 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
    - Assert: each command exits `0`. `R/results.jsonl` holds 2 lines, both of `swe@1`. No `R/diagnoses.jsonl` exists. `R/report.md` holds the gate line with the pass share `100.0%`, `gate_share` `0.5`, 0 breaches and the verdict `pass`. It holds the text `h1` zero times. No run directory holds `check.txt`.
 
 5. **L4-AC5. A breach stops the evaluation.**
-   - Fixture: Set, Auth. Each variant uses `run.sh --evaluation e5 --stage 1 --set dev`, then `report.sh --evaluation e5`.
+   - Fixture: Set, Auth. Each variant uses `run.sh --evaluation e5 --stage 1 --set dev --jobs 1`, then `report.sh --evaluation e5`.
    - Variant 1: Stub for `swe@1` calls `read` with the absolute path of `E/cases/dev/d1/check/check.sh`, then calls `write` with `ok.txt` and the text `ok`, then answers `done`.
      - Assert: `run.sh` exits `1` after the first run. `R/checks.jsonl` holds 1 line with `breach` `protected_path` and `pass` `false`. Stub receives no `re@1` request. `R/report.md` holds 1 breach of `protected_path`, and `report.sh` exits `3`.
    - Variant 2: Stub for `swe@1`: the answer text holds K once, after the `write` call.
@@ -757,7 +764,7 @@ L4 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
 
 6. **L4-AC6. A stop leaves no verdict, and a resume completes the evaluation.**
    - Fixture: Set, Auth.
-   - Variant 1: Stub answers HTTP 429 to each request. Command: `run.sh --evaluation e6 --stage 1 --set held-out`, then `report.sh --evaluation e6`. Then Stub answers as usual, and the same two commands run again.
+   - Variant 1: Stub answers HTTP 429 to each request. Command: `run.sh --evaluation e6 --stage 1 --set held-out --jobs 1`, then `report.sh --evaluation e6`. Then Stub answers as usual, and the same two commands run again.
      - Assert, first pair: `run.sh` exits `1`. `R/results.jsonl` holds 3 lines of `swe@1` on `h1`, each with `class` `retryable` and each with its own `session` and `workspace`. `R/checks.jsonl` holds no line. `R/report.md` holds the gate verdict `no verdict`, and `report.sh` exits `3`.
      - Assert, second pair: each command exits `0`. The first run of `h1` uses the run directory `h1/1-4`. `R/checks.jsonl` holds 2 lines. `R/report.md` holds the gate verdict `pass`.
    - Variant 2: Stub as usual. Auth has no entry for `openai-compatible`. Command: as in variant 1.
@@ -815,6 +822,12 @@ These rules hold with no process and no LLM stub, so their tests are unit tests 
 20. **The diff steps.** The restore of `.git/config`, the removal of `.git/info/attributes`, and the flags of the diff command of [Diff steps](#diff-steps).
 21. **The manifest.** The rules of [Manifest of the shared folder](#manifest-of-the-shared-folder). `writeManifest` writes the exact lines of rules 1 to 3 with mode `0600`, also over a manifest with another mode, and leaves no `shared.sha256.tmp`. It returns an error and writes no manifest for each refused entry of rule 4. `checkManifestDiff` returns null for an equal tree, the first path for each difference of rule 5, and `shared.sha256` for each invalid manifest. A change of an ignored file under `shared/` is the breach `set_change`, after `protected_path`. An equal tree is no breach. The start refuses a tree that differs and a set with no manifest. The `manifest` subcommand exits `0` on a set with no commit, and `1` for an argument, a refused link and an absent set. `validate` exits `1` for a tree that differs and for a set with no manifest.
 22. **The script time limit.** A `check.sh` call that times out writes `exit timeout` for its mode in `check.txt` and fails the mode. The call returns within a few seconds of the limit. After the call, a background process that the script left is gone. A script whose background process ended before the group kill does not stop the grading. A `setup.sh` timeout stops the evaluation with the stop exit code. `validate` with a hanging `check.sh` fails within the limit.
+23. **The pool concurrency.** The pool runs at most `jobs` agent calls at one time. Two repeats of one case never run at the same time. `--jobs 0` and each integer above `8` exit `2`. A non-integer `--jobs` value exits `2`.
+24. **The drain-then-refresh.** A refresh whose write predicate holds waits until every other in-flight call and its post-call checks have finished, then calls `getAuth`, then continues. When the pool holds only one in-flight call (the draining one), the wait is immediate. A refresh whose write predicate does not hold calls `getAuth` at once.
+25. **The start gate with in-flight reserves.** The gate counts the base costs so far, plus the sum of reserves of each call currently in flight, plus the reserve of the new call, against `cap_usd`. An in-flight reserve registers in the same synchronous step as the gate check. A base cost lands when `guardedAgentCall` appends the result line.
+26. **The kill handle.** `spawnToPromise` accepts a signal. When the signal is already aborted, `spawnToPromise` kills the process group and resolves `{ status: null }`. When the signal aborts while the child runs, the handler kills the process group. The kill uses `process.kill(-pid, "SIGKILL")` and ignores `ESRCH` and the empty-group codes. The handler removes itself on `close` to prevent both a stale kill and a Node listener-count warning.
+27. **The stop at a breach.** When any call finds a breach, the pool aborts: no new call starts, and each in-flight agent process and its group gets a kill. `guardedAgentCall` writes no result line and no check line for a killed call. The first breach name wins; a killed sibling that also finds a breach adds no second breach name.
+28. **The `jobs` checks.** `report.sh` refuses a parent whose `jobs` differs from the new evaluation, and an A/A pair whose two evaluations have a different `jobs`. The check message names `jobs`.
 
 ### Rules with no check, and the reason
 
@@ -861,11 +874,12 @@ These rules hold with no process and no LLM stub, so their tests are unit tests 
 12. **L4-D12.** One cap `cap_usd` in `config.json` covers one evaluation. The cap is in base dollars, the price of `base_model` `openrouter/deepseek/deepseek-v4.1-flash` (Ulrich, 2026-11-22). Constraint: `cap_usd` starts at 15 as a hypothesis; the set repository does not track `config.json`, so the cap can change at a resume; the base cost of a run is its `list_price_usd` divided by `r`; the cap is a start gate; Ulrich approves `cap_usd` before the first live run.
 13. **L4-D13.** A cost budget in base dollars scales to each model with one price ratio `r(m) = blend(m) / blend(base_model)`, where `blend(m) = 0.8 × cacheRead(m) + 0.2 × input(m) + 0.02 × output(m)` (Ulrich, 2026-11-22). Constraint: a model with price tiers uses its highest tier; the constants are part of the rule; an exact multiple of 0.01 stays, else the scaled budget rounds up to the next 0.01, with integer arithmetic.
 14. **L4-D14.** The evaluation set lies in `<data>/evaluation/agent/`, and the results lie in `<state>/evaluation/runs/<evaluation-id>/` of the KanthorD XDG directories (Ulrich, 2026-11-22). Constraint: each directory has mode `0700`; one evaluation id names one stage, one set and one prompt version; the set has no remote; nobody commits a result.
-15. **L4-D15.** The runner is `run.sh`, `report.sh`, `evaluation.mjs`, `judge.md` and `judge-task.md` in `scripts/evaluation/agent/` of the engine. Constraint: it calls only the built `kanthord run agent`, git, the case scripts, Node, the exported pi API and the three engine functions of [Runner](#runner) from `dist/`; the runs go in sequence; the same evaluation id resumes a stopped evaluation by the key case and repeat.
+15. **L4-D15.** The runner is `run.sh`, `report.sh`, `evaluation.mjs`, `judge.md` and `judge-task.md` in `scripts/evaluation/agent/` of the engine. Constraint: it calls only the built `kanthord run agent`, git, the case scripts, Node, the exported pi API and the three engine functions of [Runner](#runner) from `dist/`; up to `jobs` agent calls run at the same time; the same evaluation id resumes a stopped evaluation by the key case and repeat.
 16. **L4-D16.** The credential is the KanthorD `auth.json` file at the default `--auth` path. Constraint: no credential value enters a case, a result, a check record, a diagnosis, an iteration record, a call record, `diff.patch`, `check.txt`, the judge workspace or a report; the runner checks the digest and the mode of the file around each `run agent` call, and counts the credential values after each call; provisioning uses a private temporary pi directory and one move of `auth.json`.
 17. **L4-D17.** The refresh of an `oauth` entry uses `ModelRuntime.create`, `listCredentials` and `getAuth` of pi with an explicit `authPath` from the user database and the provider of the `--model` of the call. Constraint: refresh only an `oauth` entry, and the type comes from pi `listCredentials`; no `getAuth` call for an `api_key` entry or an absent entry; no pi CLI, no environment variable that selects the file, no proxy of the environment, no output of the token, no error text of pi, and no core dump.
 18. **L4-D18.** The price read uses the exported pi API with an in-memory credential store. Constraint: the price read opens no credential file.
 19. **L4-D19.** Each workspace and each grading clone is a clone with no remote and no reflog. Constraint: no path of the case folder stays in a clone.
+20. **L4-D20.** `run.sh` accepts `--jobs <n>` (default 4, range 1 to 8, exit 2 outside the range). The pool runs up to `jobs` agent calls at the same time, with two guards: two repeats of one case never run at the same time, and a refresh that can write drains all other in-flight calls before it calls `getAuth`. Each call spawns its child process with `detached: true` so the pool can kill the group directly. `iteration.json` records `jobs`. `report.sh` refuses a parent or a replicate with a different `jobs`. Constraint: only the agent call runs in the pool; `runCaseScript`, `setup.sh` and grading stay serial; the lines of `results.jsonl`, `checks.jsonl` and `diagnoses.jsonl` are in completion order; a breach aborts the pool and kills each in-flight process group; the first breach name wins.
 
 ## Open questions for Ulrich
 

@@ -154,6 +154,34 @@ Each pull request is one engine pull request into `feature/agent-v2` ([LA How ea
 - Verify: `pnpm run verify` macOS: tests 6764, pass 6756, fail 0. The `bwrap` branch had no local run.
 - `main` works: the runner calls one agent at a time, as before.
 
+### PR 10b. Run the agent calls of one evaluation in a pool
+
+- Files: `evaluation.mjs`, `evaluation.test.mjs`.
+- `evaluation.mjs` changes:
+  - `spawnToPromise` gains a `signal` parameter: when the signal aborts, it kills the process group with `process.kill(-pid, "SIGKILL")` and removes its listener on `close`. `spawn` gets `detached: true` so the child leads a new process group.
+  - `wrapper.run()` on macOS and Linux accepts and passes `signal` to `spawnToPromise`.
+  - `runAgentProcess` accepts and passes `signal`.
+  - `runPlan` builds an `AbortController` and passes `signal` through `deps` to each call.
+  - `runPending` replaces the serial loop with a concurrent pool. It tracks `inFlight` (count of windows from before `guardedAgentCall` to after), `inFlightReserveSum` (sum of reserves of those windows), `inFlightCases` (Set of `caseId` strings with a window open). `tryStartNext` is the scheduler: it checks `inFlight < jobs`, the case isolation guard and the start gate with `inFlightReserveSum`, then starts the call. Each completion calls `tryStartNext` again. The pool returns when all tasks settle.
+  - `startGateOpen` takes a third argument `inFlightReserveSum` and adds it to the sum before the gate check.
+  - A `refreshCanWrite(authPath, provider, validityMs)` helper reads only the `expires` field of the oauth entry, never a credential value, and applies the pi write predicate.
+  - `deps.refresh` is wrapped inside `runPending`: when `refreshCanWrite` returns `true`, the wrapper drains (waits for `inFlight === 0`), calls the real refresh, and continues; else it calls the real refresh at once. Drain serialises: a second drainer re-reads `expires` after the first finishes, so a fresh token skips the drain.
+  - `guardedAgentCall` checks `deps.signal?.aborted` before `deps.runAgent` and, if aborted, returns `{ stop: "killed" }` with no line written.
+  - `parseRunOptions` accepts `--jobs <n>`: an integer 1 to 8, default 4. A value outside the range returns `{ error, usageError: true }`. `startRun` propagates `usageError`. `runCommand` returns exit 2 for `usageError`.
+  - `newIteration` records `jobs` from `plan.jobs`. `iterationError` checks `jobs`. `pairError` checks `jobs` with the same message form as LA-D18.
+- Pool tests added to `evaluation.test.mjs` (7 new tests):
+  - The pool runs at most `jobs` calls at a time.
+  - A refresh that can write waits until no call is in flight.
+  - Two repeats of one case never overlap.
+  - The start gate counts the in-flight reserves.
+  - A breach kills the in-flight calls and starts no new call.
+  - `report.sh` refuses a parent or an A/A pair with a different `jobs`.
+  - `--jobs 0` and `--jobs 9` give exit 2.
+- Baseline test count: 326 (after PR 10a). PR 10b adds 7 tests: 333.
+- Verify: `pnpm run verify` macOS: pass.
+- `main` works: the runner runs up to 4 agent calls at a time.
+- **Open question.** With `detached: true`, Ctrl-C (SIGINT to the terminal process group) no longer reaches the child agent processes by default. The evaluation continues after a Ctrl-C, which is incorrect. The fix is to add SIGINT and SIGTERM handlers on the pool's `AbortController` before the pool starts, and remove them after. This is tracked in HANDOFF under Agent component.
+
 ## End-to-end checks
 
 (LA5 ends when these pass)
@@ -199,28 +227,36 @@ Build details of the checks:
 
 The owning module of each rule is `scripts/evaluation/agent/evaluation.mjs`, with its tests in `scripts/evaluation/agent/evaluation.test.mjs` ([L4-D15](L4-agent-evaluation.md#decisions), [LA5-D2](#decisions)). The tests run in `pnpm run verify` on macOS and on Linux.
 
-| L4 unit-level rule                        | PR         |
-| ----------------------------------------- | ---------- |
-| 1. The case schema                        | 1          |
-| 2. The configuration                      | 1          |
-| 3. The pass rule and the grading steps    | 1          |
-| 4. The scope rules and the frontend rules | 1          |
-| 5. The breach rules                       | 1 and 3    |
-| 6. The diagnosis parse                    | 2          |
-| 7. The noise rule and the A/A line        | 5          |
-| 8. The stage gate                         | 1          |
-| 9. The cap                                | 1 and 2    |
-| 10. The price ratio                       | 1          |
-| 11. The report keys                       | 1, 2 and 5 |
-| 12. The run action                        | 1, 2 and 4 |
-| 13. The start checks                      | 1 and 5    |
-| 14. The credential state                  | 1          |
-| 15. The refresh                           | 1          |
-| 16. The price read                        | 1          |
-| 17. The secret scan                       | 5          |
-| 18. The case validation                   | 5          |
-| 19. The transcript                        | 2          |
-| 20. The diff steps                        | 1          |
+| L4 unit-level rule                        | PR          |
+| ----------------------------------------- | ----------- |
+| 1. The case schema                        | 1           |
+| 2. The configuration                      | 1           |
+| 3. The pass rule and the grading steps    | 1           |
+| 4. The scope rules and the frontend rules | 1           |
+| 5. The breach rules                       | 1 and 3     |
+| 6. The diagnosis parse                    | 2           |
+| 7. The noise rule and the A/A line        | 5           |
+| 8. The stage gate                         | 1           |
+| 9. The cap                                | 1 and 2     |
+| 10. The price ratio                       | 1           |
+| 11. The report keys                       | 1, 2 and 5  |
+| 12. The run action                        | 1, 2 and 4  |
+| 13. The start checks                      | 1 and 5     |
+| 14. The credential state                  | 1           |
+| 15. The refresh                           | 1           |
+| 16. The price read                        | 1           |
+| 17. The secret scan                       | 5           |
+| 18. The case validation                   | 5           |
+| 19. The transcript                        | 2           |
+| 20. The diff steps                        | 1           |
+| 21. The manifest                          | 6           |
+| 22. The script time limit                 | 7           |
+| 23. The pool concurrency                  | 10b         |
+| 24. The drain-then-refresh                | 10b         |
+| 25. The start gate with in-flight reserves| 10b         |
+| 26. The kill handle                       | 10b         |
+| 27. The stop at a breach                  | 10b         |
+| 28. The `jobs` checks                     | 10b         |
 
 - `evaluation.mjs` imports the engine modules from the build: `findPatternText` from `dist/agent/sensitive-text.js`, `isolatedGitEnvironment` from `dist/kernel/git-environment.js` and `directories` from `dist/kernel/xdg.js` ([L4 Runner](L4-agent-evaluation.md#runner)). `pnpm run verify` runs `build` before `test`, so the unit tests read the same build. `evaluation.test.mjs` fails at once when `dist/` is absent.
 - Unit-level rule 15 uses an `oauth` entry that expires far in the future, so `getAuth` sends no request.
@@ -367,3 +403,5 @@ Branch: `feature/agent-v2-la5-iteration`.
 33. **LA5-D33.** `osDenyWrapper` denies file read and write under three real paths: the set, the results base (`resultsBaseDir`) and the work root (`workBaseDir`). Each call passes `allowedPaths` to `wrapper.run()`. Constraint: `runPlan` creates the results base and the work root before `realpathSync` and passes all three real paths to `makeWrapper`; `runAgentArgs` uses `join(currentRun.runDir, "result.jsonl")` for `--output`; `runAgentArgsJudge` uses `join(run.runDir, "judge-<n>-result.jsonl")` for `--output`; `guardedAgentCall` appends the output file to `run.resultsPath` right after `deps.runAgent` returns, before each breach check; for a `swe@1` call, `allowedPaths` is `[workspace, currentRun.runDir]`; for a diagnosis call, `allowedPaths` is `[judgeWorkspace, run.runDir]`; `runAgentProcess` passes `allowedPaths` to `wrapper.run()`; on macOS the policy adds `file-read-metadata` literals for each denied root and each ancestor of each allowed path inside a denied root, so path resolution of the allowed paths succeeds; on Linux, all `--tmpfs` come first and each `--bind <path> <path>` follows; the probe creates a temp file in the results base and in the work root with mode `0600`, proves each root is denied, and removes the files in `finally`; the set probe uses the existing `.git/HEAD`; a sibling run folder of the same evaluation is denied; the `--output` file of one call is inside the run folder of that call and not visible to a sibling run; `run.resultsPath` stays as the shared `results.jsonl` and all readers of it see the appended line before the next read.
 
 34. **LA5-D34.** Only the agent call leaf is asynchronous. `wrapper.run()` uses `spawn` through the shared helper `spawnToPromise` and returns a Promise that always resolves to `{ status }`. `spawnToPromise` catches a synchronous throw from `spawn` (for example E2BIG) and resolves `{ status: null }`, matching `spawnSync` which returns `{ status: null, error }` for the same errors. `runAgentProcess` is `async` and awaits `wrapper.run()`. `guardedAgentCall` awaits `deps.runAgent()`, which accepts a synchronous return value through `await`. Constraint: `runCaseScript`, `runScript`, `probe` and all git helpers stay on `spawnSync`, in line with [LA5-D31](#decisions); no `detached` or kill option is added to `wrapper.run()` in this PR; PR 10b adds those for the pool.
+
+35. **LA5-D35.** The pool replaces the serial loop in `runPending`. Each call window starts at the entry of `guardedAgentCall` and ends at its return. The drain waits for the in-flight window count to reach 0 (the drainer itself holds no window). A second drainer serialises by re-reading `expires` after the first finishes; a fresh token skips its drain. `spawnToPromise` gets `detached: true` and a `signal` argument; on abort, it kills the process group with `process.kill(-pid, "SIGKILL")` and ignores `ESRCH` and the empty-group codes (`EPERM` on macOS for a finished group). The pool's `AbortController` aborts on the first breach or stop; `guardedAgentCall` checks the signal before the spawn and writes no line after a kill. The start gate receives the sum of in-flight reserves alongside the accumulated base cost; both are updated atomically in the synchronous scheduler. `iteration.json` gains `jobs`; old records with no `jobs` field default to 1. `report.sh` refuses a parent or replicate with a different `jobs`, naming the key `jobs`. Constraint: `runCaseScript` and grading stay serial; two repeats of one case never run at the same time; the first breach name wins and no killed sibling overwrites it; `runPlan` returns only after all tasks settle so `finally` blocks remove each root; Ctrl-C does not reach `detached` children — HANDOFF records the fix.
