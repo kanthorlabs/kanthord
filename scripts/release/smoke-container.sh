@@ -32,9 +32,13 @@ log "image $image_name:$version ready in $engine"
 home="$RUN_DIR/release/smoke-container"
 extract=
 owner=
+served=
 
 cleanup() {
 	[ -n "${server_pid:-}" ] && kill "$server_pid" 2>/dev/null && wait "$server_pid" 2>/dev/null
+	if [ -z "$owner" ] && [ -n "$served" ]; then
+		owner=$("$engine" volume inspect --format "{{index .Labels \"$owner_label\"}}" "$slot_volume" 2>/dev/null)
+	fi
 	[ -n "$extract" ] && "$engine" rm --force "$extract" >/dev/null 2>&1
 	if [ -n "$owner" ]; then
 		"$engine" ps --all --quiet --filter "label=$owner_label=$owner" | xargs -r "$engine" rm --force >/dev/null 2>&1
@@ -43,10 +47,6 @@ cleanup() {
 	return 0
 }
 trap cleanup EXIT
-
-owned_names() {
-	"$engine" ps --all --filter "label=$owner_label" --format '{{.Names}}' | sort
-}
 
 real_config=${XDG_CONFIG_HOME:-$HOME/.config}
 real_data=${XDG_DATA_HOME:-$HOME/.local/share}
@@ -91,9 +91,14 @@ sed -i.bak -e "s/31415/$port/g" -e "s|^\\( *container_image:\\) .*|\\1 $image_na
 grep -q "^  container_image: $image_name\$" "$config" || die "worker.container_image is not $image_name in $config"
 "$binary" config validate --config "$config" >/dev/null || die "config validate failed"
 
-before=$(owned_names)
+instance=smoke-1
+slot_volume=kanthord_slot_$instance
+slot_container=kanthord_slot_$instance
+"$engine" volume inspect "$slot_volume" >/dev/null 2>&1 &&
+	die "$engine holds the volume $slot_volume of an earlier run. Remove it, and each container and volume that $engine ps --all --filter label=$owner_label and $engine volume ls --filter label=$owner_label list with the same owner"
 "$binary" serve --config "$config" >"$home/serve.log" 2>&1 &
 server_pid=$!
+served=1
 ready=0
 for _ in $(seq 1 60); do
 	if curl -fsS -o /dev/null "$endpoint/api/openapi.yaml" 2>/dev/null; then
@@ -125,36 +130,55 @@ cli agent enablement put swe@1 --file "$home/enablement.json" >/dev/null ||
 	die "agent enablement put failed"
 project_id=$(cli project create --name smoke-container | node -p 'JSON.parse(require("node:fs").readFileSync(0, "utf8")).id') ||
 	die "project create failed"
-cli worker instance create smoke-1 --worker coder@1 --placement container >/dev/null ||
-	die "worker instance create smoke-1 failed"
-cat >"$home/bindings.json" <<'JSON'
-{"version":1,"bindings":{"general":{"kind":"worker","config":{"worker":"coder@1","worker_instances":["smoke-1"],"entries":[{"agent":"swe@1","agent_provider":"default","model_identifier":"claude-sonnet-4-5","reasoning_effort":"off"}]}}}}
+cli worker instance create "$instance" --worker coder@1 --placement container >/dev/null ||
+	die "worker instance create $instance failed"
+cat >"$home/bindings.json" <<JSON
+{"version":1,"bindings":{"general":{"kind":"worker","config":{"worker":"coder@1","worker_instances":["$instance"],"entries":[{"agent":"swe@1","agent_provider":"default","model_identifier":"claude-sonnet-4-5","reasoning_effort":"off"}]}}}}
 JSON
 cli project binding apply "$project_id" --file "$home/bindings.json" >/dev/null ||
 	die "project binding apply failed"
 
-slot_ready=0
+slot_log="$home/state/kanthord/workers/$instance/stderr.log"
+refused=0
+exited=0
 for _ in $(seq 1 240); do
 	if cli worker registration list --project "$project_id" |
 		node -e '
 const { items } = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
 process.exit(items.some((item) => item.placement === "container" && item.draining === false) ? 0 : 1);
 '; then
-		slot_ready=1
+		die "a container slot registered. A slot runs without its sandbox probe. See $slot_log and $home/serve.log"
+	fi
+	if grep -qF 'worker.slot.sandbox_unavailable' "$slot_log" 2>/dev/null; then
+		refused=1
 		break
 	fi
-	kill -0 "$server_pid" 2>/dev/null || break
+	if ! kill -0 "$server_pid" 2>/dev/null; then
+		exited=1
+		break
+	fi
 	sleep 0.5
 done
-[ "$slot_ready" = 1 ] || die "no container slot registered in 120 s. See $home/serve.log"
-log "container slot registered"
+if [ "$exited" = 1 ]; then
+	grep -qF 'worker.slot.sandbox_unavailable' "$slot_log" 2>/dev/null &&
+		die "the server exited after the slot logged worker.slot.sandbox_unavailable. See $slot_log and $home/serve.log"
+	die "the server exited before the slot logged worker.slot.sandbox_unavailable. See $slot_log and $home/serve.log"
+fi
+[ "$refused" = 1 ] || die "no worker.slot.sandbox_unavailable line in $slot_log in 120 s. See $home/serve.log"
+log "container slot refused to start with worker.slot.sandbox_unavailable"
 
-created=$(comm -13 <(printf '%s\n' "$before") <(owned_names) | head -n 1)
-[ -n "$created" ] || die "no container with the label $owner_label exists"
-owner=$("$engine" inspect --format "{{index .Config.Labels \"$owner_label\"}}" "$created") ||
-	die "cannot read the owner label of $created"
-[ -n "$owner" ] || die "$created holds an empty $owner_label label"
-log "container $created holds owner $owner"
+owner=$("$engine" volume inspect --format "{{index .Labels \"$owner_label\"}}" "$slot_volume") ||
+	die "cannot read the owner label of the volume $slot_volume"
+[ -n "$owner" ] || die "the volume $slot_volume holds an empty $owner_label label"
+log "volume $slot_volume holds owner $owner"
+if label=$("$engine" container inspect --format "{{index .Config.Labels \"$owner_label\"}}" "$slot_container" 2>"$home/inspect.err"); then
+	[ "$label" = "$owner" ] || die "$slot_container holds the $owner_label label $label, not $owner"
+	log "container $slot_container holds owner $owner"
+elif [ -n "$("$engine" ps --all --quiet --filter "name=^$slot_container\$")" ]; then
+	die "cannot read the owner label of $slot_container: $(cat "$home/inspect.err")"
+else
+	log "container $slot_container is not running at the owner label check"
+fi
 
 kill "$server_pid" && wait "$server_pid" 2>/dev/null
 server_pid=
