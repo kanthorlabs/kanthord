@@ -178,6 +178,7 @@ Each pull request is one engine pull request into `feature/agent-v2` ([LA How ea
   - `report.sh` refuses a parent or an A/A pair with a different `jobs`.
   - `--jobs 0` and `--jobs 9` give exit 2.
 - Baseline test count: 326 (after PR 10a). PR 10b adds 7 tests: 333.
+- Fix (PR 10b finish): `captured` in `evaluation.test.mjs` passed non-string chunks (the serialized test events that `node --test` sends on stdout) through `String()`, which turned them into the literal string `"[object Buffer]"`. Under `node --test`, the child process sends these chunks during pool tests that yield with `setImmediate`. The fix passes each non-string chunk to the original `write` and captures only string chunks. Without this fix, 16 test results never reached the runner.
 - Verify: `pnpm run verify` macOS: pass.
 - `main` works: the runner runs up to 4 agent calls at a time.
 - **Open question.** With `detached: true`, Ctrl-C (SIGINT to the terminal process group) no longer reaches the child agent processes by default. The evaluation continues after a Ctrl-C, which is incorrect. The fix is to add SIGINT and SIGTERM handlers on the pool's `AbortController` before the pool starts, and remove them after. This is tracked in HANDOFF under Agent component.
