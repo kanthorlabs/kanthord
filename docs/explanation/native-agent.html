@@ -1643,7 +1643,9 @@ Binding prompt of repository app:
                 <tr>
                   <td>Marker restore</td>
                   <td>
-                    Restores a redaction marker of this run into the input of
+                    Restores a redaction marker of this run that a pattern rule
+                    made, for example a database password in a file, into the
+                    input of
                     <code>write</code> and <code>edit</code>. Blocks a call
                     whose input holds a known secret, a marker in a
                     <code>bash</code> command, a marker of the LLM credential or
@@ -1666,7 +1668,10 @@ Binding prompt of repository app:
                 </tr>
                 <tr>
                   <td>Pinned layers</td>
-                  <td>Re-inserts the work prompt before each model call.</td>
+                  <td>
+                    Before each model call, re-inserts the work prompt when the
+                    conversation lacks it.
+                  </td>
                   <td>The task survives a compaction.</td>
                 </tr>
                 <tr>
