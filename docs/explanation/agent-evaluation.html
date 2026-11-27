@@ -164,7 +164,7 @@
                   <td>Reads a held-out case, session or check output.</td>
                 </tr>
                 <tr>
-                  <td>Ulrich</td>
+                  <td>The owner of the evaluation</td>
                   <td>
                     Fixes the stage gate before the first run, sets the noise
                     threshold from the A/A measure and decides after a gate with
@@ -183,14 +183,14 @@
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 28, "rankSpacing": 44}}}%%
 flowchart LR
     accTitle: The phases of one stage of the agent evaluation
-    accDescr: A stage starts with a baseline on the dev set and a second baseline with the same prompt, the A/A pair. Then each iteration changes one prompt rule and runs the dev set again. The noise rule gives keep or revert. When the prompt is ready, one held-out evaluation measures the stage gate. A pass starts the next stage. A fail returns the stage to iterations. No verdict goes to Ulrich.
+    accDescr: A stage starts with a baseline on the dev set and a second baseline with the same prompt, the A/A pair. Then each iteration changes one prompt rule and runs the dev set again. The noise rule gives keep or revert. When the prompt is ready, one held-out evaluation measures the stage gate. A pass starts the next stage. A fail returns the stage to iterations. No verdict goes to the owner.
     base["Baseline&lt;br/&gt;dev set"] --&gt; aa["A/A pair&lt;br/&gt;same prompt again"]
     aa --&gt; iter["Iteration&lt;br/&gt;one prompt change"]
     iter -- "keep or revert" --&gt; iter
     iter --&gt; gate["Stage gate&lt;br/&gt;held-out set"]
     gate -- "pass" --&gt; next(["Next stage"])
     gate -- "fail" --&gt; iter
-    gate -- "no verdict" --&gt; ulrich(["Ulrich decides"])
+    gate -- "no verdict" --&gt; owner(["The owner decides"])
           </pre>
           <div class="table-wrap">
             <table>
@@ -244,25 +244,28 @@ flowchart LR
           <p>
             The operator runs the commands from the engine checkout. Each
             evaluation has an id; one id names one stage, one set and one prompt
-            version.
+            version. <code>&lt;baseline&gt;</code> and
+            <code>&lt;replicate&gt;</code> stand for the ids of the two baseline
+            evaluations.
           </p>
-          <pre><code>scripts/evaluation/agent/run.sh --evaluation s1-b1 --stage 1 --set dev
-scripts/evaluation/agent/run.sh --evaluation s1-b2 --stage 1 --set dev --replicate s1-b1
-scripts/evaluation/agent/report.sh --evaluation s1-b2
+          <pre><code>scripts/evaluation/agent/run.sh --evaluation &lt;baseline&gt; --stage 1 --set dev
+scripts/evaluation/agent/run.sh --evaluation &lt;replicate&gt; --stage 1 --set dev --replicate &lt;baseline&gt;
+scripts/evaluation/agent/report.sh --evaluation &lt;replicate&gt;
 # commit one prompt change of swe@1, then:
 scripts/evaluation/agent/run.sh --evaluation s1-i1 --stage 1 --set dev \
-  --parent s1-b2 --aspect A1 --hypothesis "&lt;text&gt;"
+  --parent &lt;replicate&gt; --aspect A1 --hypothesis "&lt;text&gt;"
 scripts/evaluation/agent/report.sh --evaluation s1-i1
 scripts/evaluation/agent/run.sh --evaluation s1-g1 --stage 1 --set held-out
 scripts/evaluation/agent/report.sh --evaluation s1-g1</code></pre>
           <ol>
             <li>
-              <code>s1-b1</code> is the baseline. Each of the 10 dev cases runs
-              <code>repeats</code> times (2), so 20 runs and 20 diagnoses.
+              <code>&lt;baseline&gt;</code> is the baseline. Each of the 10 dev
+              cases runs <code>repeats</code> times (2), so 20 runs and 20
+              diagnoses.
             </li>
             <li>
-              <code>s1-b2</code> repeats the baseline with the same prompt. Its
-              report holds the A/A line.
+              <code>&lt;replicate&gt;</code> repeats the baseline with the same
+              prompt. Its report holds the A/A line.
             </li>
             <li>
               <code>s1-i1</code> changes one rule of the Role of
@@ -866,8 +869,8 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/judge-1.jsonl","valid":true,"findin
             the same prompt (<code>--replicate</code>). The A/A line shows, for
             each aspect, the good runs of each evaluation, the difference and
             the flips. A <strong>flip</strong> is a case where some runs are
-            good on the aspect and some are not. Ulrich sets the noise threshold
-            from this line.
+            good on the aspect and some are not. The owner sets the noise
+            threshold from this line.
           </p>
           <h3 id="the-noise-rule">The noise rule</h3>
           <ul>
@@ -948,7 +951,7 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/judge-1.jsonl","valid":true,"findin
           <h2 id="the-stage-gate">The stage gate</h2>
           <p>
             One evaluation of the held-out set at the current prompt measures
-            the gate. Ulrich fixed the gate before the first run.
+            the gate. The owner fixed the gate before the first run.
           </p>
           <ul>
             <li>
@@ -988,7 +991,7 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/judge-1.jsonl","valid":true,"findin
                     A planned run has no line in <code>checks.jsonl</code>
                   </td>
                   <td><code>no verdict</code></td>
-                  <td>Ulrich decides</td>
+                  <td>The owner decides</td>
                 </tr>
                 <tr>
                   <td>The share of a kind is below <code>gate_share</code></td>
@@ -1193,8 +1196,8 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/judge-1.jsonl","valid":true,"findin
             <li>
               <strong>Cap.</strong> On a held-out gate, the start gate closes
               after 30 runs. <code>run.sh</code> exits <code>4</code>, and the
-              gate has no verdict. Ulrich raises <code>cap_usd</code>, and the
-              same id resumes the 10 missing runs.
+              gate has no verdict. The owner raises <code>cap_usd</code>, and
+              the same id resumes the 10 missing runs.
             </li>
           </ul>
 
