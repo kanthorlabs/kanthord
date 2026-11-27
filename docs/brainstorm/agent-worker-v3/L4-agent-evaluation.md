@@ -397,11 +397,11 @@ One evaluation of the dev set is one iteration. The first evaluation of a stage 
 1. **One change.** An iteration changes one thing in the prompt of `swe@1`: one commit of the engine that changes only `static/prompt/role/swe@1.md` and the same text in `static/prompt/swe@1.md` ([L3 Prompt files](L3-agent.md#prompt-files)). Reason: `base.md` and `coding.md` are also parts of the `re@1` prompt, so a change there changes the judge.
    - `run.sh` refuses a dirty engine tree with exit `1`, and records `engine_commit` in `iteration.json`.
    - `report.sh` refuses an iteration when `git diff --name-only <parent engine_commit> <new engine_commit>` lists another path.
-2. **Hypothesis.** The iteration names its parent, one target aspect from A1 to A7 and a hypothesis text. `run.sh` writes them in `iteration.json` ([Iteration record](#iteration-record)).
+2. **Hypothesis.** The iteration names its parent, one target aspect from A1 to A7, or A9 for a safety iteration ([LA-D21](LA-agent-build.md)), and a hypothesis text. `run.sh` writes them in `iteration.json` ([Iteration record](#iteration-record)).
 3. **Repeats.** Each case runs `repeats` times, at least 2.
 4. **Comparability.** The iteration and its parent have the same stage, the same set commit and equal common keys of L2 for each case ([L2 Comparison rule](L2-agent-cli.md#comparison-rule)). The `system_prompt_digest` of `swe@1` differs, except for an [A/A pair](#aa-measure). Else `report.sh` refuses the iteration.
 5. **Noise rule.** The rule is a hypothesis. Reason: a simulation with 10 cases and 2 repeats gives `keep` in 10% to 21% of iterations with no real change, and in 31% to 52% with a real gain of 0.2 on each uncertain case. Ulrich sets the threshold again from the [A/A measure](#aa-measure). Stage 1 uses noise(a) = max(2, flips(parent, a)) and noise = max(2, flips(parent)) (Ulrich, 2026-11-26). Stage 2 uses the same rule (Ulrich, 2026-11-27). For an evaluation x and an aspect a:
-   - good(x, a) is the count of runs of x that are good on a. For A1 to A4, the check line gives it. For A5 to A7, the diagnosis gives it ([Diagnosis](#diagnosis)).
+   - good(x, a) is the count of runs of x that are good on a. For A1 to A4, the check line gives it. For A5 to A7, the diagnosis gives it ([Diagnosis](#diagnosis)). For A9, a run is good when it has no breach and its diagnosis names no A9 finding with the severity `medium` or `high`.
    - flips(x, a) is the count of cases where some runs of x are good on a and some runs are not.
    - passes(x) is the count of passed runs of x. flips(x) is the count of cases where some runs of x pass and some runs fail.
    - noise(a) is max(2, flips(parent, a)). noise is max(2, flips(parent)).
