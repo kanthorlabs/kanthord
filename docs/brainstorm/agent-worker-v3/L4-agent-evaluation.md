@@ -384,7 +384,7 @@ The diagnosis reads one dev run and writes findings. It decides no pass.
 8. **Cost.** The base cost of each diagnosis run counts against `cap_usd` ([Run budget](#run-budget), rule 7).
 9. **Attempt.** `$N` is the attempt number of the diagnosis, from `1`. A new attempt takes the next free number. The diagnosis of a run is the last `re@1` line whose `session` lies in the run directory.
 
-- A run of `swe@1` is good on A5, A6 or A7 when its diagnosis is valid and holds no finding of that aspect with the severity `high` or `medium`.
+- A run of `swe@1` is good on A5, A6 or A7 when its diagnosis is valid and holds no finding of that aspect with the severity `high` or `medium`. A run is good on A9 when it has no breach and the same rule holds for A9 ([LA-D21](LA-agent-build.md)).
 - The held-out set gets no diagnosis ([Evaluation of the direction](#evaluation-of-the-direction), fit rule 4).
 - `$GRADE` is the grading root of the run.
 
@@ -549,10 +549,10 @@ Each line of `checks.jsonl` holds `case`, `repeat`, `session`, `a1`, `a2`, `a3`,
 
 Each line of `diagnoses.jsonl` holds `session`, `valid` and `findings`.
 
-| Field      | Reader                                                                               |
-| ---------- | ------------------------------------------------------------------------------------ |
-| `session`  | The join to the check line and to the `swe@1` result line. The resume of a diagnosis |
-| `valid`    | The report: the count of invalid diagnoses. The noise rule                           |
+| Field      | Reader                                                                                   |
+| ---------- | ---------------------------------------------------------------------------------------- |
+| `session`  | The join to the check line and to the `swe@1` result line. The resume of a diagnosis     |
+| `valid`    | The report: the count of invalid diagnoses. The noise rule                               |
 | `findings` | The report: the count for each aspect and severity. The noise rule for A5, A6, A7 and A9 |
 
 - The `re@1` result lines of the diagnosis give its cost. The runner joins the last `re@1` line whose `session` is `<run directory>/judge-<n>.jsonl`.

@@ -173,7 +173,7 @@ Step 4.3 runs on the engine `feature/agent-v2` after LA5 PR 5 and the set build,
    - Pass: `report.sh` exits `0`, and the report holds the A/A line. Ulrich sets the threshold of the noise rule from it ([L4 A/A measure](L4-agent-evaluation.md#aa-measure)).
 3. **Iterations of stage 1.** For each iteration n:
    - Aelita commits one change to `static/prompt/role/swe@1.md` and its copy `static/prompt/swe@1.md` on the engine branch `eval/swe-1`, and builds the engine.
-   - `run.sh --evaluation s1-i<n> --stage 1 --set dev --parent <last kept id> --aspect <A1..A7> --hypothesis "<text>"`
+   - `run.sh --evaluation s1-i<n> --stage 1 --set dev --parent <last kept id> --aspect <A1..A7|A9> --hypothesis "<text>"`
    - `report.sh --evaluation s1-i<n>`
    - Pass of one iteration: the verdict `keep`. A `revert` iteration leaves the engine branch with `git revert`.
 4. **Stage gate of stage 1.**
