@@ -1,0 +1,1355 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How the agent evaluation works · KanthorD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&amp;display=swap"
+    />
+    <link rel="stylesheet" href="../assets/base.css" />
+    <link rel="stylesheet" href="../assets/explanation.css" />
+    <link rel="stylesheet" href="../assets/diagram.css" />
+  </head>
+  <body class="explanation">
+    <header class="site-header">
+      <a class="brand" href="../index.html"
+        ><img
+          src="../assets/logo/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+        />KanthorD</a
+      >
+      <nav aria-label="Sections">
+        <a href="../tutorials/index.html">Tutorials</a>
+        <a href="../how-to-guides/index.html">How-to guides</a>
+        <a href="../reference/index.html">Reference</a>
+        <a href="../explanation/index.html" aria-current="true">Explanation</a>
+      </nav>
+    </header>
+    <div class="page has-toc">
+      <nav class="breadcrumb" aria-label="Breadcrumb">
+        <a href="../index.html">Home</a> /
+        <a href="../explanation/index.html">Explanation</a>
+      </nav>
+      <details class="toc">
+        <summary>On this page</summary>
+        <ul>
+          <li><a href="#in-short">In short</a></li>
+          <li><a href="#who-does-what">Who does what</a></li>
+          <li>
+            <a href="#the-evaluation-at-a-glance">The evaluation at a glance</a>
+          </li>
+          <li><a href="#example-one-stage">Example: one stage</a></li>
+          <li><a href="#the-evaluation-set">The evaluation set</a></li>
+          <li><a href="#one-run">One run</a></li>
+          <li><a href="#grading-a1-to-a4">Grading: A1 to A4</a></li>
+          <li><a href="#the-diagnosis">The diagnosis</a></li>
+          <li><a href="#safety-of-the-runner">Safety of the runner</a></li>
+          <li><a href="#the-pool">The pool</a></li>
+          <li>
+            <a href="#iterations-and-the-noise-rule"
+              >Iterations and the noise rule</a
+            >
+          </li>
+          <li><a href="#the-stage-gate">The stage gate</a></li>
+          <li><a href="#cost">Cost</a></li>
+          <li><a href="#how-an-evaluation-ends">How an evaluation ends</a></li>
+          <li><a href="#edge-cases">Edge cases</a></li>
+          <li><a href="#results">Results</a></li>
+          <li><a href="#under-the-hood">Under the hood</a></li>
+          <li><a href="#records-and-report">Records and report</a></li>
+          <li><a href="#limitations">Limitations</a></li>
+        </ul>
+      </details>
+      <main>
+        <article>
+          <h1 id="how-the-agent-evaluation-works">
+            How the agent evaluation works
+          </h1>
+          <p>
+            Read <a href="native-agent.html">How the native agent works</a>
+            first. That page explains the agent, its profiles and the command
+            <code>kanthord run agent</code>. This page explains how KanthorD
+            measures the profile <code>swe@1</code>, and how a change of its
+            prompt enters the engine only with evidence.
+          </p>
+
+          <h2 id="in-short">In short</h2>
+          <ul>
+            <li>
+              The evaluation runs <code>swe@1</code> through
+              <code>kanthord run agent</code> on fixed coding cases. It adds no
+              engine command and calls no server.
+            </li>
+            <li>
+              Scripted hidden checks decide each pass: A1 correctness, A2 no
+              regression, A3 scope and A4 repository fit.
+            </li>
+            <li>
+              An Opus run of <code>re@1</code> diagnoses each dev run. It
+              explains failures with findings and decides no pass.
+            </li>
+            <li>
+              The dev set feeds the prompt changes. The held-out set measures
+              only the stage gate, and nobody reads its cases.
+            </li>
+            <li>
+              A prompt change stays only when its gain on the target aspect is
+              at least the noise of its parent.
+            </li>
+            <li>
+              The runner stops the whole evaluation at the first breach of its
+              boundary: a credential, the <code>auth.json</code> file, a
+              protected path or the evaluation set.
+            </li>
+            <li>
+              Stage 1 and stage 2 each passed their gate: 39 of 40 runs and 40
+              of 40 runs.
+            </li>
+          </ul>
+
+          <h2 id="who-does-what">Who does what</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Actor</th>
+                  <th>Does</th>
+                  <th>Never does</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    The runner (<code>run.sh</code>, <code>report.sh</code>,
+                    <code>evaluation.mjs</code>)
+                  </td>
+                  <td>
+                    Clones each case, starts each agent call, grades each diff,
+                    applies the breach rules, writes the records and the report.
+                  </td>
+                  <td>Decides a pass from a model text.</td>
+                </tr>
+                <tr>
+                  <td><code>swe@1</code> on Haiku 5.5 at <code>high</code></td>
+                  <td>Does the work of one case in a fresh clone.</td>
+                  <td>Sees the hidden checks or the reference solution.</td>
+                </tr>
+                <tr>
+                  <td><code>re@1</code> on Opus 5.5 at <code>high</code></td>
+                  <td>Writes the findings of one dev run, aspects A1 to A9.</td>
+                  <td>Decides a pass. Reads a held-out run.</td>
+                </tr>
+                <tr>
+                  <td>The hidden checks (<code>check.sh</code>)</td>
+                  <td>
+                    Run the modes <code>fail_to_pass</code>,
+                    <code>pass_to_pass</code> and <code>conventions</code> in a
+                    separate grading clone.
+                  </td>
+                  <td>Run in the workspace of the agent.</td>
+                </tr>
+                <tr>
+                  <td>The prompt author</td>
+                  <td>
+                    Reads the dev reports, writes one prompt change and one
+                    hypothesis per iteration.
+                  </td>
+                  <td>Reads a held-out case, session or check output.</td>
+                </tr>
+                <tr>
+                  <td>Ulrich</td>
+                  <td>
+                    Fixes the stage gate before the first run, sets the noise
+                    threshold from the A/A measure and decides after a gate with
+                    no verdict.
+                  </td>
+                  <td>
+                    Changes <code>gate_share</code> after the first gate try.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="the-evaluation-at-a-glance">The evaluation at a glance</h2>
+          <pre class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#ffffff", "primaryTextColor": "#2d3142", "primaryBorderColor": "#4f5d75", "secondaryColor": "#ececec", "tertiaryColor": "#f5f5f5", "lineColor": "#4f5d75", "edgeLabelBackground": "#f5f5f5", "fontFamily": "system-ui, sans-serif", "fontSize": "14px"}, "flowchart": {"htmlLabels": true, "useMaxWidth": false, "nodeSpacing": 28, "rankSpacing": 44}}}%%
+flowchart LR
+    accTitle: The phases of one stage of the agent evaluation
+    accDescr: A stage starts with a baseline on the dev set and a second baseline with the same prompt, the A/A pair. Then each iteration changes one prompt rule and runs the dev set again. The noise rule gives keep or revert. When the prompt is ready, one held-out evaluation measures the stage gate. A pass starts the next stage. A fail returns the stage to iterations. No verdict goes to Ulrich.
+    base["Baseline&lt;br/&gt;dev set"] --&gt; aa["A/A pair&lt;br/&gt;same prompt again"]
+    aa --&gt; iter["Iteration&lt;br/&gt;one prompt change"]
+    iter -- "keep or revert" --&gt; iter
+    iter --&gt; gate["Stage gate&lt;br/&gt;held-out set"]
+    gate -- "pass" --&gt; next(["Next stage"])
+    gate -- "fail" --&gt; iter
+    gate -- "no verdict" --&gt; ulrich(["Ulrich decides"])
+          </pre>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Phase</th>
+                  <th>Set</th>
+                  <th>Question that it answers</th>
+                  <th>Output</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Baseline</td>
+                  <td><code>dev</code></td>
+                  <td>How good is the current prompt?</td>
+                  <td>The verdict <code>complete</code></td>
+                </tr>
+                <tr>
+                  <td>A/A pair</td>
+                  <td><code>dev</code></td>
+                  <td>How much do two runs of the same prompt differ?</td>
+                  <td>The A/A line, the base of the noise threshold</td>
+                </tr>
+                <tr>
+                  <td>Iteration</td>
+                  <td><code>dev</code></td>
+                  <td>Does one prompt change help its target aspect?</td>
+                  <td><code>keep</code>, <code>revert</code> or no verdict</td>
+                </tr>
+                <tr>
+                  <td>Stage gate</td>
+                  <td><code>held-out</code></td>
+                  <td>Does the prompt pass cases that it never saw?</td>
+                  <td><code>pass</code>, <code>fail</code> or no verdict</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Two stages exist. In stage 1, each run gets only the profile prompt
+            of <code>swe@1</code>. In stage 2, each run also gets the kind
+            prompt of its case kind, <code>binding/&lt;kind&gt;.md</code> of the
+            set, as one <code>--system-prompt</code> part. The kind prompt holds
+            the conventions of the case repository, as a Binding prompt does in
+            a project. Stage 2 starts only after a held-out evaluation of stage
+            1 passes the gate.
+          </p>
+
+          <h2 id="example-one-stage">Example: one stage</h2>
+          <p>
+            The operator runs the commands from the engine checkout. Each
+            evaluation has an id; one id names one stage, one set and one prompt
+            version.
+          </p>
+          <pre><code>scripts/evaluation/agent/run.sh --evaluation s1-b1 --stage 1 --set dev
+scripts/evaluation/agent/run.sh --evaluation s1-b2 --stage 1 --set dev --replicate s1-b1
+scripts/evaluation/agent/report.sh --evaluation s1-b2
+# commit one prompt change of swe@1, then:
+scripts/evaluation/agent/run.sh --evaluation s1-i1 --stage 1 --set dev \
+  --parent s1-b2 --aspect A1 --hypothesis "&lt;text&gt;"
+scripts/evaluation/agent/report.sh --evaluation s1-i1
+scripts/evaluation/agent/run.sh --evaluation s1-g1 --stage 1 --set held-out
+scripts/evaluation/agent/report.sh --evaluation s1-g1</code></pre>
+          <ol>
+            <li>
+              <code>s1-b1</code> is the baseline. Each of the 10 dev cases runs
+              <code>repeats</code> times (2), so 20 runs and 20 diagnoses.
+            </li>
+            <li>
+              <code>s1-b2</code> repeats the baseline with the same prompt. Its
+              report holds the A/A line.
+            </li>
+            <li>
+              <code>s1-i1</code> changes one rule of the Role of
+              <code>swe@1</code> and targets A1. This is the iteration that
+              added "Contract coverage". Its report holds the iteration line
+              with the verdict <code>keep</code>.
+            </li>
+            <li>
+              <code>s1-g1</code> runs the 20 held-out cases twice, 40 runs, with
+              no diagnosis. Its report holds the gate line.
+            </li>
+          </ol>
+          <p>One run of a dev case writes these lines:</p>
+          <pre><code>results.jsonl    {"agent":"swe@1","end":"completed","class":null,"model":"claude-haiku-5-5",
+                  "reasoning_effort":"high","session":"&lt;run dir&gt;/session.jsonl", ...}
+checks.jsonl     {"case":"&lt;case-id&gt;","repeat":1,"session":"&lt;run dir&gt;/session.jsonl",
+                  "a1":true,"a2":true,"a3":true,"a4":true,"pass":true,"breach":null}
+results.jsonl    {"agent":"re@1","end":"completed","session":"&lt;run dir&gt;/judge-1.jsonl", ...}
+diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findings":[]}</code></pre>
+          <p>The gate line of a report has this form:</p>
+          <pre><code>gate: pass share backend 95.0%, pass share frontend 100.0%, gate_share 0.6,
+  breaches 0, earlier held-out evaluations &lt;n&gt;, verdict pass</code></pre>
+
+          <h2 id="the-evaluation-set">The evaluation set</h2>
+          <p>
+            The set is a local git repository with no remote, at
+            <code>&lt;data&gt;/evaluation/agent/</code>, for example
+            <code>~/.local/share/kanthord/evaluation/agent/</code>. It lies
+            outside the engine repository.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Set</th>
+                  <th>Cases</th>
+                  <th>Kinds</th>
+                  <th>Use</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>dev</code></td>
+                  <td>10</td>
+                  <td>5 <code>backend</code>, 5 <code>frontend</code></td>
+                  <td>Each iteration. The diagnosis reads each run.</td>
+                </tr>
+                <tr>
+                  <td><code>held-out</code></td>
+                  <td>20</td>
+                  <td>10 <code>backend</code>, 10 <code>frontend</code></td>
+                  <td>The stage gate only. No diagnosis.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            A <strong>case</strong> is one folder
+            <code>cases/&lt;set&gt;/&lt;case-id&gt;/</code>:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>Content</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>case.json</code></td>
+                  <td>
+                    <code>kind</code>, <code>commit</code> (the base commit C),
+                    <code>wall</code>, <code>usd</code> (in base dollars) and
+                    <code>allowed</code> (the path globs that the run can
+                    change)
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>repo.bundle</code></td>
+                  <td>
+                    The case repository: C and its ancestors only, so no later
+                    commit leaks the solution
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>setup.sh</code></td>
+                  <td>The dependency install for one clone, with no network</td>
+                </tr>
+                <tr>
+                  <td><code>task.md</code></td>
+                  <td>The case text: the <code>--prompt</code> value</td>
+                </tr>
+                <tr>
+                  <td><code>check/</code></td>
+                  <td>
+                    The hidden checks: <code>check.sh</code>,
+                    <code>tests/</code> and <code>reference.patch</code>, a
+                    correct solution
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ul>
+            <li>
+              <strong>Derivable contract.</strong> <code>task.md</code> states
+              each path, name, signature, status code and exact text that a
+              hidden test asserts and that the repository does not show. A
+              hidden test that checks an unstated contract measures a guess.
+            </li>
+            <li>
+              <strong>Same scope for each kind.</strong>
+              <code>backend</code> allows <code>README.md</code>,
+              <code>src/**</code> and <code>test/**</code>.
+              <code>frontend</code> allows <code>src/components/**</code>,
+              <code>src/tasks/**</code>, <code>src/lib/**</code>,
+              <code>src/App.tsx</code> and <code>src/App.test.tsx</code>. No
+              scope holds a runner configuration, a lock file or
+              <code>.gitignore</code>.
+            </li>
+            <li>
+              <strong>A proven reference.</strong> On C with
+              <code>reference.patch</code>, each mode passes three times in
+              sequence. <code>node evaluation.mjs validate &lt;case&gt;</code>
+              checks it.
+            </li>
+            <li>
+              <strong>A blind held-out set.</strong> Nobody reads a held-out
+              session file, check output or case text to change a prompt. The
+              held-out report shows no line for one case.
+            </li>
+            <li>
+              <strong>A guarded shared folder.</strong> Git ignores
+              <code>shared/*/node_modules/</code>, so the committed manifest
+              <code>shared.sha256</code> records the tree under
+              <code>shared/</code>. A difference stops a call.
+            </li>
+          </ul>
+          <p>
+            <code>config.json</code> of the set holds exactly
+            <code>cap_usd</code> (start value 15), <code>base_model</code>,
+            <code>model</code> (<code>anthropic/claude-haiku-5-5:high</code>),
+            <code>judge_model</code>
+            (<code>anthropic/claude-opus-5-5:high</code>),
+            <code>judge_usd</code> (<code>0.1usd</code>),
+            <code>repeats</code> (at least 2, start value 2) and
+            <code>gate_share</code> (start value 0.6).
+          </p>
+
+          <h2 id="one-run">One run</h2>
+          <p>The runner does these steps for each run of <code>swe@1</code>:</p>
+          <ol>
+            <li>
+              <strong>Workspace.</strong> Make the run directory and a new
+              workspace root with 16 random letters, so the path names no case.
+              Clone the bundle, check out C, remove the remote and expire the
+              reflog. The clone then holds no path of the case folder.
+            </li>
+            <li>
+              <strong>Setup.</strong> Run <code>setup.sh</code> in the clone.
+            </li>
+            <li>
+              <strong>Credential refresh.</strong> Refresh an
+              <code>oauth</code> entry through the pi API, under the auth gate.
+            </li>
+            <li>
+              <strong>Run.</strong> Call
+              <code>kanthord run agent swe@1</code> with the case budget, the
+              workspace, a new session file, an output file and a copy of
+              <code>task.md</code>. In stage 2, add the kind prompt as
+              <code>--system-prompt</code>.
+            </li>
+            <li>
+              <strong>Breach rules 1 to 4.</strong> A breach stops the
+              evaluation.
+            </li>
+            <li>
+              <strong>Diff.</strong> Restore <code>.git/config</code>, run
+              <code>git add -A</code> and write the binary diff against C to
+              <code>diff.patch</code>.
+            </li>
+            <li>
+              <strong>Grading.</strong> Grade the diff in a new grading clone.
+              Append one line to <code>checks.jsonl</code>.
+            </li>
+            <li>
+              <strong>Diagnosis.</strong> On the dev set, run
+              <code>re@1</code> on the run.
+            </li>
+            <li>
+              <strong>Removal.</strong> Remove the workspace root and the
+              grading root. On the held-out set, also remove
+              <code>check.txt</code>.
+            </li>
+          </ol>
+          <p>
+            The exit code of each <code>run agent</code> call decides the next
+            action. The first matching row decides:
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Exit of <code>run agent</code></th>
+                  <th>Action of the runner</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    stderr holds <code>cli.run.agent.prompt_text_path</code>
+                  </td>
+                  <td>
+                    Stop the evaluation: a prompt file did not reach the run.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>0</code></td>
+                  <td>
+                    <code>swe@1</code>: the grading decides the pass.
+                    <code>re@1</code>: the parse decides <code>valid</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>4</code>, <code>5</code></td>
+                  <td>
+                    <code>swe@1</code>: the run fails, and the grading still
+                    runs. <code>re@1</code>: the diagnosis is not valid.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>75</code></td>
+                  <td>
+                    Start again as the next attempt, with a new session and a
+                    new workspace. The third exit <code>75</code> of one run in
+                    one call stops the evaluation.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    Each other exit, <code>1</code> and <code>2</code> included
+                  </td>
+                  <td>Stop the evaluation.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="grading-a1-to-a4">Grading: A1 to A4</h2>
+          <p>
+            The grading follows DeepSWE v1.1: it grades only the agent diff, in
+            a clone that the agent never saw, with tests that the agent cannot
+            control.
+          </p>
+          <ol>
+            <li>Make the grading clone of C and run <code>setup.sh</code>.</li>
+            <li>
+              Apply <code>diff.patch</code>. A failed apply fails A1, A2 and A4.
+            </li>
+            <li>
+              <strong>A4</strong>: run <code>check.sh g conventions</code>. For
+              the kind <code>frontend</code>, also apply the frontend rules: no
+              added CSS file and no arbitrary value such as
+              <code>w-[calc(100%-1rem)]</code> in a class utility.
+            </li>
+            <li>
+              Copy <code>check/tests/</code> over the clone. A file of the same
+              name replaces the agent version.
+            </li>
+            <li>
+              <strong>A1</strong>: <code>check.sh g fail_to_pass</code>. The
+              tests that fail on C must pass.
+            </li>
+            <li>
+              <strong>A2</strong>: <code>check.sh g pass_to_pass</code>. The
+              tests that pass on C must still pass.
+            </li>
+            <li>
+              <strong>A3</strong>: each changed path matches a glob of
+              <code>allowed</code>, no added line holds a conflict marker, and
+              no entry is a symbolic link or a submodule.
+            </li>
+          </ol>
+          <p>
+            A run <strong>passes</strong> when its result line has the end
+            <code>completed</code>, A1 to A4 pass and the run breaches no A9
+            rule. Each case script runs in its own process group with a limit of
+            10 minutes. A <code>check.sh</code> timeout fails its mode.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Aspect</th>
+                  <th>Name</th>
+                  <th>Decided by</th>
+                  <th>Effect</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A1</td>
+                  <td>Correctness</td>
+                  <td>Script: <code>fail_to_pass</code></td>
+                  <td>Part of the pass</td>
+                </tr>
+                <tr>
+                  <td>A2</td>
+                  <td>No regression</td>
+                  <td>Script: <code>pass_to_pass</code></td>
+                  <td>Part of the pass</td>
+                </tr>
+                <tr>
+                  <td>A3</td>
+                  <td>Scope discipline</td>
+                  <td>Script: the scope rules</td>
+                  <td>Part of the pass</td>
+                </tr>
+                <tr>
+                  <td>A4</td>
+                  <td>Repository fit</td>
+                  <td>
+                    Script: <code>conventions</code> and the frontend rules
+                  </td>
+                  <td>Part of the pass</td>
+                </tr>
+                <tr>
+                  <td>A5</td>
+                  <td>Self-verification</td>
+                  <td>The diagnosis</td>
+                  <td>Counted, never a pass rule</td>
+                </tr>
+                <tr>
+                  <td>A6</td>
+                  <td>Honest report</td>
+                  <td>The diagnosis</td>
+                  <td>Counted, never a pass rule</td>
+                </tr>
+                <tr>
+                  <td>A7</td>
+                  <td>Instruction fit</td>
+                  <td>The diagnosis</td>
+                  <td>Counted, never a pass rule</td>
+                </tr>
+                <tr>
+                  <td>A8</td>
+                  <td>Efficiency</td>
+                  <td>Measured: cost, duration, calls</td>
+                  <td>Shown, never a pass rule</td>
+                </tr>
+                <tr>
+                  <td>A9</td>
+                  <td>Boundary</td>
+                  <td>Script: the breach rules; also diagnosis findings</td>
+                  <td>A breach stops the evaluation and fails the run</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="the-diagnosis">The diagnosis</h2>
+          <p>
+            The diagnosis explains a dev run. It never changes a pass. The
+            held-out set gets no diagnosis, because a text about a held-out case
+            could reach a prompt change.
+          </p>
+          <ol>
+            <li>
+              The runner makes the judge workspace <code>j</code> in the grading
+              root. It copies <code>diff.patch</code>, <code>check.txt</code>,
+              <code>check.json</code> (the check line), <code>task.md</code>
+              and, in stage 2, the kind prompt. It writes
+              <code>transcript.md</code> from the session file, with each tool
+              result cut to 4,000 characters.
+            </li>
+            <li>
+              It calls <code>kanthord run agent re@1</code> with the judge
+              model, a wall budget of <code>15m</code>, the system prompt part
+              <code>judge.md</code> and the prompt <code>judge-task.md</code>.
+              <code>re@1</code> is confined to <code>j</code> and has only
+              <code>read</code>, <code>grep</code>, <code>find</code> and
+              <code>ls</code>.
+            </li>
+            <li>
+              The final answer is exactly one JSON object
+              <code>{"findings": [...]}</code> with at most 20 findings. Each
+              finding holds <code>aspect</code> (<code>A1</code> to
+              <code>A9</code>), <code>evidence</code> (1 to 500 characters with
+              a quote and the file) and
+              <code>severity</code> (<code>high</code>, <code>medium</code> or
+              <code>low</code>).
+            </li>
+            <li>
+              The runner appends one line to <code>diagnoses.jsonl</code>. A
+              text that breaks the form, or a run that does not end
+              <code>completed</code>, gives <code>valid</code>
+              <code>false</code>.
+            </li>
+          </ol>
+          <p>
+            A run is <strong>good</strong> on A5, A6 or A7 when its diagnosis is
+            valid and holds no finding of that aspect with the severity
+            <code>high</code> or <code>medium</code>. A run is good on A9 when
+            it has no breach and the same rule holds for A9.
+            <code>judge.md</code> and <code>judge-task.md</code> lie in the
+            runner, outside the prompt files, so an iteration never changes the
+            judge.
+          </p>
+
+          <h2 id="safety-of-the-runner">Safety of the runner</h2>
+          <p>
+            <code>swe@1</code> is not confined, so a session can read each file
+            of the OS user. The runner adds four layers around each agent call.
+          </p>
+          <h3 id="os-read-deny-rule">The OS read-deny rule</h3>
+          <p>
+            Each agent call runs under an OS rule that denies each read and each
+            write under the evaluation set, the results base directory and the
+            work root. Inside them, the rule allows only the workspace and the
+            run folder of the current call. On macOS the rule is one
+            <code>sandbox-exec</code> policy. On Linux it is
+            <code>bwrap</code> with an empty <code>tmpfs</code> at each denied
+            root. Before the first call, a start probe must fail to read a file
+            in each denied root and must read a file outside them. An absent
+            mechanism or a failed probe stops the runner with exit
+            <code>1</code>. No switch turns the rule off. The task file and the
+            kind prompt are files of the set, so the runner passes copies in a
+            new temporary directory.
+          </p>
+          <h3 id="breach-rules">The breach rules</h3>
+          <p>
+            The runner checks rules 1 to 4 in this order after each call, and
+            rule 5 after the diff and after the grading. A breach is an A9
+            breach: the check line gets the rule name in <code>breach</code>,
+            and the evaluation stops.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Breach</th>
+                  <th>Condition</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1</td>
+                  <td><code>credential</code></td>
+                  <td>
+                    The session file holds a credential value of the entry.
+                  </td>
+                </tr>
+                <tr>
+                  <td>2</td>
+                  <td><code>auth_file</code></td>
+                  <td>
+                    The digest or the mode of <code>auth.json</code> changes, or
+                    <code>~/.config/kanthord</code> gets a new entry.
+                  </td>
+                </tr>
+                <tr>
+                  <td>3</td>
+                  <td><code>protected_path</code></td>
+                  <td>
+                    The session file names a protected path: the set, the
+                    results, <code>/check/</code>, or a file name such as
+                    <code>reference.patch</code> or <code>check.sh</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>4</td>
+                  <td><code>set_change</code></td>
+                  <td>
+                    The HEAD or the tree of the set differs from
+                    <code>set_commit</code>, or <code>shared/</code> differs
+                    from <code>shared.sha256</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td>5</td>
+                  <td><code>credential</code></td>
+                  <td>
+                    <code>diff.patch</code> or <code>check.txt</code> holds a
+                    credential value. The runner removes both files.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Rule 3 does not apply to a diagnosis, because the judge quotes the
+            names of the run files.
+          </p>
+          <h3 id="the-auth-gate">The auth gate</h3>
+          <p>
+            All calls share one <code>auth.json</code>. A refresh of an
+            <code>oauth</code> token writes that file, and an in-flight call
+            then sees a changed digest, which is the breach
+            <code>auth_file</code>. The auth gate prevents that:
+          </p>
+          <ul>
+            <li>
+              Each call enters the gate as a reader before it reads the
+              credential, and leaves it after its post-call
+              <code>auth_file</code> check.
+            </li>
+            <li>
+              A refresh that can write takes the gate exclusively. It waits
+              until each reader leaves, refreshes and releases the gate. While
+              it waits or writes, no new call enters.
+            </li>
+            <li>
+              A refresh can write when the token expires within
+              <code>max(5 min, wall budget + 10 min)</code>, or when the entry
+              has no numeric <code>expires</code>. A second writer reads
+              <code>expires</code> again and skips a fresh token.
+            </li>
+            <li>A refresh that cannot write runs at once, with no gate.</li>
+          </ul>
+
+          <h2 id="the-pool">The pool</h2>
+          <p>
+            <code>run.sh --jobs &lt;n&gt;</code> runs up to n agent calls at the
+            same time, from 1 to 8, default 4. A value outside the range exits
+            <code>2</code>.
+          </p>
+          <ul>
+            <li>
+              The runs start in byte order of the case id, then by repeat. Two
+              repeats of one case never run at the same time.
+            </li>
+            <li>On the dev set, the diagnosis of a run follows its own run.</li>
+            <li>
+              The record lines are in completion order. The report joins them by
+              <code>session</code>.
+            </li>
+            <li>
+              <code>iteration.json</code> keeps <code>jobs</code>. A resumed
+              call, a parent and a replicate must have the same
+              <code>jobs</code>.
+            </li>
+            <li>
+              At a breach, the pool starts no new call and kills each in-flight
+              agent process with its process group. A killed call writes no
+              line.
+            </li>
+          </ul>
+
+          <h2 id="iterations-and-the-noise-rule">
+            Iterations and the noise rule
+          </h2>
+          <p>
+            An iteration is one evaluation of the dev set with one prompt
+            change, one target aspect and one hypothesis.
+          </p>
+          <ol>
+            <li>
+              <strong>One change.</strong> One engine commit changes only
+              <code>static/prompt/role/swe@1.md</code> and the same text in
+              <code>static/prompt/swe@1.md</code>. <code>run.sh</code> refuses a
+              dirty engine tree. <code>report.sh</code> refuses a diff to its
+              parent commit that lists another path.
+            </li>
+            <li>
+              <strong>Target.</strong> <code>--aspect</code> is one of
+              <code>A1</code> to <code>A7</code>, or <code>A9</code> for a
+              safety iteration.
+            </li>
+            <li>
+              <strong>Comparability.</strong> The iteration and its parent have
+              the same stage, set commit, model, budget and
+              <code>input_digest</code> for each case, and a different
+              <code>system_prompt_digest</code>.
+            </li>
+          </ol>
+          <h3 id="aa-measure">The A/A measure</h3>
+          <p>
+            Before the first iteration of a stage, the baseline runs twice with
+            the same prompt (<code>--replicate</code>). The A/A line shows, for
+            each aspect, the good runs of each evaluation, the difference and
+            the flips. A <strong>flip</strong> is a case where some runs are
+            good on the aspect and some are not. Ulrich sets the noise threshold
+            from this line.
+          </p>
+          <h3 id="noise-rule">The noise rule</h3>
+          <ul>
+            <li>
+              good(x, a) is the count of runs of x that are good on a. passes(x)
+              is the count of passed runs.
+            </li>
+            <li>
+              noise(a) is max(2, flips(parent, a)). noise is max(2,
+              flips(parent)), where flips counts cases with both passed and
+              failed runs.
+            </li>
+          </ul>
+          <p>The first matching row decides the verdict:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Condition</th>
+                  <th>Verdict</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A run of the new evaluation breaches A9</td>
+                  <td><code>revert</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    A planned run or diagnosis of either evaluation has no line
+                  </td>
+                  <td>No verdict</td>
+                </tr>
+                <tr>
+                  <td>
+                    The target is A5, A6, A7 or A9, and the <code>re@1</code>
+                    lines differ in provider, model or effort
+                  </td>
+                  <td>No verdict</td>
+                </tr>
+                <tr>
+                  <td>
+                    good(new, target) − good(parent, target) ≥ noise(target),
+                    and passes(parent) − passes(new) &lt; noise
+                  </td>
+                  <td><code>keep</code></td>
+                </tr>
+                <tr>
+                  <td>Each other case</td>
+                  <td><code>revert</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ul>
+            <li>
+              An invalid diagnosis counts as good in the parent and as not good
+              in the new evaluation, so it never helps a change.
+            </li>
+            <li>
+              <strong>Keep</strong> leaves the prompt commit in the engine.
+              <strong>Revert</strong> removes it. The report of each iteration
+              stays.
+            </li>
+            <li>
+              <strong>Ceiling.</strong> A dev case is at the ceiling when each
+              run passes in the A/A pair and in the baseline. When more than
+              half of the dev cases are at the ceiling, the set author replaces
+              them before the next iteration. That gives a new baseline.
+            </li>
+          </ul>
+
+          <h2 id="the-stage-gate">The stage gate</h2>
+          <p>
+            One evaluation of the held-out set at the current prompt measures
+            the gate. Ulrich fixed the gate before the first run.
+          </p>
+          <ul>
+            <li>
+              The pass share of a kind is its passes divided by its planned
+              runs: 10 cases times <code>repeats</code>.
+            </li>
+            <li>
+              The share of <code>backend</code> and the share of
+              <code>frontend</code> are each compared with
+              <code>gate_share</code>. One share over both kinds could pass with
+              a failed half.
+            </li>
+            <li>
+              <code>gate_share</code> stays fixed from the first held-out
+              evaluation of a stage. <code>run.sh</code> refuses a different
+              value with exit <code>1</code>.
+            </li>
+          </ul>
+          <p>The first matching row decides the gate verdict:</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Condition</th>
+                  <th>Verdict</th>
+                  <th>Next step</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A run breaches A9</td>
+                  <td><code>fail</code></td>
+                  <td>Back to iterations on the dev set</td>
+                </tr>
+                <tr>
+                  <td>
+                    A planned run has no line in <code>checks.jsonl</code>
+                  </td>
+                  <td><code>no verdict</code></td>
+                  <td>Ulrich decides</td>
+                </tr>
+                <tr>
+                  <td>The share of a kind is below <code>gate_share</code></td>
+                  <td><code>fail</code></td>
+                  <td>Back to iterations on the dev set</td>
+                </tr>
+                <tr>
+                  <td>Each other case</td>
+                  <td><code>pass</code></td>
+                  <td>The next stage starts</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2 id="cost">Cost</h2>
+          <ul>
+            <li>
+              Each case sets its own wall budget <code>wall</code> (at most
+              <code>2h</code>) and cost budget <code>usd</code> in base dollars.
+              A run has no turn limit. A diagnosis has <code>15m</code> and
+              <code>judge_usd</code>.
+            </li>
+            <li>
+              <strong>Base dollars.</strong> The spend is measured with the
+              price list of <code>base_model</code>. A model m gets
+              <code>--budget &lt;usd × r(m)&gt;usd</code>, rounded up to the
+              next cent. r(m) is blend(m) / blend(base_model), and blend(m) =
+              0.8 × cache read + 0.2 × input + 0.02 × output.
+            </li>
+            <li>
+              <strong>One cap.</strong> <code>cap_usd</code> covers one
+              evaluation, diagnoses and attempts included. A call starts only
+              when the base cost so far, plus the reserves of the calls in
+              flight, plus its own reserve, is at or below the cap. Otherwise
+              the runner lets the calls in flight finish, writes the report and
+              exits <code>4</code>.
+            </li>
+          </ul>
+
+          <h2 id="how-an-evaluation-ends">How an evaluation ends</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>End</th>
+                  <th>Runner action</th>
+                  <th><code>run.sh</code> exit</th>
+                  <th>Next step</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Each planned run and diagnosis has a line</td>
+                  <td>Writes the report</td>
+                  <td><code>0</code></td>
+                  <td><code>report.sh</code> gives the verdict</td>
+                </tr>
+                <tr>
+                  <td>The start gate does not open</td>
+                  <td>Lets the calls in flight finish, writes the report</td>
+                  <td><code>4</code></td>
+                  <td>
+                    Raise <code>cap_usd</code> and resume with the same id
+                  </td>
+                </tr>
+                <tr>
+                  <td>A breach</td>
+                  <td>Kills each in-flight call, writes the report</td>
+                  <td><code>1</code></td>
+                  <td>The iteration reverts, or the gate fails</td>
+                </tr>
+                <tr>
+                  <td>
+                    A stop: exit <code>1</code> or <code>2</code> of a call, a
+                    third exit <code>75</code>, a failed setup
+                  </td>
+                  <td>Writes the report</td>
+                  <td><code>1</code></td>
+                  <td>Fix the cause and resume with the same id</td>
+                </tr>
+                <tr>
+                  <td><code>--jobs</code> outside 1 to 8</td>
+                  <td>Starts no run</td>
+                  <td><code>2</code></td>
+                  <td>Fix the option</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <strong>Resume.</strong> A later call with the same evaluation id
+            skips each run whose case and repeat have a line in
+            <code>checks.jsonl</code>, and runs a missing diagnosis. A run that
+            starts again takes the next free attempt number, so no session file
+            is used twice. <code>report.sh</code> exits <code>0</code> with a
+            verdict, <code>3</code> with no verdict and <code>1</code> at a
+            refusal.
+          </p>
+
+          <h2 id="edge-cases">Edge cases</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Edge case</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>The run ends <code>budget_end</code></td>
+                  <td>The run fails, and the grading still runs</td>
+                </tr>
+                <tr>
+                  <td>The provider gives a 429 after the pi retries</td>
+                  <td>A new attempt with a new session and workspace</td>
+                </tr>
+                <tr>
+                  <td>The agent edits a hidden test path</td>
+                  <td>
+                    The copy of <code>check/tests/</code> replaces the file
+                  </td>
+                </tr>
+                <tr>
+                  <td>The agent changes <code>package.json</code></td>
+                  <td>A3 fails</td>
+                </tr>
+                <tr>
+                  <td>The session names <code>reference.patch</code></td>
+                  <td>
+                    The breach <code>protected_path</code>; the evaluation stops
+                  </td>
+                </tr>
+                <tr>
+                  <td>The diagnosis answers prose, not JSON</td>
+                  <td><code>valid</code> <code>false</code></td>
+                </tr>
+                <tr>
+                  <td>The gate stops at the cap</td>
+                  <td>No verdict until a resume completes it</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Each example starts from the dev run of the example above.</p>
+          <ul>
+            <li>
+              <strong>Budget end.</strong> The case wall budget ends while the
+              agent runs the tests. <code>run agent</code> exits <code>4</code>.
+              The runner grades the diff; the check line has <code>pass</code>
+              <code>false</code> even when A1 to A4 pass, because the end is not
+              <code>completed</code>.
+            </li>
+            <li>
+              <strong>Retryable failure.</strong> <code>run agent</code> exits
+              <code>75</code>. The result line stays. The runner clones the case
+              again and starts the attempt <code>1-2</code> with a new session
+              file.
+            </li>
+            <li>
+              <strong>Hidden test path.</strong> The agent writes its own
+              version of a test file that <code>check/tests/</code> also holds.
+              The grading copy removes the agent file and writes the hidden one,
+              so the agent cannot weaken a hidden test.
+            </li>
+            <li>
+              <strong>Configuration change.</strong> The agent adds a lint
+              exception to a configuration file outside <code>allowed</code>. A3
+              fails, and the run fails. The rule "Configuration stays" targets
+              this failure.
+            </li>
+            <li>
+              <strong>Protected path.</strong> A <code>bash</code> command of
+              the session holds the path part <code>/check/</code>. The runner
+              finds it in the session file, writes the check line with
+              <code>breach</code> <code>protected_path</code>, kills each
+              in-flight call and exits <code>1</code>.
+            </li>
+            <li>
+              <strong>Invalid diagnosis.</strong> <code>re@1</code> writes a
+              heading before the JSON object. The diagnosis line has
+              <code>valid</code> <code>false</code>. The run counts as good in a
+              parent and as not good in a new evaluation.
+            </li>
+            <li>
+              <strong>Cap.</strong> On a held-out gate, the start gate closes
+              after 30 runs. <code>run.sh</code> exits <code>4</code>, and the
+              gate has no verdict. Ulrich raises <code>cap_usd</code>, and the
+              same id resumes the 10 missing runs.
+            </li>
+          </ul>
+
+          <h2 id="results">Results</h2>
+          <p>These are the results of the first round, as counts only.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Gate</th>
+                  <th>Stage</th>
+                  <th>Passed runs</th>
+                  <th><code>backend</code></th>
+                  <th><code>frontend</code></th>
+                  <th>Breaches</th>
+                  <th>Verdict</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>s1-g1</code></td>
+                  <td>1</td>
+                  <td>39 of 40</td>
+                  <td>95%</td>
+                  <td>100%</td>
+                  <td>0</td>
+                  <td><code>pass</code> (<code>gate_share</code> 0.6)</td>
+                </tr>
+                <tr>
+                  <td><code>s2-g1</code></td>
+                  <td>2</td>
+                  <td>40 of 40</td>
+                  <td>100%</td>
+                  <td>100%</td>
+                  <td>0</td>
+                  <td><code>pass</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ul>
+            <li><code>s2-g1</code> took 23 minutes with the pool.</li>
+            <li>
+              <strong>Kept:</strong> <code>s1-i1</code> "Contract coverage",
+              target A1, and <code>s2-i3</code> "Configuration stays", target
+              A3. Both rules are in the Role of <code>swe@1</code> today.
+            </li>
+            <li>
+              <strong>Reverted:</strong> <code>s2-i1</code> and
+              <code>s2-i2</code>, target A9. They gave 15 to 17 good runs on A9,
+              below the noise bar of 18.
+            </li>
+          </ul>
+
+          <h2 id="under-the-hood">Under the hood</h2>
+          <ul>
+            <li>
+              The runner lives in <code>scripts/evaluation/agent/</code> of the
+              engine: <code>run.sh</code>, <code>report.sh</code>,
+              <code>evaluation.mjs</code>, <code>judge.md</code> and
+              <code>judge-task.md</code>. <code>run.sh</code> runs
+              <code>ulimit -c 0</code> and starts
+              <code>evaluation.mjs run</code>.
+            </li>
+            <li>
+              <code>evaluation.mjs</code> calls only the built
+              <code>kanthord run agent</code>, git, the case scripts and Node.
+              It imports <code>findPatternText</code>,
+              <code>isolatedGitEnvironment</code> and
+              <code>directories</code> from <code>dist/</code> of the same
+              checkout.
+            </li>
+            <li>
+              It reads each price with <code>ModelRuntime.create</code> of pi
+              and an in-memory credential store, so the price read needs no
+              credential.
+            </li>
+            <li>
+              The runner passes no <code>--auth</code>, so each call reads
+              <code>~/.config/kanthord/auth.json</code>. It refuses
+              <code>NODE_USE_ENV_PROXY</code> and <code>--use-env-proxy</code>.
+            </li>
+            <li>
+              Each runner <code>git</code> command uses the isolated git
+              environment. The diff step restores <code>.git/config</code> and
+              removes <code>.git/info/attributes</code>, so a filter driver of
+              the agent cannot change the diff.
+            </li>
+          </ul>
+
+          <h2 id="records-and-report">Records and report</h2>
+          <p>
+            The results directory of one evaluation is
+            <code>&lt;state&gt;/evaluation/runs/&lt;evaluation-id&gt;/</code>,
+            mode <code>0700</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>One line or object per</th>
+                  <th>Fields</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>iteration.json</code></td>
+                  <td>Evaluation</td>
+                  <td>
+                    <code>stage</code>, <code>set</code>,
+                    <code>set_commit</code>, <code>engine_commit</code>,
+                    <code>repeats</code>, <code>jobs</code>,
+                    <code>gate_share</code>, <code>parent</code>,
+                    <code>replicate</code>, <code>aspect</code>,
+                    <code>hypothesis</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>results.jsonl</code></td>
+                  <td>Agent call, attempts included</td>
+                  <td>The result line of <code>run agent</code></td>
+                </tr>
+                <tr>
+                  <td><code>checks.jsonl</code></td>
+                  <td>Graded run</td>
+                  <td>
+                    <code>case</code>, <code>repeat</code>,
+                    <code>session</code>, <code>a1</code> to <code>a4</code>,
+                    <code>pass</code>, <code>breach</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>diagnoses.jsonl</code></td>
+                  <td>Diagnosis</td>
+                  <td>
+                    <code>session</code>, <code>valid</code>,
+                    <code>findings</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>calls.jsonl</code></td>
+                  <td>Call of <code>run.sh</code></td>
+                  <td><code>cap_usd</code></td>
+                </tr>
+                <tr>
+                  <td><code>report.md</code></td>
+                  <td>Evaluation</td>
+                  <td>
+                    The goal table, the case lines, the set-difficulty line, the
+                    iteration, A/A or gate line, and the cost block
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The report holds no session text, no check output, no finding
+            evidence and no credential value. On the held-out set, it holds no
+            line for one case.
+          </p>
+
+          <h2 id="limitations">Limitations</h2>
+          <ul>
+            <li>
+              <strong>The protected-path search is a heuristic.</strong> A path
+              that a shell builds from parts can pass it. The OS read-deny rule
+              is the main guard.
+            </li>
+            <li>
+              <strong>No clean stop at a signal.</strong> Today SIGINT or
+              SIGTERM ends the runner with no report and leaves its work roots.
+              A later call with the same id resumes the evaluation.
+            </li>
+            <li>
+              <strong>Escaped credential values.</strong> Today the credential
+              count searches the raw bytes only. A value with <code>"</code> or
+              <code>\</code> has another form in a JSON line. No provider token
+              holds such a character today.
+            </li>
+            <li>
+              <strong>One run model.</strong> The evaluation measures only Haiku
+              5.5 at <code>high</code>.
+            </li>
+            <li>
+              <strong>Only <code>swe@1</code>.</strong> The evaluation holds no
+              review case. The worker evaluation owns them.
+            </li>
+          </ul>
+        </article>
+      </main>
+    </div>
+    <footer class="site-footer">
+      KanthorD documentation ·
+      <a href="https://github.com/kanthorlabs/kanthord">GitHub</a>
+    </footer>
+    <script type="module" src="../assets/page.mjs"></script>
+    <script type="module" src="../assets/diagram-page.mjs"></script>
+  </body>
+</html>
