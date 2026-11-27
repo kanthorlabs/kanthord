@@ -91,6 +91,9 @@ sed -i.bak -e "s/31415/$port/g" -e "s|^\\( *container_image:\\) .*|\\1 $image_na
 grep -q "^  container_image: $image_name\$" "$config" || die "worker.container_image is not $image_name in $config"
 "$binary" config validate --config "$config" >/dev/null || die "config validate failed"
 
+slot_volume=kanthord_slot_smoke-1
+"$engine" volume inspect "$slot_volume" >/dev/null 2>&1 &&
+	die "$engine holds the volume $slot_volume of an earlier run. Remove it with $engine volume rm $slot_volume"
 before=$(owned_names)
 "$binary" serve --config "$config" >"$home/serve.log" 2>&1 &
 server_pid=$!
@@ -135,6 +138,7 @@ cli project binding apply "$project_id" --file "$home/bindings.json" >/dev/null 
 
 slot_log="$home/state/kanthord/workers/smoke-1/stderr.log"
 refused=0
+exited=0
 for _ in $(seq 1 240); do
 	if cli worker registration list --project "$project_id" |
 		node -e '
@@ -143,37 +147,47 @@ process.exit(items.some((item) => item.placement === "container" && item.drainin
 '; then
 		die "a container slot registered. A slot runs without its sandbox probe. See $slot_log and $home/serve.log"
 	fi
-	if grep -q 'worker.slot.sandbox_unavailable' "$slot_log" 2>/dev/null; then
+	if grep -qF 'worker.slot.sandbox_unavailable' "$slot_log" 2>/dev/null; then
 		refused=1
 		break
 	fi
-	kill -0 "$server_pid" 2>/dev/null || break
+	if ! kill -0 "$server_pid" 2>/dev/null; then
+		exited=1
+		break
+	fi
 	sleep 0.5
 done
+if [ "$exited" = 1 ]; then
+	grep -qF 'worker.slot.sandbox_unavailable' "$slot_log" 2>/dev/null ||
+		die "the server exited before the slot logged worker.slot.sandbox_unavailable. See $slot_log and $home/serve.log"
+	refused=1
+fi
 [ "$refused" = 1 ] || die "no worker.slot.sandbox_unavailable line in $slot_log in 120 s. See $home/serve.log"
 log "container slot refused to start with worker.slot.sandbox_unavailable"
 
+owner=$("$engine" volume inspect --format "{{index .Labels \"$owner_label\"}}" "$slot_volume") ||
+	die "cannot read the owner label of the volume $slot_volume"
+[ -n "$owner" ] || die "the volume $slot_volume holds an empty $owner_label label"
+log "volume $slot_volume holds owner $owner"
 created=$(comm -13 <(printf '%s\n' "$before") <(owned_names) | head -n 1)
 if [ -n "$created" ]; then
-	owner=$("$engine" inspect --format "{{index .Config.Labels \"$owner_label\"}}" "$created") ||
+	label=$("$engine" inspect --format "{{index .Config.Labels \"$owner_label\"}}" "$created") ||
 		die "cannot read the owner label of $created"
-	[ -n "$owner" ] || die "$created holds an empty $owner_label label"
+	[ "$label" = "$owner" ] || die "$created holds the $owner_label label $label, not $owner"
 	log "container $created holds owner $owner"
 fi
 
 kill "$server_pid" && wait "$server_pid" 2>/dev/null
 server_pid=
-if [ -n "$owner" ]; then
-	gone=0
-	for _ in $(seq 1 40); do
-		if [ -z "$("$engine" ps --all --quiet --filter "label=$owner_label=$owner")" ]; then
-			gone=1
-			break
-		fi
-		sleep 0.5
-	done
-	[ "$gone" = 1 ] || die "a container with the owner label remained 20 s after the server stop"
-	log "no container with the owner label remains after the server stop"
-fi
+gone=0
+for _ in $(seq 1 40); do
+	if [ -z "$("$engine" ps --all --quiet --filter "label=$owner_label=$owner")" ]; then
+		gone=1
+		break
+	fi
+	sleep 0.5
+done
+[ "$gone" = 1 ] || die "a container with the owner label remained 20 s after the server stop"
+log "no container with the owner label remains after the server stop"
 
 log "container smoke passed for $binary"
