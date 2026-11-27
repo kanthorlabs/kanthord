@@ -674,9 +674,10 @@ flowchart LR
           </pre>
           <ul>
             <li>
-              A refusal writes no result and exit <code>1</code>. No model
-              request leaves before the session opens, so a refusal costs
-              nothing.
+              A refusal writes no result and exit <code>1</code>. A refusal
+              after the run directory exists, for example a failed start
+              precondition, also removes the run directory. No model request
+              leaves before the session opens, so a refusal costs nothing.
             </li>
             <li>
               A signal before the message leaves gives exit <code>2</code> and
@@ -718,7 +719,7 @@ flowchart LR
 %%{init: {"theme": "base", "themeVariables": {"background": "#f5f5f5", "primaryColor": "#f5f5f5", "primaryTextColor": "#2d3142", "actorBkg": "#f5f5f5", "actorBorder": "#4f5d75", "actorTextColor": "#2d3142", "actorLineColor": "#bfc0c0", "signalColor": "#4f5d75", "signalTextColor": "#2d3142", "noteBkgColor": "#ececec", "noteBorderColor": "#bfc0c0", "noteTextColor": "#2d3142", "activationBkgColor": "#fbeae1", "activationBorderColor": "#eb6c36"}, "themeCSS": "&amp; { background-color: #f5f5f5; }", "sequence": {"mirrorActors": false, "useMaxWidth": false}}}%%
 sequenceDiagram
     accTitle: One run of kanthord run agent swe@1
-    accDescr: The developer starts the command. The CLI checks the options, the session path, the pi directory and the auth file. It makes a run directory, removes the ambient credentials and installs the pi tools. It builds the model runtime with no network call and resolves the model. It composes the system prompt and calls openAgent. The agent runtime checks the start preconditions and opens a pi session with the guards. The CLI sends one message. pi calls the provider and runs tools until the turn ends. The CLI kills the tool processes, closes the session, removes the run directory, appends the result line and exits 0.
+    accDescr: The developer starts the command. The CLI checks the options, the session path, the pi directory and the auth file. It makes a run directory, removes the ambient credentials and installs the pi tools. It builds the model runtime with no network call and resolves the model. It composes the system prompt and calls openAgent. The agent runtime checks the start preconditions and opens a pi session with the guards. The CLI sends one message. pi calls the provider and runs tools until the turn ends. The agent runtime kills the tool processes and closes the session. The CLI removes the run directory, appends the result line and exits 0.
     autonumber
     participant D as Developer
     participant C as run agent (CLI)
@@ -739,8 +740,9 @@ sequenceDiagram
         L--&gt;&gt;P: Reply and tool calls
         P-&gt;&gt;P: Guards, then tools
     end
+    A-&gt;&gt;A: Kill tool processes, close the session
     A--&gt;&gt;C: Turn end: completed
-    C-&gt;&gt;C: Close, remove the run directory
+    C-&gt;&gt;C: Remove the run directory
     C--&gt;&gt;D: One result line, exit 0
           </pre>
           <ol>
@@ -932,7 +934,9 @@ sequenceDiagram
               consumer. <code>run agent</code> implements no consumer tool. So a
               run of <code>swe@1</code> through <code>run agent</code> has no
               <code>evidence-upload</code> and no <code>link_update_list</code>.
-              pi then declares only the built-in tools to the model.
+              pi then declares only the built-in tools to the model. A model
+              call of such a name gets the pi result
+              <code>Tool &lt;name&gt; not found</code>, and no tool runs.
             </li>
             <li>
               A consumer that passes a tool that the profile does not declare
@@ -1422,7 +1426,9 @@ Binding prompt of repository app:
           <p>
             pi compacts a long conversation into a summary. A rule or a task
             that only the old messages hold can then disappear. Two pins stop
-            that:
+            that. The system prompt pin keeps the rules for each consumer that
+            has it. Only a Worker execution also pins the task. Under
+            <code>run agent</code>, a compaction can summarize the task message.
           </p>
           <ul>
             <li>
@@ -1644,8 +1650,9 @@ Binding prompt of repository app:
                     a marker that it cannot restore.
                   </td>
                   <td>
-                    The model can still write a masked value into a file, and no
-                    tool receives the LLM credential.
+                    The model can write a value that it saw only as a marker
+                    into a file: the real value reaches the file. No tool
+                    receives the LLM credential.
                   </td>
                 </tr>
                 <tr>

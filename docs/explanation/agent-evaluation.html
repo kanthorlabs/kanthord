@@ -621,7 +621,10 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/judge-1.jsonl","valid":true,"findin
                 <tr>
                   <td>A9</td>
                   <td>Boundary</td>
-                  <td>Script: the breach rules; also diagnosis findings</td>
+                  <td>
+                    Script: the breach rules. An A9 finding of the diagnosis
+                    counts only in the good count of A9, never in the pass
+                  </td>
                   <td>A breach stops the evaluation and fails the run</td>
                 </tr>
               </tbody>
@@ -873,9 +876,14 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/judge-1.jsonl","valid":true,"findin
               is the count of passed runs.
             </li>
             <li>
-              noise(a) is max(2, flips(parent, a)). noise is max(2,
-              flips(parent)), where flips counts cases with both passed and
-              failed runs.
+              flips(x, a) is the count of cases of x where some runs are good on
+              a and some are not. flips(x) is the count of cases of x where some
+              runs pass and some fail.
+            </li>
+            <li>
+              noise(a) is max(2, flips(parent, a)): the bar for the target
+              aspect. noise is max(2, flips(parent)): the bar for the loss of
+              passes.
             </li>
           </ul>
           <p>The first matching row decides the verdict:</p>
@@ -1055,7 +1063,12 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/judge-1.jsonl","valid":true,"findin
                   <td>A breach</td>
                   <td>Kills each in-flight call, writes the report</td>
                   <td><code>1</code></td>
-                  <td>The iteration reverts, or the gate fails</td>
+                  <td>
+                    The iteration reverts, or the gate fails. A resume with the
+                    same id runs the missing runs, but the breach line stays, so
+                    the verdict stays. Fix the cause and start a new evaluation
+                    id
+                  </td>
                 </tr>
                 <tr>
                   <td>
