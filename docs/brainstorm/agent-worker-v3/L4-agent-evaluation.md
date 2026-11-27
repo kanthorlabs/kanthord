@@ -400,7 +400,7 @@ One evaluation of the dev set is one iteration. The first evaluation of a stage 
 2. **Hypothesis.** The iteration names its parent, one target aspect from A1 to A7 and a hypothesis text. `run.sh` writes them in `iteration.json` ([Iteration record](#iteration-record)).
 3. **Repeats.** Each case runs `repeats` times, at least 2.
 4. **Comparability.** The iteration and its parent have the same stage, the same set commit and equal common keys of L2 for each case ([L2 Comparison rule](L2-agent-cli.md#comparison-rule)). The `system_prompt_digest` of `swe@1` differs, except for an [A/A pair](#aa-measure). Else `report.sh` refuses the iteration.
-5. **Noise rule.** The rule is a hypothesis. Reason: a simulation with 10 cases and 2 repeats gives `keep` in 10% to 21% of iterations with no real change, and in 31% to 52% with a real gain of 0.2 on each uncertain case. Ulrich sets the threshold again from the [A/A measure](#aa-measure). Stage 1 uses noise(a) = max(2, flips(parent, a)) and noise = max(2, flips(parent)) (Ulrich, 2026-11-26). For an evaluation x and an aspect a:
+5. **Noise rule.** The rule is a hypothesis. Reason: a simulation with 10 cases and 2 repeats gives `keep` in 10% to 21% of iterations with no real change, and in 31% to 52% with a real gain of 0.2 on each uncertain case. Ulrich sets the threshold again from the [A/A measure](#aa-measure). Stage 1 uses noise(a) = max(2, flips(parent, a)) and noise = max(2, flips(parent)) (Ulrich, 2026-11-26). Stage 2 uses the same rule (Ulrich, 2026-11-27). For an evaluation x and an aspect a:
    - good(x, a) is the count of runs of x that are good on a. For A1 to A4, the check line gives it. For A5 to A7, the diagnosis gives it ([Diagnosis](#diagnosis)).
    - flips(x, a) is the count of cases where some runs of x are good on a and some runs are not.
    - passes(x) is the count of passed runs of x. flips(x) is the count of cases where some runs of x pass and some runs fail.
@@ -411,7 +411,7 @@ One evaluation of the dev set is one iteration. The first evaluation of a stage 
    - passes(parent) − passes(new) is less than noise;
    - no run of the new evaluation breaches A9.
 
-6. **Ceiling.** A dev case is at the ceiling when each run passes in the A/A pair and in the baseline of the stage. Before an iteration, the set author replaces the dev cases at the ceiling when more than half of the dev cases are at the ceiling (Ulrich, 2026-11-26). A replaced case gives a new set commit, so the next evaluation is a new baseline, with a new A/A measure.
+6. **Ceiling.** A dev case is at the ceiling when each run passes in the A/A pair and in the baseline of the stage. Before an iteration, the set author replaces the dev cases at the ceiling when more than half of the dev cases are at the ceiling (Ulrich, 2026-11-26). A replaced case gives a new set commit, so the next evaluation is a new baseline, with a new A/A measure. Stage 2 replaces its 7 dev cases at the ceiling before its first iteration (Ulrich, 2026-11-27).
 7. **Record.** Each iteration keeps its results directory, `iteration.json` and `report.md`. The report of a `revert` iteration stays. The prompt commit of a `revert` iteration leaves the engine.
 
 - **No verdict.** The iteration has no verdict when a planned run or a planned diagnosis of the two evaluations has no line, or when the target is A5, A6 or A7 and the `re@1` lines of the two evaluations differ in `provider`, `model` or `reasoning_effort`. A breach gives `revert`, also with a planned run with no line.
