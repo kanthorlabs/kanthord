@@ -218,8 +218,8 @@
                   </td>
                   <td>Prompt</td>
                   <td>
-                    A prompt change enters only with a measured effect above the
-                    run-to-run noise.
+                    A prompt change enters only with a measured gain of at least
+                    the run-to-run noise.
                   </td>
                   <td><code>swe@1</code> everywhere</td>
                 </tr>
@@ -236,8 +236,8 @@
                     conversation.
                   </td>
                   <td>
-                    System prompt pin: <code>run agent</code>, Worker. Work pin:
-                    Worker only
+                    System prompt pin: <code>run agent</code>, Worker,
+                    Workbench. Work pin: Worker only
                   </td>
                 </tr>
                 <tr>
@@ -324,17 +324,21 @@
                   </td>
                   <td>Guards</td>
                   <td>
-                    The session file and the result hold no credential value
-                    that a consumer gave.
+                    No input entry of the session file holds a known secret, and
+                    the result text shows a marker. Under
+                    <code>run agent</code>, a reply that echoes a secret stays
+                    unchanged and gives
+                    <code>cli.run.agent.secret_exposed</code>.
                   </td>
                   <td>All</td>
                 </tr>
                 <tr>
                   <td>12</td>
                   <td>
-                    An own pi directory under the KanthorD XDG state, an offline
-                    pi, and no user pi extension, skill, setting or context
-                    file. <code>run agent</code> also points
+                    An own pi directory (in the KanthorD XDG state, or
+                    <code>pi/</code> of the data directory of a worker
+                    instance), an offline pi, and no user pi extension, skill,
+                    setting or context file. <code>run agent</code> also points
                     <code>HOME</code> and <code>TMPDIR</code> to a new run
                     directory.
                   </td>
@@ -354,8 +358,9 @@
                   </td>
                   <td>Agent runtime</td>
                   <td>
-                    One run cannot change a later run except through files that
-                    the consumer names.
+                    KanthorD itself writes only these files. A
+                    <code>bash</code> command of <code>swe@1</code> can still
+                    write each file of the OS user.
                   </td>
                   <td><code>run agent</code></td>
                 </tr>
@@ -385,12 +390,15 @@
                   <td>16</td>
                   <td>
                     One process group for each <code>bash</code> command. The
-                    end of the command, a timeout and the end of the turn kill
-                    the group.
+                    end of the command and a timeout kill the group. Under
+                    <code>run agent</code>, the end of the turn also kills each
+                    live command.
                   </td>
                   <td>Agent runtime</td>
                   <td>No background process of the model outlives its run.</td>
-                  <td><code>run agent</code>, Worker</td>
+                  <td>
+                    <code>run agent</code>; Worker without the turn-end kill
+                  </td>
                 </tr>
                 <tr>
                   <td>17</td>
@@ -418,7 +426,7 @@
                   <td>Evaluation</td>
                   <td>
                     A prompt change of <code>swe@1</code> stays only when the
-                    measured gain is above the noise.
+                    measured gain is at least the noise.
                   </td>
                   <td>Evaluation</td>
                 </tr>
@@ -430,8 +438,9 @@
                   </td>
                   <td>Evaluation</td>
                   <td>
-                    The agent under test cannot read the hidden tests or change
-                    the credential file.
+                    The agent under test cannot read the hidden tests. A change
+                    of the credential file, or a credential value in a run file,
+                    stops the evaluation.
                   </td>
                   <td>Evaluation</td>
                 </tr>
@@ -456,8 +465,8 @@
             contract (<code>openAgent</code>). A Worker execution, a Workbench
             session and the <code>env@1</code> run use older open paths. So rows
             8, 13, 14, 15 and 17 apply only to <code>run agent</code>. The build
-            plan moves the Project Service and the Workbench onto the contract
-            in later steps.
+            plan moves the Project Service onto the contract next, the Workbench
+            at the rebase of its branch, and the Worker with the worker layer.
           </p>
 
           <h2 id="the-words-you-need">The words you need</h2>
@@ -674,9 +683,10 @@ flowchart LR
               no result.
             </li>
             <li>
-              Each of the five ends of an open session writes one result:
-              <code>completed</code> (exit <code>0</code>),
-              <code>budget_end</code> (exit <code>4</code>),
+              A second signal during the 10-second abort wait forces the stop at
+              once: exit <code>2</code> and no result. Each other end of an open
+              session writes one result: <code>completed</code> (exit
+              <code>0</code>), <code>budget_end</code> (exit <code>4</code>),
               <code>stopped</code> (exit <code>2</code>),
               <code>failed</code> with the class <code>terminal</code> (exit
               <code>5</code>) and <code>failed</code> with the class
@@ -748,8 +758,9 @@ sequenceDiagram
             <li>
               The CLI checks the <code>--auth</code> file. The option is absent,
               so the file is <code>~/.config/kanthord/auth.json</code> of the OS
-              user. The CLI reads only the <code>anthropic</code> entry and
-              writes nothing to the file.
+              user. The CLI checks the schema of every entry of the file, uses
+              only the <code>anthropic</code> entry and writes nothing to the
+              file.
             </li>
             <li>
               The CLI makes a run directory in <code>TMPDIR</code>, with
@@ -870,6 +881,51 @@ sequenceDiagram
               </tbody>
             </table>
           </div>
+          <p>
+            The agent contract checks the start preconditions of the profile
+            before it opens the session. A failed precondition refuses the start
+            with a reason that starts with its id. Under
+            <code>run agent</code>, the refusal is
+            <code>cli.run.agent.start_refused</code> with exit <code>1</code>.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Id</th>
+                  <th>Condition</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>workspace_directory</code></td>
+                  <td>
+                    The working directory and each root are directories that
+                    exist.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>git_worktree</code></td>
+                  <td>
+                    Each root is the top level of its git worktree. A
+                    subdirectory of a worktree fails.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>git_clean</code></td>
+                  <td>
+                    Each root has no uncommitted change and no untracked file.
+                    An ignored file is no change.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Each check runs <code>git</code> with an isolated environment, no
+            hook and no fsmonitor, and a deadline of 30 seconds. It changes no
+            file of the workspace.
+          </p>
           <ul>
             <li>
               A consumer tool is declared in the profile but implemented by the
@@ -929,6 +985,19 @@ sequenceDiagram
                   <td><code>env@1</code></td>
                 </tr>
                 <tr>
+                  <td>Working directory</td>
+                  <td>
+                    <code>--workspace</code>, default the current directory
+                  </td>
+                  <td>The workspace of the execution</td>
+                  <td>
+                    <code
+                      >~/.local/state/kanthord/workbench/&lt;agent_name&gt;</code
+                    >
+                  </td>
+                  <td>The checkout of the binding</td>
+                </tr>
+                <tr>
                   <td>System prompt</td>
                   <td>
                     <code>base.md</code>, <code>coding.md</code>, the Role, then
@@ -967,6 +1036,13 @@ sequenceDiagram
                   <td><code>re@1</code></td>
                   <td>No</td>
                   <td>Yes</td>
+                </tr>
+                <tr>
+                  <td>System prompt pin</td>
+                  <td>Yes</td>
+                  <td>Yes</td>
+                  <td>Yes</td>
+                  <td>No</td>
                 </tr>
                 <tr>
                   <td>Work pin</td>
@@ -1028,8 +1104,8 @@ sequenceDiagram
             Today a Worker execution, a Workbench session and the
             <code>env@1</code> run do not use the agent contract, so they have
             no start preconditions and they redact the LLM output. The build
-            plan moves the Project Service onto the contract next, and the
-            Workbench at the rebase of its branch.
+            plan moves the Project Service onto the contract next, the Workbench
+            at the rebase of its branch, and the Worker with the worker layer.
           </p>
 
           <h2 id="the-reviewer-re1">The reviewer re@1</h2>
@@ -1052,9 +1128,11 @@ sequenceDiagram
           </ul>
           <p>
             <code>re@1</code> has no tool that writes a file or runs a command.
-            It is confined, so its file tools read only inside its workspace.
-            Its prompt also forbids a change to the repository. The tool set
-            enforces that rule; the prompt only states it.
+            Under <code>run agent</code> and in a Worker execution it is
+            confined, so its file tools read only inside its workspace. A
+            Workbench session does not confine it. Its prompt also forbids a
+            change to the repository. The tool set enforces that rule; the
+            prompt only states it.
           </p>
           <p>
             <code>re@1</code> reads the same <code>base.md</code> and the same
@@ -1106,11 +1184,11 @@ Binding prompt of repository app:
             <li>
               <code>run agent</code> takes the profile prompt from
               <code>profilePrompt</code>: <code>base.md</code>,
-              <code>coding.md</code> (not for <code>env@1</code>) and
-              <code>role/&lt;profile&gt;.md</code>. Each
-              <code>--system-prompt</code> part follows, with no heading. A
-              <code>--system-prompt</code> part never replaces the profile
-              prompt.
+              <code>coding.md</code> (not for <code>env@1</code>) and the Role
+              <code>role/&lt;profile&gt;.md</code> (<code>env@1.md</code> for
+              <code>env@1</code>). Each <code>--system-prompt</code> part
+              follows, with no heading. A <code>--system-prompt</code> part
+              never replaces the profile prompt.
             </li>
             <li>
               A server consumer takes layer 1 from the agent declaration:
@@ -1145,6 +1223,18 @@ Binding prompt of repository app:
               the code instead.
             </li>
           </ul>
+
+          <h3 id="text-or-path">Text or path</h3>
+          <p>
+            A <code>--prompt</code> or <code>--system-prompt</code> value is a
+            path only when it looks like one: it starts with <code>/</code>,
+            <code>./</code> or <code>../</code>, or it holds no whitespace and
+            holds a <code>/</code> or ends with a short extension such as
+            <code>.md</code>. Each other value is text. When no file exists at a
+            path, the value becomes literal text, and stderr gets the notice
+            <code>cli.run.agent.prompt_text_path</code>. To read the file
+            <code>README</code>, write <code>./README</code>.
+          </p>
 
           <h3 id="the-three-prompt-layers">The three prompt layers</h3>
           <p>
@@ -1313,6 +1403,10 @@ Binding prompt of repository app:
               &lt;name&gt;</code
             >
             resolves each reference and checks each digest.
+            <code>kanthord agent get &lt;agent&gt;</code> answers the composed
+            stack of an agent; the
+            <a href="../reference/agent/agent.html">agent reference</a> gives
+            its views.
             <a href="../reference/agent/prompt.html"
               >Resolve the prompt of an execution</a
             >
@@ -1462,12 +1556,15 @@ Binding prompt of repository app:
               them from <code>PATH</code>.
             </li>
             <li>
-              <strong><code>bash</code></strong> runs each command in its own
-              process group, as the OS user of KanthorD. The timeout of each
-              command is at most 10 minutes and at most the remaining wall
-              budget. At the end of the command, KanthorD kills the group, so a
-              background process does not survive. At the end of the turn,
-              KanthorD kills each live command.
+              <strong><code>bash</code></strong> runs each command as the OS
+              user of KanthorD, in its own process group. Under
+              <code>run agent</code> and in a Worker execution, the timeout of
+              each command is at most 10 minutes and at most the remaining wall
+              budget, and the end of the command kills the group, so a
+              background process does not survive. Under <code>run agent</code>,
+              the end of the turn also kills each live command. A Workbench
+              command has no timeout cap, and the end of the command does not
+              kill its group.
             </li>
             <li>
               <strong>Worker tools.</strong>
@@ -1484,6 +1581,22 @@ Binding prompt of repository app:
                 >operation tool reference</a
               >
               lists every tool.
+            </li>
+            <li>
+              An operation becomes a tool when its access is human, it is not a
+              stream and it handles no secret. The tool name is the operation id
+              with each <code>.</code> replaced by <code>--</code>, for example
+              <code>mission--node--create</code>. The agent cannot call the 13
+              operations that handle a secret or pin a host key:
+              <code>llm.credential.create</code>, <code>.rotate</code>,
+              <code>.check</code> and <code>.login_code</code>;
+              <code>repository.credential.create</code>, <code>.rotate</code>,
+              <code>.check</code>, <code>.ssh_key_create</code> and
+              <code>.ssh_key_rotate</code>;
+              <code>repository.host_key.pin</code>;
+              <code>storage.credential.create</code>, <code>.rotate</code> and
+              <code>.check</code>. A human does these in the dashboard or the
+              CLI.
             </li>
           </ul>
 
@@ -1558,7 +1671,10 @@ Binding prompt of repository app:
                       >&lt;redacted:&lt;rule&gt;:&lt;index&gt;:&lt;tag&gt;&gt;</code
                     >.
                   </td>
-                  <td>The session file and the model hold no secret value.</td>
+                  <td>
+                    No input entry of the session file holds a secret value, and
+                    the model never receives one.
+                  </td>
                 </tr>
                 <tr>
                   <td>Output finding</td>
@@ -1635,7 +1751,11 @@ Binding prompt of repository app:
                 </tr>
                 <tr>
                   <td><code>stopped</code></td>
-                  <td>SIGINT or SIGTERM during the turn.</td>
+                  <td>
+                    SIGINT or SIGTERM during the turn. Today a wall limit that
+                    fires during the abort gives
+                    <code>budget_end</code> instead.
+                  </td>
                   <td><code>terminal</code></td>
                   <td><code>2</code></td>
                 </tr>
@@ -1663,7 +1783,9 @@ Binding prompt of repository app:
               pi retries a retryable error up to 3 times inside the session.
               <code>run agent</code> retries nothing by itself. A consumer
               retries an exit <code>75</code> with a new
-              <code>--session</code> path.
+              <code>--session</code> path and a workspace that passes the start
+              preconditions. For <code>swe@1</code>, reset or clone the worktree
+              again first, as the evaluation does.
             </li>
             <li>
               The first signal aborts the turn, and the run waits at most 10
@@ -1835,7 +1957,10 @@ Binding prompt of repository app:
                       >~/.local/state/kanthord/pi/sessions/workbench/&lt;agent_name&gt;/</code
                     >
                   </td>
-                  <td>Durable, survives a restart</td>
+                  <td>
+                    Durable. After a restart, KanthorD reopens the file by its
+                    session id; a turn that ran at the restart is lost
+                  </td>
                   <td>The Workbench Service</td>
                 </tr>
                 <tr>

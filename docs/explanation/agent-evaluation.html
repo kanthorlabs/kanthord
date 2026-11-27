@@ -100,7 +100,8 @@
             </li>
             <li>
               A prompt change stays only when its gain on the target aspect is
-              at least the noise of its parent.
+              at least the noise of its parent, and it loses fewer passes than
+              the pass noise.
             </li>
             <li>
               The runner stops the whole evaluation at the first breach of its
@@ -280,7 +281,7 @@ scripts/evaluation/agent/report.sh --evaluation s1-g1</code></pre>
 checks.jsonl     {"case":"&lt;case-id&gt;","repeat":1,"session":"&lt;run dir&gt;/session.jsonl",
                   "a1":true,"a2":true,"a3":true,"a4":true,"pass":true,"breach":null}
 results.jsonl    {"agent":"re@1","end":"completed","session":"&lt;run dir&gt;/judge-1.jsonl", ...}
-diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findings":[]}</code></pre>
+diagnoses.jsonl  {"session":"&lt;run dir&gt;/judge-1.jsonl","valid":true,"findings":[]}</code></pre>
           <p>The gate line of a report has this form:</p>
           <pre><code>gate: pass share backend 95.0%, pass share frontend 100.0%, gate_share 0.6,
   breaches 0, earlier held-out evaluations &lt;n&gt;, verdict pass</code></pre>
@@ -459,8 +460,12 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
             </li>
           </ol>
           <p>
-            The exit code of each <code>run agent</code> call decides the next
-            action. The first matching row decides:
+            An <strong>attempt</strong> is one <code>run agent</code> call of
+            one run; an exit <code>75</code> starts the next attempt in a new
+            run folder
+            <code>&lt;case-id&gt;/&lt;repeat&gt;-&lt;attempt&gt;/</code>. The
+            exit code of each call decides the next action. The first matching
+            row decides:
           </p>
           <div class="table-wrap">
             <table>
@@ -625,9 +630,11 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
 
           <h2 id="the-diagnosis">The diagnosis</h2>
           <p>
-            The diagnosis explains a dev run. It never changes a pass. The
-            held-out set gets no diagnosis, because a text about a held-out case
-            could reach a prompt change.
+            The diagnosis explains a dev run. It never changes a pass. It
+            decides the good count of A5, A6, A7 and A9, so it decides the
+            verdict of an iteration that targets one of them. The held-out set
+            gets no diagnosis, because a text about a held-out case could reach
+            a prompt change.
           </p>
           <ol>
             <li>
@@ -675,9 +682,10 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
           <h2 id="safety-of-the-runner">Safety of the runner</h2>
           <p>
             <code>swe@1</code> is not confined, so a session can read each file
-            of the OS user. The runner adds four layers around each agent call.
+            of the OS user. The runner adds three layers around each agent call:
+            the OS read-deny rule, the breach rules and the auth gate.
           </p>
-          <h3 id="os-read-deny-rule">The OS read-deny rule</h3>
+          <h3 id="the-os-read-deny-rule">The OS read-deny rule</h3>
           <p>
             Each agent call runs under an OS rule that denies each read and each
             write under the evaluation set, the results base directory and the
@@ -692,7 +700,7 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
             kind prompt are files of the set, so the runner passes copies in a
             new temporary directory.
           </p>
-          <h3 id="breach-rules">The breach rules</h3>
+          <h3 id="the-breach-rules">The breach rules</h3>
           <p>
             The runner checks rules 1 to 4 in this order after each call, and
             rule 5 after the diff and after the grading. A breach is an A9
@@ -755,7 +763,10 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
           </div>
           <p>
             Rule 3 does not apply to a diagnosis, because the judge quotes the
-            names of the run files.
+            names of the run files. Before each call, the runner also applies
+            rule 2 to the mode and the directory, and rule 1 to each input file
+            of a diagnosis. The credential values are the keys and tokens of
+            every entry of <code>auth.json</code>.
           </p>
           <h3 id="the-auth-gate">The auth gate</h3>
           <p>
@@ -797,8 +808,9 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
             </li>
             <li>On the dev set, the diagnosis of a run follows its own run.</li>
             <li>
-              The record lines are in completion order. The report joins them by
-              <code>session</code>.
+              The record lines are in completion order. The report joins a check
+              line and a result line by <code>session</code>, and a diagnosis by
+              its run folder.
             </li>
             <li>
               <code>iteration.json</code> keeps <code>jobs</code>. A resumed
@@ -806,9 +818,9 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
               <code>jobs</code>.
             </li>
             <li>
-              At a breach, the pool starts no new call and kills each in-flight
-              agent process with its process group. A killed call writes no
-              line.
+              At the first breach or stop, the pool starts no new call and kills
+              each in-flight agent process with its process group. A killed call
+              writes no line.
             </li>
           </ul>
 
@@ -834,12 +846,18 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
             </li>
             <li>
               <strong>Comparability.</strong> The iteration and its parent have
-              the same stage, set commit, model, budget and
-              <code>input_digest</code> for each case, and a different
-              <code>system_prompt_digest</code>.
+              the same stage and set commit, equal <code>engine_version</code>,
+              <code>provider</code>, <code>model</code> and
+              <code>reasoning_effort</code>, equal <code>input_digest</code> and
+              <code>budget</code> for each case, equal <code>jobs</code> and one
+              <code>re@1</code> system prompt digest. The
+              <code>system_prompt_digest</code> of <code>swe@1</code> differs;
+              only an A/A pair has one digest. Otherwise
+              <code>report.sh</code> refuses with exit <code>1</code> and writes
+              no report.
             </li>
           </ol>
-          <h3 id="aa-measure">The A/A measure</h3>
+          <h3 id="the-aa-measure">The A/A measure</h3>
           <p>
             Before the first iteration of a stage, the baseline runs twice with
             the same prompt (<code>--replicate</code>). The A/A line shows, for
@@ -848,7 +866,7 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
             good on the aspect and some are not. Ulrich sets the noise threshold
             from this line.
           </p>
-          <h3 id="noise-rule">The noise rule</h3>
+          <h3 id="the-noise-rule">The noise rule</h3>
           <ul>
             <li>
               good(x, a) is the count of runs of x that are good on a. passes(x)
@@ -1023,7 +1041,11 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
                 </tr>
                 <tr>
                   <td>The start gate does not open</td>
-                  <td>Lets the calls in flight finish, writes the report</td>
+                  <td>
+                    Lets the calls in flight finish when the gate closes before
+                    a run starts. Kills them when the gate closes before a
+                    diagnosis or a retry. Writes the report
+                  </td>
                   <td><code>4</code></td>
                   <td>
                     Raise <code>cap_usd</code> and resume with the same id
@@ -1038,9 +1060,11 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
                 <tr>
                   <td>
                     A stop: exit <code>1</code> or <code>2</code> of a call, a
-                    third exit <code>75</code>, a failed setup
+                    third exit <code>75</code>, the notice
+                    <code>cli.run.agent.prompt_text_path</code>, a failed
+                    credential refresh, a failed clone or <code>setup.sh</code>
                   </td>
-                  <td>Writes the report</td>
+                  <td>Kills each in-flight call, writes the report</td>
                   <td><code>1</code></td>
                   <td>Fix the cause and resume with the same id</td>
                 </tr>
@@ -1058,9 +1082,14 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
             skips each run whose case and repeat have a line in
             <code>checks.jsonl</code>, and runs a missing diagnosis. A run that
             starts again takes the next free attempt number, so no session file
-            is used twice. <code>report.sh</code> exits <code>0</code> with a
-            verdict, <code>3</code> with no verdict and <code>1</code> at a
-            refusal.
+            is used twice. A resume refuses with exit <code>1</code> when
+            <code>--stage</code>, <code>--set</code>, <code>--jobs</code>,
+            <code>--parent</code>, <code>--replicate</code>,
+            <code>--aspect</code> or <code>--hypothesis</code> differs from
+            <code>iteration.json</code>, when the set commit moved, or when the
+            engine tree is dirty. <code>report.sh</code> exits
+            <code>0</code> with a verdict, <code>3</code> with no verdict and
+            <code>1</code> at a refusal.
           </p>
 
           <h2 id="edge-cases">Edge cases</h2>
@@ -1203,7 +1232,8 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
             <li>
               <strong>Reverted:</strong> <code>s2-i1</code> and
               <code>s2-i2</code>, target A9. They gave 15 to 17 good runs on A9,
-              below the noise bar of 18.
+              below 18, the good-run count that <code>keep</code> needed: the
+              good runs of the parent plus noise(A9).
             </li>
           </ul>
 
@@ -1259,6 +1289,20 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td>
+                    Run folder
+                    <code>&lt;case-id&gt;/&lt;repeat&gt;-&lt;attempt&gt;/</code>
+                  </td>
+                  <td>Attempt of one run</td>
+                  <td>
+                    <code>session.jsonl</code>, <code>result.jsonl</code>,
+                    <code>stderr.txt</code>, <code>diff.patch</code>,
+                    <code>check.txt</code> and, on the dev set,
+                    <code>judge-&lt;n&gt;.jsonl</code> with its stderr and
+                    result files
+                  </td>
+                </tr>
                 <tr>
                   <td><code>iteration.json</code></td>
                   <td>Evaluation</td>
@@ -1332,6 +1376,17 @@ diagnoses.jsonl  {"session":"&lt;run dir&gt;/session.jsonl","valid":true,"findin
               count searches the raw bytes only. A value with <code>"</code> or
               <code>\</code> has another form in a JSON line. No provider token
               holds such a character today.
+            </li>
+            <li>
+              <strong>Agent calls survive the runner.</strong> Today in-flight
+              agent calls run in their own process groups and keep running after
+              the runner ends at a signal.
+            </li>
+            <li>
+              <strong>The credential file is readable.</strong> The OS rule does
+              not deny <code>~/.config/kanthord</code>. A command of
+              <code>swe@1</code> can read <code>auth.json</code>. The breach
+              rules find a value only when it reaches a run file.
             </li>
             <li>
               <strong>One run model.</strong> The evaluation measures only Haiku
