@@ -190,7 +190,7 @@ Each pull request is one engine pull request into `feature/agent-v2` ([LA How ea
 - `evaluation.mjs` adds `A9` to `ASPECT_VALUES` and to `DIAGNOSED_ASPECTS` ([LA-D21](LA-agent-build.md)). `--aspect` accepts `A1` to `A7` or `A9`.
 - `goodOnRunNoise` gives not good on A9 for a run with a breach. It is the one rule of good on A5 to A7 and A9: the verdict, the flips, the A/A line and the report lines use it. `goodRuns` uses it for the new evaluation, so an invalid diagnosis is not good there.
 - The report prints `A9 good runs: <n>, findings: ...` on the dev set. The case lines, the diff line and the A/A line hold A9. The "No verdict" rule for different `re@1` keys covers A9.
-- Baseline test count of `evaluation.test.mjs`: 335 (after PR 10b). PR 11 adds 6 tests: 341.
+- Baseline test count of `evaluation.test.mjs`: 335 (after PR 10b). PR 11 adds 7 tests: 342. One test counts a case with one breach run and one clean run as one A9 flip.
 - Makes pass: L4 unit-level rules 6 and 7 for A9.
 - `main` works: an iteration can target A9.
 
