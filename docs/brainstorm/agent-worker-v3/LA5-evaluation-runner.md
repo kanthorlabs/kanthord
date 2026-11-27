@@ -184,6 +184,16 @@ Each pull request is one engine pull request into `feature/agent-v2` ([LA How ea
 - `main` works: the runner runs up to 4 agent calls at a time.
 - **Open question.** With `detached: true`, Ctrl-C (SIGINT to the terminal process group) no longer reaches the child agent processes by default. The evaluation continues after a Ctrl-C, which is incorrect. The fix is to add SIGINT and SIGTERM handlers on the pool's `AbortController` before the pool starts, and remove them after. This is tracked in HANDOFF under Agent component.
 
+### PR 11. Let a safety iteration target A9
+
+- Files: `evaluation.mjs`, `evaluation.test.mjs`.
+- `evaluation.mjs` adds `A9` to `ASPECT_VALUES` and to `DIAGNOSED_ASPECTS` ([LA-D21](LA-agent-build.md)). `--aspect` accepts `A1` to `A7` or `A9`.
+- `goodOnRunNoise` gives not good on A9 for a run with a breach. It is the one rule of good on A5 to A7 and A9: the verdict, the flips, the A/A line and the report lines use it. `goodRuns` uses it for the new evaluation, so an invalid diagnosis is not good there.
+- The report prints `A9 good runs: <n>, findings: ...` on the dev set. The case lines, the diff line and the A/A line hold A9. The "No verdict" rule for different `re@1` keys covers A9.
+- Baseline test count of `evaluation.test.mjs`: 335 (after PR 10b). PR 11 adds 6 tests: 341.
+- Makes pass: L4 unit-level rules 6 and 7 for A9.
+- `main` works: an iteration can target A9.
+
 ## End-to-end checks
 
 (LA5 ends when these pass)

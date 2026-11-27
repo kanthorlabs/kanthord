@@ -414,7 +414,7 @@ One evaluation of the dev set is one iteration. The first evaluation of a stage 
 6. **Ceiling.** A dev case is at the ceiling when each run passes in the A/A pair and in the baseline of the stage. Before an iteration, the set author replaces the dev cases at the ceiling when more than half of the dev cases are at the ceiling (Ulrich, 2026-11-26). A replaced case gives a new set commit, so the next evaluation is a new baseline, with a new A/A measure. Stage 2 replaces its 7 dev cases at the ceiling before its first iteration (Ulrich, 2026-11-27).
 7. **Record.** Each iteration keeps its results directory, `iteration.json` and `report.md`. The report of a `revert` iteration stays. The prompt commit of a `revert` iteration leaves the engine.
 
-- **No verdict.** The iteration has no verdict when a planned run or a planned diagnosis of the two evaluations has no line, or when the target is A5, A6 or A7 and the `re@1` lines of the two evaluations differ in `provider`, `model` or `reasoning_effort`. A breach gives `revert`, also with a planned run with no line.
+- **No verdict.** The iteration has no verdict when a planned run or a planned diagnosis of the two evaluations has no line, or when the target is A5, A6, A7 or A9 and the `re@1` lines of the two evaluations differ in `provider`, `model` or `reasoning_effort`. A breach gives `revert`, also with a planned run with no line.
 
 ### A/A measure
 
@@ -422,7 +422,7 @@ Before the first iteration of a stage, the baseline runs twice with the same pro
 
 1. The second evaluation names the first with `--replicate <id>`. `run.sh` writes `replicate` in `iteration.json`.
 2. `report.sh` accepts one `system_prompt_digest` in the two evaluations only for such a pair. Each other check of [Iteration](#iteration), rule 4, holds.
-3. The report of the second evaluation holds the A/A line: for each aspect A1 to A7, good(first, a), good(second, a), the difference and flips(first, a); and passes(first), passes(second) and the difference.
+3. The report of the second evaluation holds the A/A line: for each aspect A1 to A7 and A9, good(first, a), good(second, a), the difference and flips(first, a); and passes(first), passes(second) and the difference.
 4. Ulrich sets the threshold of the noise rule from the A/A line before the first iteration of the stage.
 
 - An invalid diagnosis counts as good in the parent and as not good in the new evaluation. Reason: an invalid diagnosis then never helps the change.
@@ -553,7 +553,7 @@ Each line of `diagnoses.jsonl` holds `session`, `valid` and `findings`.
 | ---------- | ------------------------------------------------------------------------------------ |
 | `session`  | The join to the check line and to the `swe@1` result line. The resume of a diagnosis |
 | `valid`    | The report: the count of invalid diagnoses. The noise rule                           |
-| `findings` | The report: the count for each aspect and severity. The noise rule for A5, A6 and A7 |
+| `findings` | The report: the count for each aspect and severity. The noise rule for A5, A6, A7 and A9 |
 
 - The `re@1` result lines of the diagnosis give its cost. The runner joins the last `re@1` line whose `session` is `<run directory>/judge-<n>.jsonl`.
 
@@ -596,7 +596,7 @@ The runner is a set of scripts in the engine repository: `scripts/evaluation/age
 ### `run.sh`
 
 ```text
-run.sh --evaluation <id> --stage <1|2> --set <dev|held-out> [--jobs <n>] [--parent <id> --aspect <A1..A7> --hypothesis <text> | --replicate <id>]
+run.sh --evaluation <id> --stage <1|2> --set <dev|held-out> [--jobs <n>] [--parent <id> --aspect <A1..A7|A9> --hypothesis <text> | --replicate <id>]
 ```
 
 | Option         | Question it answers                                | Rule                                                                                            |
@@ -606,7 +606,7 @@ run.sh --evaluation <id> --stage <1|2> --set <dev|held-out> [--jobs <n>] [--pare
 | `--set`        | Which cases run?                                   | Required. `dev` or `held-out`                                                                   |
 | `--jobs`       | How many agent calls run at one time?              | Optional. An integer from 1 to 8. Default 4. A value outside the range exits `2`               |
 | `--parent`     | Which evaluation does this iteration compare with? | Optional. Only with `--set dev`. It requires `--aspect` and `--hypothesis`                      |
-| `--aspect`     | Which aspect does the prompt change target?        | Only with `--parent`. One of `A1` to `A7`                                                       |
+| `--aspect`     | Which aspect does the prompt change target?        | Only with `--parent`. One of `A1` to `A7`, or `A9`                                              |
 | `--hypothesis` | What does the prompt change expect?                | Only with `--parent`. A text of 1 to 500 characters                                             |
 | `--replicate`  | Which baseline does this evaluation repeat?        | Optional. Only with `--set dev` and with no `--parent` ([A/A measure](#aa-measure))             |
 
@@ -638,11 +638,11 @@ report.sh --evaluation <id>
 
 4. It writes `report.md` in the results directory:
    - the head: the evaluation id, the stage, the set, the set commit, and, with a parent, the parent, the target aspect and the hypothesis;
-   - the goal table: for A1 to A4, the count of good runs; for A5 to A7, the count of findings of each severity and the count of good runs; on the dev set, for each other aspect, the count of findings of each severity; for A8, the median and the sum of the base cost, and the median `duration_ms`, `model_calls` and `tool_calls`; for A9, the count of breaches and the name of each breach rule; the count of runs for each `end`;
+   - the goal table: for A1 to A4, the count of good runs; for A5 to A7, the count of findings of each severity and the count of good runs; on the dev set, for each other aspect, the count of findings of each severity; for A8, the median and the sum of the base cost, and the median `duration_ms`, `model_calls` and `tool_calls`; for A9, the count of breaches and the name of each breach rule; on the dev set, for A9, the count of good runs next to the count of findings of each severity; the count of runs for each `end`;
    - the passes and the planned runs, and the count of invalid diagnoses;
-   - on the dev set, one line for each case: the passes, and the good runs for each aspect A1 to A7;
+   - on the dev set, one line for each case: the passes, and the good runs for each aspect A1 to A7 and A9;
    - on the dev set, the set-difficulty line: the count of ceiling cases, where each run passes, and of floor cases, where no run passes, of the case count;
-   - with a parent, the iteration line: good(parent, target), good(new, target), noise(target), passes(parent), passes(new), noise, and the verdict `keep`, `revert` or `no verdict`; and for each aspect A1 to A7, good(new, a) − good(parent, a);
+   - with a parent, the iteration line: good(parent, target), good(new, target), noise(target), passes(parent), passes(new), noise, and the verdict `keep`, `revert` or `no verdict`; and for each aspect A1 to A7 and A9, good(new, a) − good(parent, a);
    - with `replicate`, the A/A line of [A/A measure](#aa-measure);
    - on the held-out set, the gate line: the pass share of each kind, `gate_share`, the count of breaches, the count of earlier held-out evaluations of the stage, in stage 2 the pass share of each kind of the last passed stage 1 gate, and the verdict `pass`, `fail` or `no verdict`;
    - the cost block.
@@ -805,14 +805,14 @@ These rules hold with no process and no LLM stub, so their tests are unit tests 
 3. **The pass rule and the grading steps.** Each condition of [Pass rule](#pass-rule), with each end of a result line and each breach. A 0-byte diff skips the apply. A failed apply fails A1, A2 and A4. A failed copy fails A1 and A2. A failed `add` or `diff` fails A1 to A4. The copy removes a destination entry after an `lstat`, also a symbolic link.
 4. **The scope rules and the frontend rules.** Each rule of [Scope rules](#scope-rules) and of [Frontend rules](#frontend-rules): a rename as a deletion and an addition, each conflict marker form, the modes `120000` and `160000`, and each fail form and each pass form of the arbitrary-value rule.
 5. **The breach rules.** Each string of the protected-path search, the order of [Breach rules](#breach-rules), breach rule 5 on `diff.patch` and on `check.txt` with the removal of both files, and the check line of a breach. Breach rule 4 for each change that the index or an exclude rule hides, for a mode change, and for each entry that the walk does not skip. The OS read-deny rule: a denied read of the set, a denied read of the results base, a denied read of the work root, a read in an allowed path, a sibling run folder denied, the output file location and result line, a read outside the set, a set path with `\"` and `\\`, the refusal at an absent mechanism and at a failed probe with no agent call, the rule on the `swe@1` call and on the `re@1` call, and the mode of the prompt copies.
-6. **The diagnosis parse.** Each rule of [Diagnosis](#diagnosis), rules 5 and 6: an absent or added field, an aspect outside `A1` to `A9`, an empty evidence and one of 501 characters, a severity outside the three, 21 findings, a text with more than one JSON object, and a run that does not end `completed`. The good result of a run on A5, A6 and A7.
+6. **The diagnosis parse.** Each rule of [Diagnosis](#diagnosis), rules 5 and 6: an absent or added field, an aspect outside `A1` to `A9`, an empty evidence and one of 501 characters, a severity outside the three, 21 findings, a text with more than one JSON object, and a run that does not end `completed`. The good result of a run on A5, A6, A7 and A9, and a breach that makes a run not good on A9.
 7. **The noise rule and the A/A line.** Each rule of [Iteration](#iteration), rule 5, the no-verdict list and the A/A line of [A/A measure](#aa-measure): the difference equal to noise and one below; flips of 0, 1, 2 and 3; a regression equal to noise and one below; a breach; an invalid diagnosis in each evaluation; a planned diagnosis with no line; and two `re@1` lines with different `system_prompt_digest`.
 8. **The stage gate.** Each rule of [Stage gate](#stage-gate): a pass share of each kind equal to `gate_share` and one run below, one kind below with the other above, a breach with a planned run with no line, a planned run with no line with no breach, and the count of earlier held-out evaluations. Unit-level rule 8 covers L1-D16.
 9. **The cap.** [Run budget](#run-budget), rules 4 and 6 to 8: the base cost is `list_price_usd / r`; a model with no price has the base cost `0`, also when each of its four prices is 0 and when the price read gives no model; the sum plus the reserve equal to `cap_usd` starts the run; one cent above stops the call. A diagnosis run reserves `judge_usd`.
 10. **The price ratio.** Each rule of [Price ratio](#price-ratio): `blend` of the three models of its table; the highest tier of a model with tiers; `r` 1 for the base model, so `0.3usd` stays `0.3usd`; an exact multiple of 0.01 stays, and another product rounds up to the next 0.01, with integer arithmetic.
 11. **The report keys.** [`report.sh`](#reportsh), rule 3: the report refuses each break of each check, each break of [Iteration](#iteration), rule 4, a parent `re@1` digest that differs, and a `git diff --name-only` list with another path than the two files of [Iteration](#iteration), rule 1. It accepts one digest for an A/A pair only. It accepts two cases with two budgets. It accepts two kinds with two `system_prompt_digest` values. It refuses two lines of one kind with different `system_prompt_digest`. The set-difficulty line counts each ceiling case and each floor case. The held-out report holds no line for one case.
 12. **The run action.** Each row of [Exit codes of a run](#exit-codes-of-a-run), for a run of `swe@1` and for a diagnosis run: the exits `0`, `1`, `2`, `4`, `5` and `75`, each other exit, the third exit `75` of one run in one call, and `cli.run.agent.prompt_text_path` in stderr. The next free attempt number of a resumed run and of a diagnosis, `judge-<n>.jsonl`. The join of the last `re@1` line of a run directory. The resume of a missing diagnosis.
-13. **The start checks.** The refusal of `NODE_USE_ENV_PROXY` and of `--use-env-proxy` in `NODE_OPTIONS`. Each option rule of [`run.sh`](#runsh): `--parent` with `--set held-out`, `--parent` with no `--aspect` or no `--hypothesis`, `--replicate` with `--parent` or with `--set held-out`, an aspect outside `A1` to `A7`, a parent of another stage, and options that differ from `iteration.json`. A dirty engine tree. A `gate_share` that differs from an earlier held-out evaluation of the stage. A refused call writes no line to `calls.jsonl`. A call that passes its start checks writes its line at its start.
+13. **The start checks.** The refusal of `NODE_USE_ENV_PROXY` and of `--use-env-proxy` in `NODE_OPTIONS`. Each option rule of [`run.sh`](#runsh): `--parent` with `--set held-out`, `--parent` with no `--aspect` or no `--hypothesis`, `--replicate` with `--parent` or with `--set held-out`, an aspect outside `A1` to `A7` and `A9`, a parent of another stage, and options that differ from `iteration.json`. A dirty engine tree. A `gate_share` that differs from an earlier held-out evaluation of the stage. A refused call writes no line to `calls.jsonl`. A call that passes its start checks writes its line at its start.
 14. **The credential state.** A changed digest, a changed mode, a mode other than `0600`, and a new entry in the configuration directory each give the breach `auth_file`.
 15. **The refresh.** With an `oauth` entry that expires far in the future, the refresh writes no file, keeps the digest of `auth.json` and writes nothing to stdout or stderr. A thrown error and an `undefined` result each give the stop, with no error text of pi. The refresh uses the provider of the `--model` of the call, and an absent entry gets no refresh.
 16. **The price read.** The price read of [Configuration](#configuration) creates no entry in `<home>/.config/kanthord` and reads no credential file. It gives the base prices 0.30, 1.20 and 0.006. It gives no model for `openai-compatible/stub-1`.
