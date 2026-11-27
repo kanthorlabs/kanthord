@@ -561,19 +561,19 @@ Each line of `diagnoses.jsonl` holds `session`, `valid` and `findings`.
 
 `run.sh` writes `iteration.json` in the results directory at the first call of an evaluation. It holds `stage`, `set`, `set_commit`, `engine_commit`, `repeats`, `jobs`, `gate_share`, `parent`, `replicate`, `aspect` and `hypothesis`.
 
-| Field           | Reader                                                                                                     |
-| --------------- | ---------------------------------------------------------------------------------------------------------- |
-| `stage`         | The context of each run. The comparability check. The report                                               |
-| `set`           | The planned runs. The report: the iteration or the gate                                                    |
-| `set_commit`    | `git -C <evaluation set> rev-parse HEAD` at the first call. The comparability check                        |
-| `engine_commit` | The engine commit of the runner at the first call. The one-change check of [Iteration](#iteration), rule 1 |
-| `repeats`       | `repeats` of `config.json` at the first call. The planned runs                                             |
+| Field           | Reader                                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `stage`         | The context of each run. The comparability check. The report                                                              |
+| `set`           | The planned runs. The report: the iteration or the gate                                                                   |
+| `set_commit`    | `git -C <evaluation set> rev-parse HEAD` at the first call. The comparability check                                       |
+| `engine_commit` | The engine commit of the runner at the first call. The one-change check of [Iteration](#iteration), rule 1                |
+| `repeats`       | `repeats` of `config.json` at the first call. The planned runs                                                            |
 | `jobs`          | `--jobs` of the first call, default 4. The pool size. `report.sh` refuses a parent or a replicate with a different `jobs` |
-| `gate_share`    | On the held-out set, `gate_share` of `config.json`, else `null`. The stage gate                            |
-| `parent`        | The evaluation id of the parent, or `null`. The noise rule                                                 |
-| `replicate`     | The evaluation id of the first baseline of an A/A pair, or `null`. The A/A line                            |
-| `aspect`        | The target aspect, or `null`. The noise rule                                                               |
-| `hypothesis`    | The hypothesis text, or `null`. The report                                                                 |
+| `gate_share`    | On the held-out set, `gate_share` of `config.json`, else `null`. The stage gate                                           |
+| `parent`        | The evaluation id of the parent, or `null`. The noise rule                                                                |
+| `replicate`     | The evaluation id of the first baseline of an A/A pair, or `null`. The A/A line                                           |
+| `aspect`        | The target aspect, or `null`. The noise rule                                                                              |
+| `hypothesis`    | The hypothesis text, or `null`. The report                                                                                |
 
 - A resumed call refuses options that differ from `iteration.json` with exit `1`, including `--jobs`. An old record with no `jobs` field defaults to `1`.
 - A call refuses a `set_commit` that differs from `git -C <evaluation set> rev-parse HEAD` with exit `1`.
@@ -599,16 +599,16 @@ The runner is a set of scripts in the engine repository: `scripts/evaluation/age
 run.sh --evaluation <id> --stage <1|2> --set <dev|held-out> [--jobs <n>] [--parent <id> --aspect <A1..A7|A9> --hypothesis <text> | --replicate <id>]
 ```
 
-| Option         | Question it answers                                | Rule                                                                                            |
-| -------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `--evaluation` | Which evaluation do the results join?              | Required. The evaluation id                                                                     |
-| `--stage`      | Which context do the runs get?                     | Required. `1` or `2` ([Stages](#stages))                                                        |
-| `--set`        | Which cases run?                                   | Required. `dev` or `held-out`                                                                   |
-| `--jobs`       | How many agent calls run at one time?              | Optional. An integer from 1 to 8. Default 4. A value outside the range exits `2`               |
-| `--parent`     | Which evaluation does this iteration compare with? | Optional. Only with `--set dev`. It requires `--aspect` and `--hypothesis`                      |
-| `--aspect`     | Which aspect does the prompt change target?        | Only with `--parent`. One of `A1` to `A7`, or `A9`                                              |
-| `--hypothesis` | What does the prompt change expect?                | Only with `--parent`. A text of 1 to 500 characters                                             |
-| `--replicate`  | Which baseline does this evaluation repeat?        | Optional. Only with `--set dev` and with no `--parent` ([A/A measure](#aa-measure))             |
+| Option         | Question it answers                                | Rule                                                                                |
+| -------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `--evaluation` | Which evaluation do the results join?              | Required. The evaluation id                                                         |
+| `--stage`      | Which context do the runs get?                     | Required. `1` or `2` ([Stages](#stages))                                            |
+| `--set`        | Which cases run?                                   | Required. `dev` or `held-out`                                                       |
+| `--jobs`       | How many agent calls run at one time?              | Optional. An integer from 1 to 8. Default 4. A value outside the range exits `2`    |
+| `--parent`     | Which evaluation does this iteration compare with? | Optional. Only with `--set dev`. It requires `--aspect` and `--hypothesis`          |
+| `--aspect`     | Which aspect does the prompt change target?        | Only with `--parent`. One of `A1` to `A7`, or `A9`                                  |
+| `--hypothesis` | What does the prompt change expect?                | Only with `--parent`. A text of 1 to 500 characters                                 |
+| `--replicate`  | Which baseline does this evaluation repeat?        | Optional. Only with `--set dev` and with no `--parent` ([A/A measure](#aa-measure)) |
 
 - The evaluation set and its configuration are the fixed paths of [Location](#location).
 - The runs start in this order: the cases in byte order of the case id, then the repeats. On the dev set, the diagnosis of a run follows its own run. Within the pool, up to `jobs` agent calls run at the same time, two repeats of the same case never at the same time.

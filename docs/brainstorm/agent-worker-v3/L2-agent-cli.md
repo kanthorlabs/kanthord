@@ -569,15 +569,15 @@ The script `scripts/play-run-agent.mjs` of the engine sets up a private play dir
 pnpm run play:agent -- [--repo <path>] [--model <provider>/<model>:<level>] [--auth <path>] [--budget <duration>] [--no-refresh] [--no-build] [--refresh-only] ["<prompt>"]
 ```
 
-| Option           | Default                              | Effect                                                                      |
-| ---------------- | ------------------------------------ | --------------------------------------------------------------------------- |
-| `--repo`         | none                                 | Clone this git repository as the workspace. With no value, use the sample   |
-| `--model`        | `anthropic/claude-sonnet-5-5:medium` | The model of each run                                                       |
-| `--auth`         | `~/.config/kanthord/auth.json`       | The `--auth` file of each run                                               |
-| `--budget`       | `15m`                                | The wall budget of each run                                                 |
-| `--no-refresh`   | refresh on                           | Skip the pi token refresh before each run                                   |
-| `--no-build`     | build check on                       | Skip the build check                                                        |
-| `--refresh-only` | run on                               | Refresh and prepare the play directory; print its path and exit `0`         |
+| Option           | Default                              | Effect                                                                           |
+| ---------------- | ------------------------------------ | -------------------------------------------------------------------------------- |
+| `--repo`         | none                                 | Clone this git repository as the workspace. With no value, use the sample        |
+| `--model`        | `anthropic/claude-sonnet-5-5:medium` | The model of each run                                                            |
+| `--auth`         | `~/.config/kanthord/auth.json`       | The `--auth` file of each run                                                    |
+| `--budget`       | `15m`                                | The wall budget of each run                                                      |
+| `--no-refresh`   | refresh on                           | Skip the pi token refresh before each run                                        |
+| `--no-build`     | build check on                       | Skip the build check                                                             |
+| `--refresh-only` | run on                               | Refresh and prepare the play directory; print its path and exit `0`              |
 | `"<prompt>"`     | use `prompt.md`                      | Prompt text or a path to a file, as one argument. With no value, use `prompt.md` |
 
 The `--auth` default uses `userInfo().homedir` from `node:os`, not the `HOME` environment variable.
