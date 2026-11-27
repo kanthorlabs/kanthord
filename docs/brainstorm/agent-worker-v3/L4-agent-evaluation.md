@@ -746,7 +746,7 @@ L4 adds these details to the [L2 fixtures](L2-agent-cli.md#l2-fixtures).
    - Assert: each command exits `0`. `R/results.jsonl` holds 2 lines, both of `swe@1`. No `R/diagnoses.jsonl` exists. `R/report.md` holds the gate line with the pass share `100.0%`, `gate_share` `0.5`, 0 breaches and the verdict `pass`. It holds the text `h1` zero times. No run directory holds `check.txt`.
 
 5. **L4-AC5. A breach stops the evaluation.**
-   - Fixture: Set, Auth. Each variant uses `run.sh --evaluation e5 --stage 1 --set dev --jobs 1`, then `report.sh --evaluation e5`.
+   - Fixture: Set, Auth. Each variant uses `run.sh --evaluation e5 --stage 1 --set dev --jobs 1`, then `report.sh --evaluation e5`. With `--jobs 1`, the breach run is the only graded run.
    - Variant 1: Stub for `swe@1` calls `read` with the absolute path of `E/cases/dev/d1/check/check.sh`, then calls `write` with `ok.txt` and the text `ok`, then answers `done`.
      - Assert: `run.sh` exits `1` after the first run. `R/checks.jsonl` holds 1 line with `breach` `protected_path` and `pass` `false`. Stub receives no `re@1` request. `R/report.md` holds 1 breach of `protected_path`, and `report.sh` exits `3`.
    - Variant 2: Stub for `swe@1`: the answer text holds K once, after the `write` call.
