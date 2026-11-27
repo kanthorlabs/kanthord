@@ -32,9 +32,13 @@ log "image $image_name:$version ready in $engine"
 home="$RUN_DIR/release/smoke-container"
 extract=
 owner=
+served=
 
 cleanup() {
 	[ -n "${server_pid:-}" ] && kill "$server_pid" 2>/dev/null && wait "$server_pid" 2>/dev/null
+	if [ -z "$owner" ] && [ -n "$served" ]; then
+		owner=$("$engine" volume inspect --format "{{index .Labels \"$owner_label\"}}" "$slot_volume" 2>/dev/null)
+	fi
 	[ -n "$extract" ] && "$engine" rm --force "$extract" >/dev/null 2>&1
 	if [ -n "$owner" ]; then
 		"$engine" ps --all --quiet --filter "label=$owner_label=$owner" | xargs -r "$engine" rm --force >/dev/null 2>&1
@@ -97,6 +101,7 @@ slot_volume=kanthord_slot_smoke-1
 before=$(owned_names)
 "$binary" serve --config "$config" >"$home/serve.log" 2>&1 &
 server_pid=$!
+served=1
 ready=0
 for _ in $(seq 1 60); do
 	if curl -fsS -o /dev/null "$endpoint/api/openapi.yaml" 2>/dev/null; then
@@ -171,10 +176,14 @@ owner=$("$engine" volume inspect --format "{{index .Labels \"$owner_label\"}}" "
 log "volume $slot_volume holds owner $owner"
 created=$(comm -13 <(printf '%s\n' "$before") <(owned_names) | head -n 1)
 if [ -n "$created" ]; then
-	label=$("$engine" inspect --format "{{index .Config.Labels \"$owner_label\"}}" "$created") ||
+	if label=$("$engine" inspect --format "{{index .Config.Labels \"$owner_label\"}}" "$created" 2>/dev/null); then
+		[ "$label" = "$owner" ] || die "$created holds the $owner_label label $label, not $owner"
+		log "container $created holds owner $owner"
+	elif [ -n "$("$engine" ps --all --quiet --filter "name=^$created\$")" ]; then
 		die "cannot read the owner label of $created"
-	[ "$label" = "$owner" ] || die "$created holds the $owner_label label $label, not $owner"
-	log "container $created holds owner $owner"
+	else
+		log "container $created ended before the owner label check"
+	fi
 fi
 
 kill "$server_pid" && wait "$server_pid" 2>/dev/null
