@@ -1696,7 +1696,7 @@ An agent declaration names its host tools: `swe@1` holds `evidence-upload` and `
 The evaluation method adds the `checkoutConfinement` hook of `src/agent/hooks/checkout-confinement.ts` to the `re@1` session.
 `re@1` has no `bash`, so the hook is its only path boundary. Without the hook, `read`, `grep`, `find` and `ls` reach every file of the worker user.
 The hook resolves each `path` with the path function of pi (`resolveToCwd`: `@` prefix, `~`, `file://`, Unicode spaces), then follows symbolic links. The hook accepts the path when the result is inside one root. The hook refuses a path that it cannot resolve. A call with no `path` takes the agent root. With two checkouts the agent root is `review/checkouts`; the roots are the agent root and the `evidence` directory. A workspace with no checkout holds the placed evidence itself, so it is the root.
-The agent catalog `src/agent/catalog.ts` owns `EVIDENCE_UPLOAD_PARAMETERS`, the parameter schema of `evidence-upload`.
+The worker contract `src/worker/contract.ts` owns `EVIDENCE_UPLOAD_PARAMETERS`, the parameter schema of `evidence-upload`.
 `agent.get` lists a host tool with the source `host`.
 Each `host_tools` entry of an agent declaration is an agent tool of [the Foundry](#the-foundry), and a capability of the Foundry host registers it.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
@@ -2745,6 +2745,7 @@ The Foundry depends only on its input and on the host tools that the Foundry hos
 It constructs no client, no transport and no resource, and it does not know its Foundry host.
 The Foundry makes a side effect only through a host tool.
 Section 2 of the chain design holds the types and the rules of the Foundry. Sections 5.4, 5.5 and 5.7 hold the credential rules, the agent tooling and the CLI host.
+In the model of [Agent V2 and Worker V3](agent-worker-v3/L1-model.md#worker), the term for the Foundry is "the line". The term for the worker host below is "the worker host". The CLI host leaves the model in V3: the offline mode, `kanthord worker tasks` and the replay go. The code keeps the names `foundry-*.ts`, `FoundryHost` and the port types.
 
 Each term has one meaning.
 

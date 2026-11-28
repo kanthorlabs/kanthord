@@ -357,7 +357,7 @@ The Agent component owns these keys of the section `agent`.
 
 ## The agent port
 
-- `agentPort` in `engine/src/agent/agent-port.ts` opens each guarded agent session of a Foundry host. It answers a `SessionPort`, and `open` answers a `PortSession`.
+- `agentPort` in `engine/src/worker/unit/agent-port.ts` opens each guarded agent session of a Foundry host. It answers a `SessionPort`, and `open` answers a `PortSession`.
 - The input of `agentPort` holds `capabilities`, `modelRuntimeFactory`, `knownSecrets`, `trace`, `sessionRoot`, `budget`, `env` and `hostHome`. `agentPort` receives no credential.
 - `open` reads the first agent of `setup.agents`. It takes the working directory from `reviewWorkspace.directory`, or else from the checkout directory. With more than one checkout, it takes the parent directory of the first checkout.
 - `open` builds each session through the `AgentSessionRuntime` of pi (`openSessionRuntime` in `engine/src/agent/agent-session.ts`). pi emits `session_shutdown` in `runtime.dispose()` only, not in `session.dispose()`. `agentPort` therefore builds each session through `AgentSessionRuntime`.
@@ -376,14 +376,16 @@ The Agent component owns these keys of the section `agent`.
 - `swe@1` has no confinement, because `bash` reaches each path.
 - The resource loader runs the extension factories in this order:
   1. `homeRelativeCwd`
-  2. the redaction `restore` hook
+  2. `markerRestore`
   3. `toolAllowlist`
   4. `checkoutConfinement`, for a `re@1` session only
   5. `pinnedLayers`
   6. the `capabilities` of the host
-  7. the redaction `hook`
+  7. `inputRedaction`
+  8. `assistantRedaction`
+- `sessionParts` adds items 1, 2, 7 and 8 on `openSession` and `openSessionRuntime`. The caller gives items 3 to 6 in `hooks`.
 - pi runs handlers in load order. A guard thus sees each tool call before a capability handler.
-- `pinnedLayers` pins the work prompt as the first user message. [Sensitive text redaction](#sensitive-text-redaction) holds the two redaction hooks.
+- `pinnedLayers` pins the work prompt as the first user message. [Sensitive text redaction](#sensitive-text-redaction) holds the redaction hooks.
 
 ### Checkout confinement
 
@@ -391,7 +393,7 @@ The Agent component owns these keys of the section `agent`.
 - A `tool_call` handler reads the catalog entry of the tool. It resolves each field of `locations` and blocks the call when one path leaves every root.
 - A tool with no catalog entry is blocked with the reason `The tool <name> has no location rule in this session.`
 - A `locations` field that holds a value that is not a string is blocked. An absent field passes, so a call with no `path` takes `cwd`.
-- `agentPort` computes the roots (`engine/src/agent/review-roots.ts`). A `reviewWorkspace` gives its `directory` and its evidence directory: `<key>/evidence`, or `directory` when `key` equals `directory`.
+- `agentPort` computes the roots (`engine/src/worker/unit/review-roots.ts`). A `reviewWorkspace` gives its `directory` and its evidence directory: `<key>/evidence`, or `directory` when `key` equals `directory`.
 - A workspace with no checkout has `key` equal to `directory`, so `directory` is its only root. A `re@1` session with no `reviewWorkspace` has the working directory as its only root.
 - The hook copies the path rules of `resolveToCwd` of pi, because pi 1.1.0 does not export them: the `@` prefix, `~`, `~/`, `file://` and Unicode spaces.
 - The hook also checks the spelling variants that the pi `read` tool tries. The hook checks them for each path, not only for a path that does not exist. The variants are: a narrow no-break space before `AM.` or `PM.`, the NFD form, the curly quote, and the curly quote with NFD.
@@ -402,13 +404,13 @@ The Agent component owns these keys of the section `agent`.
 ### Capabilities
 
 - A capability is one `InlineExtension` in `capabilities`. The design has no registry and no plugin format.
-- `executionEvidence` and `linkUpdates` in `engine/src/agent/capabilities/` take `SessionHostTools = (workspace) => HostTools`. Each registers one tool with `pi.registerTool`.
+- `executionEvidence` and `linkUpdates` in `engine/src/worker/unit/capabilities/` take `SessionHostTools = (workspace) => HostTools`. Each registers one tool with `pi.registerTool`.
 - A tool takes the workspace from `ctx.cwd` of the call, so one capability list serves each execution.
 - Each tool declares `annotations.openWorldHint` explicitly. `evidence-upload` and `link_update_list` declare `false`.
 - `sessionTools` in `engine/src/agent/tool-table.ts` puts no capability tool in `customTools`. It puts only the wrapped `bash` there, and only for an agent with `bash`.
 - A capability factory receives only the pi extension API. That API exposes `pi.registerProvider` and `ctx.modelRegistry`, so the lint rule below forbids both. A capability receives no model runtime, no known secrets and no credential from `agentPort`.
 - Today no capability registers an MCP server. The MCP rules of design section 5.5 have no code.
-- The `eslint.config.js` entry for `src/agent/capabilities/**/*.ts` forbids `modelRegistry` and `registerProvider` as a member or a property. The message is `A capability reads no model registry and registers no provider.`
+- The `eslint.config.js` entry for `src/worker/unit/capabilities/**/*.ts` forbids `modelRegistry` and `registerProvider` as a member or a property. The message is `A capability reads no model registry and registers no provider.`
 - For a `Diagnostic`, `asToolError` throws an `Error` with the message `<code>: <message>`. Every other error passes unchanged.
 
 ### The session close
@@ -462,9 +464,10 @@ The Agent component owns these keys of the section `agent`.
 
 - Sensitive text redaction is the first [session hook](agent.vocabulary.md#session-hook). It replaces each [sensitive text](agent.vocabulary.md#sensitive-text) of an agent session with a [redaction marker](agent.vocabulary.md#redaction-marker).
 - It acts before pi persists a message and before the model reads it.
-- The rule module is `engine/src/agent/sensitive-text.ts`. The session hooks live in `engine/src/agent/hooks/sensitive-text-redaction.ts`.
-- One redaction object exists for each call of `sensitiveTextRedaction`. It holds the rule set, one growing known set, the redaction table and the tag. It exposes two session hooks: `restore` and `hook`.
-- `openSession` creates the redaction object from the pi session id, unless the consumer passes one. The input of `openSession` holds exactly one of `knownSecrets` and `redaction`, so no consumer opens a session without a redaction.
+- Superseded 2026-11-21 by R2-H of Ulrich: KanthorD does not modify LLM output. Assistant text, thinking blocks and the compaction summary stay unredacted, and a finding raises a rotate warning. [L1-model.md](agent-worker-v3/L1-model.md#session-file) holds the rule; the rules below for LLM output are superseded.
+- The rule module is `engine/src/agent/sensitive-text.ts`. The session state lives in `engine/src/agent/redaction.ts`. The four hook modules are `marker-restore.ts`, `input-redaction.ts`, `output-finding.ts` and `assistant-redaction.ts` in `engine/src/agent/hooks/`.
+- One redaction object exists for each call of `createRedaction`. It holds the rule set, one growing known set, the redaction table and the tag. It implements `SessionRedaction`.
+- `openSession` creates the redaction object from the pi session id, unless the consumer passes one. The input of `openSession` holds exactly one of `knownSecrets` (`FreshRedaction`) and `redaction` (`ReusedRedaction`), so no consumer opens a session without a redaction.
 - `openSession` redacts the system prompt once with `redaction.text`, passes the result to the resource loader, and returns it. The worker and the workbench pin that text with `pinInference`. The worker pins the redacted work.
 - The worker passes the secrets of every credential of the execution as the known secrets of each session. The workbench passes the secrets of the holder of its current configuration. `env@1` passes the secrets of the server agent credentials.
 - The workbench keeps one redaction object for the life of its session in the process. Each later `openAgent` passes that object, so a marker from before `configure` restores after it.
@@ -800,21 +803,27 @@ The two-pass scan applies to `message_end`, `text()` and the `context` handler:
 
 ### The handlers
 
-| Handler           | Extension | Effect                                                                                                                                                                                                                                            |
-| ----------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tool_call`       | `restore` | For each valid marker in each string of `event.input`, act on its tag and on the tool. The cases follow below.                                                                                                                                    |
-| `turn_start`      | `hook`    | Refresh the known secrets with `await known()`. On a rejection, keep the last set (`engine/src/worker/unit/agent-telemetry.ts`).                                                                                                                  |
-| `message_end`     | `hook`    | For an `assistant` message, refresh the known secrets first, because pi resolves the key in the stream call (`pi-agent-core/agent-loop.js`).                                                                                                      |
-| `message_end`     | `hook`    | Return a redacted copy of a `system`, `user`, `assistant`, `toolResult` or `custom` message. Return nothing when no string changes.                                                                                                               |
-| `context`         | `hook`    | Redact the `summary` of each `compactionSummary` message, and each `custom` message. This cleans the summary of a resumed session file, because `SessionManager.open` loads the raw text.                                                         |
-| `session_compact` | `hook`    | Redact `compactionEntry.summary` in place, and count each finding as `compaction_residual`. This cleans the projection of this process (`pi-coding-agent/core/session-manager.js`) and the tracer copy. The session file keeps the residual (G1). |
+| Handler           | Extension            | Effect                                                                                                                                                                                                                                            |
+| ----------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tool_call`       | `markerRestore`      | Block the call when a string of `event.input` holds a known secret as raw text. Else, for each valid marker in each string of `event.input`, act on its tag and on the tool. The cases follow below.                                              |
+| `turn_start`      | `inputRedaction`     | Refresh the known secrets with `await known()`. On a rejection, keep the last set (`engine/src/worker/unit/agent-telemetry.ts`).                                                                                                                  |
+| `message_end`     | `inputRedaction`     | Return a redacted copy of a `system`, `user`, `toolResult` or `custom` message. Return nothing when no string changes.                                                                                                                            |
+| `message_end`     | `inputRedaction`     | For an `assistant` message, refresh the known secrets first, because pi resolves the key in the stream call (`pi-agent-core/agent-loop.js`). Then redact its `errorMessage` with every rule, and no other field.                                  |
+| `context`         | `inputRedaction`     | Redact each `custom` message.                                                                                                                                                                                                                     |
+| `message_end`     | `assistantRedaction` | For an `assistant` message, refresh the known secrets and return a redacted copy. The `content` gets rule 0 only.                                                                                                                                 |
+| `context`         | `assistantRedaction` | Redact the `summary` of each `compactionSummary` message. This cleans the summary of a resumed session file, because `SessionManager.open` loads the raw text.                                                                                    |
+| `session_compact` | `assistantRedaction` | Redact `compactionEntry.summary` in place, and count each finding as `compaction_residual`. This cleans the projection of this process (`pi-coding-agent/core/session-manager.js`) and the tracer copy. The session file keeps the residual (G1). |
+| `message_end`     | `outputFinding`      | For an `assistant` message, count each known secret in a string of `content` as `output_found`, and keep one warning with the rule `llm_credential` and the count. Change no message.                                                             |
+
+- `assistantRedaction` is the interim module of [L3](agent-worker-v3/L3-agent.md#interim-redaction). `openSession` and `openSessionRuntime` add it after `inputRedaction`. pi gives each `message_end` handler the message of the handler before it, so `assistantRedaction` gets the copy with the redacted `errorMessage`.
+- No open path of today adds `outputFinding`. The agent contract adds it in place of `assistantRedaction`.
 
 The `context` handler sees no `system` message (`pi-coding-agent/core/extensions/runner.js`). The `systemMessage` of a compaction entry is a copy of the redacted `system` message, so it needs no handler.
 
 The `context` handler and the `custom` messages:
 
 - A `context` handler of a consumer can add a `custom` message that never passes `message_end`. `pinnedLayersHook` adds `kanthord.prompt-layer` (`engine/src/agent/hooks/pinned-layers.ts`).
-- `hook` runs last, so its `context` handler sees that message and redacts it.
+- `inputRedaction` runs after each consumer hook, so its `context` handler sees that message and redacts it.
 - A persisted `custom` message already holds markers, and the scanner keeps a valid marker unchanged. So its second scan changes no text.
 
 ### The restore by tool
@@ -823,6 +832,7 @@ The `context` handler and the `custom` messages:
 - A marker of this session in a `bash` call blocks the call. So no command receives a masked value. This closes the path of a prompt injection that sends a value with `curl`.
 - A value that the model types into a command is model text, and the command receives it.
 - A marker of the LLM credential blocks the call in every tool.
+- A known secret as raw text in a string of the input blocks the call in every tool. The check reads each string of the input, also under a structural key such as `id` or `type` and in the `data` of an image block. The matcher is the known-secret matcher of the session. This check runs before the marker cases.
 - Every other tool, for example `read`, `grep`, a workbench operation tool or a custom tool, receives the marker text unchanged.
 
 Restore cases, in this order:
@@ -849,6 +859,7 @@ Block reasons:
 - Unkept: `The input holds a value that this session could not keep. Read the source of the value again, then repeat the call.`
 - Resume: `The input holds a marker of an earlier run of this session. Read the source of the value again, then repeat the call.`
 - Credential: `The input holds a marker of the LLM credential. No tool receives this value.`
+- Known credential: `The input holds a value of a known credential. No tool receives this value.`
 - Shell: `A command cannot hold a masked value. To write the value into a file, use the write or edit tool. Otherwise read the value through the shell from its source, for example with $(sed -n ...), then repeat the call.`
 
 Schema validation:
@@ -886,12 +897,12 @@ The final assistant text:
 
 Hook order:
 
-- `restore` runs before every consumer `tool_call` handler. So every gate checks the input that the tool executes: the restored input of `write` and `edit`, and the unchanged input of every other tool.
+- `markerRestore` runs before every consumer `tool_call` handler. So every gate checks the input that the tool executes: the restored input of `write` and `edit`, and the unchanged input of every other tool.
 - `checkoutConfinement` checks the path that `read` opens (`engine/src/agent/hooks/checkout-confinement.ts`).
 - The workbench approval acts only on a mutation operation tool (`engine/src/workbench/service.ts`). It holds the input that the operation receives, in memory only, in `session.approvals`. For an operation tool, that input holds the marker text, because a pattern value restores only into `write` and `edit`.
 - A block from a consumer gate ends the chain (`pi-coding-agent/core/extensions/runner.js`). The tool does not run.
 - A nested call of `ctx.executeTool` passes the same chain.
-- `hook` runs last, so no later `message_end` handler adds text after the redaction.
+- `inputRedaction` and `assistantRedaction` run last, so no later `message_end` handler adds text after the redaction.
 
 - The process part never restores a marker of another redaction object, whatever the history holds. Such a marker blocks instead.
 - A wrong restore needs a 32-bit collision of two process parts of one session.
@@ -957,7 +968,7 @@ The worker writes seven attributes at the end of the `agent.session` span (`engi
 - A rule throws for a string, for example a `RangeError`. The string becomes `<redacted:scan_failed:a:TAG>`, and `scan_failed` grows. The reference also fails closed (`pi.ts`).
 - The `message_end` handler catches every error itself, because pi persists the unchanged message after a handler error (`pi-coding-agent/core/extensions/runner.js`). On an error outside a string, each non-structural string becomes `<redacted:scan_failed:a:TAG>`.
 - The `context` handler catches every error, and the summary becomes `<redacted:scan_failed:a:TAG>`.
-- The `tool_call` handler catches every error and returns `{ block: true, reason }`. On a throw, pi also fails the call (`pi-agent-core/agent-loop.js`).
+- The `tool_call` handler catches every error and returns `{ block: true, reason }` with the unkept reason. This holds for a failed scan of the known-secret check and for a failed restore. On a throw, pi also fails the call (`pi-agent-core/agent-loop.js`).
 - `known()` rejects at the first call: the set stays empty, and rules 0b to 17 still apply. The `content` of an assistant message then gets no rule.
 
 ### Tests
@@ -1028,47 +1039,88 @@ A test file builds every fake key from parts at run time, for example `["AKIA", 
 - `redactValue`: keeps structural keys, masks a pattern finding of rules 1 to 17 with `<redacted:RULE>`, and leaves a session marker unchanged.
 - `redactValue`: one matcher masks a secret that `addSecret` added after an earlier call.
 
-`engine/src/agent/hooks/sensitive-text-redaction.test.ts`:
+`engine/src/agent/redaction-test-support.ts` holds the test harness of the redaction tests. It runs the `message_end` and `context` handlers as a chain and stops a `tool_call` at the first block, as pi does.
+
+`engine/src/agent/redaction.test.ts`:
+
+- `redactionSummary` gives the seven fields of the open paths of today.
+- With `markerRestore`, `inputRedaction` and `outputFinding` only, the assistant message, the summary at `context` and the summary at `session_compact` stay unchanged. `thinking_kept` and `compaction_residual` stay 0, and `output_found` counts each finding.
+- `exitText` gives the session marker of a pattern value and of a known secret, and `modelOutput` gives the same text.
+- `modelOutput`: masks every rule and adds no value to the known set.
+- `text()` refreshes the known secrets and counts each finding.
+
+`engine/src/agent/hooks/input-redaction.test.ts`:
 
 - `message_end` for each role other than `assistant`, with `system` sections and `toolsAdded`.
-- Assistant: `content` keeps a pattern value and a table value and masks a known secret. `errorMessage` keeps every rule. A signed thinking block adds no value to the table.
-- `modelOutput`: masks every rule and adds no value to the known set.
 - Same message: line 1 of a tool result holds the value in a form that no rule matches. Line 2 holds a rule 4 finding. Both lines hold the marker.
+- A `toolResult` with an extra key that holds a value: the persisted message holds the marker in that key.
+- Refresh at `turn_start` and at the `message_end` of an assistant message; a rejected `known`.
+- `counts`, `text()` counts, a handler error that fails closed.
+- An `assistant` message keeps its `content`, and its `errorMessage` gets every rule.
+- `context` redacts a `custom` message and keeps a `compactionSummary` message; `session_compact` changes nothing.
+- A `custom` message of `pi.sendMessage` and a steering message of `session.steer` reach the session file and the request redacted.
+- `context`: a `custom` message that a consumer `context` handler adds before `inputRedaction` reaches the request redacted.
+
+`engine/src/agent/hooks/marker-restore.test.ts`:
+
 - A rule 12 value restored into `edit`, then the `toolResult` with its `diff` holds the marker.
 - A rule 4 password `pass` is restored into `edit`, and the `toolResult` of that call holds the marker. A later `npm test` output with `passed` stays unchanged.
 - A rule 13 value of 12 characters and entropy below 3.25 is restored into `write`. A later `cat` `toolResult` of that file holds the marker.
 - A `bash` `toolResult`: the persisted message holds only the keys `role`, `toolCallId`, `toolName`, `content`, `details`, `usage`, `isError`, `durationMs` and `timestamp`.
-- A `toolResult` with an extra key that holds a value: the persisted message holds the marker in that key.
 - After a restore into `write`, the persisted assistant `toolCall.arguments` hold the marker.
+- `markerRestore`: `write` and `edit` input; a nested `write` call with `parentToolCallId`.
+- `markerRestore` by tool: a `read` and a `grep` input with a rule 12 marker reach the tool unchanged. A `read` input with a `llm_credential` marker blocks.
+- `markerRestore` blocks: index 0, an index with no value, a resumed session file that holds a marker of an earlier redaction object.
+- `markerRestore` blocks: a value that equals a known secret under another rule, and a value that contains a known secret.
+- `markerRestore` blocks every `bash` input with a marker of this session, with the shell reason. The cases are a value of shell-safe characters, a resume marker and an index 0 marker.
+- `markerRestore` blocks: a rule 6 PEM block in `bash`, and the reason names the write and edit tools.
+- `markerRestore` blocks: a `llm_credential` marker after the holder changes and the current set no longer holds its secret.
+- `markerRestore` blocks: a value whose view text differs from its source text has index 0, and its restore into `write` blocks.
+- Table: each final merged span of pass 2 enters the table, and its marker restores the exact source text.
+- `markerRestore` leaves text: a tracer marker, a marker of another session, also in `bash`.
+- A table above `REDACTION_TABLE_MAX` gives index 0, and its restore blocks.
+- A custom tool with a `pattern` parameter refuses a marker before the restore.
+- `checkoutConfinement` after `markerRestore` receives the unchanged marker of a `read` path.
+- A prompt holds a provider key before the first refresh; a `bash` call with its marker blocks.
+- A known secret as raw text blocks the call with the known credential reason in `bash`, `write`, `read` and a consumer tool, and each block grows `restore_blocked`.
+- A known secret under a structural key of a tool input (`id`, `type`, `model`) or in the `data` of an image block blocks the call.
+- A tool input that the scan cannot read blocks the call with the unkept reason.
+
+`engine/src/agent/hooks/assistant-redaction.test.ts`, with `markerRestore`, `inputRedaction` and `assistantRedaction` in the order of the open paths of today:
+
+- Assistant: `content` keeps a pattern value and a table value and masks a known secret. `errorMessage` keeps every rule. A signed thinking block adds no value to the table.
 - Thinking: a signed Anthropic block, a signed Codex block and a signed Azure Responses block stay whole, and `thinking_kept` grows.
 - Thinking: an unsigned Google block and a Bedrock block with an empty signature are redacted, and each keeps its `thinkingSignature`.
 - Thinking: an `openai-completions` block with `reasoning_content` is redacted and keeps its signature. A block of another API with a signature stays whole.
 - Thinking: pass 2 leaves a kept block unchanged.
 - Structural keys: `thoughtSignature` stays; a key `model` inside `arguments` is redacted.
-- `restore`: `write` and `edit` input; a nested `write` call with `parentToolCallId`.
-- `restore` by tool: a `read` and a `grep` input with a rule 12 marker reach the tool unchanged. A `read` input with a `llm_credential` marker blocks.
-- `restore` blocks: index 0, an index with no value, a resumed session file that holds a marker of an earlier redaction object.
-- `restore` blocks: a value that equals a known secret under another rule, and a value that contains a known secret.
-- `restore` blocks every `bash` input with a marker of this session, with the shell reason. The cases are a value of shell-safe characters, a resume marker and an index 0 marker.
-- `restore` blocks: a rule 6 PEM block in `bash`, and the reason names the write and edit tools.
-- `restore` blocks: a `llm_credential` marker after the holder changes and the current set no longer holds its secret.
-- `restore` blocks: a value whose view text differs from its source text has index 0, and its restore into `write` blocks.
-- Table: each final merged span of pass 2 enters the table, and its marker restores the exact source text.
-- `mergedSecrets` of two sources returns the secrets of both.
-- `restore` leaves text: a tracer marker, a marker of another session, also in `bash`.
-- A table above `REDACTION_TABLE_MAX` gives index 0, and its restore blocks.
-- A custom tool with a `pattern` parameter refuses a marker before the restore.
-- `checkoutConfinement` after `restore` receives the unchanged marker of a `read` path.
-- `toolApproval` after `restore` holds the unchanged marker of a mutation operation input in `session.approvals`. A `write` call passes the approval with no entry.
-- A prompt holds a provider key before the first refresh; a `bash` call with its marker blocks.
-- Refresh at `turn_start` and at the `message_end` of an assistant message; a rejected `known`.
 - `context` redacts the summary of a resumed file; `session_compact` counts the residual.
-- `context`: a `custom` message that a consumer `context` handler adds before `hook` reaches the request redacted.
-- `counts`, `text()` counts, a handler error that fails closed.
+
+`engine/src/agent/hooks/output-finding.test.ts`:
+
+- One `assistant` message with a known secret in its text, its thinking, its thinking signature and its tool call arguments gives one warning with the rule `llm_credential` and the count 4. The message stays byte for byte.
+- A message with no finding, a known secret in `errorMessage` and a `toolResult` message give no warning.
+
+`engine/src/agent/hooks/tool-approval.test.ts`:
+
+- `toolApproval` after `markerRestore` holds the unchanged marker of a mutation operation input in `session.approvals`. A `write` call passes the approval with no entry.
+- `toolApproval` passes an approved call and blocks a refused call with its reason.
+
+`engine/src/agent/hooks/tool-allowlist.test.ts`, `home-relative-cwd.test.ts` and `pinned-layers.test.ts`:
+
+- `toolAllowlist` passes a declared name and blocks an undeclared name with `The tool <name> is not declared for this agent.`
+- `homeRelativeCwd` writes the working directory relative to the host home.
+- `pinnedLayersHook` adds the work pin once, before the first message that is no `system` message, only when no user message equals it. It removes an old layer message.
+
+`engine/scripts/hooks-gate.test.mjs` fails when a module of `engine/src/agent/hooks/` has no test file next to it. It is a file of `always_run` in `.kanthord/suite-pass.json`, because it reads a directory.
+
+`engine/src/agent/known-secrets.test.ts`:
+
+- `mergedSecrets` of two sources returns the secrets of both. `credentialSecrets` returns the key of an API key entry, both tokens of an OAuth entry and nothing for an absent provider.
 
 Engine consumers:
 
-- `engine/src/worker/unit/agent-session.test.ts`: `openSession` installs `restore` after `homeRelativeCwd` and `hook` last, and returns the redacted system prompt. A passed `redaction` is used, and none is created.
+- `engine/src/worker/unit/agent-session.test.ts`: `openSession` and `openSessionRuntime` install `homeRelativeCwd`, `markerRestore`, the caller hooks, `inputRedaction` and `assistantRedaction`, in this order. `openSession` returns the redacted system prompt. A passed `redaction` is used, and none is created.
 - In that test: the tag of the returned system prompt equals the tag of a later `message_end` marker of the same session.
 - `engine/src/worker/unit/native-agent.test.ts`: `openNativeAgent` with `scriptedProvider` and `SessionManager.create` on a temporary directory. The work prompt and the system prompt hold a fake key.
 - In that test: the script calls `write` with the marker of the work prompt key, then `bash` with the same marker.
