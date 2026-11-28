@@ -45,7 +45,7 @@ kanthord run agent <agent-name>
 - `run agent` runs one agent profile on one piece of work, writes one result and exits. It is local. It calls no route, opens no database, reads no server configuration file and reads no `cli.yaml`.
 - Change: `run` joins the closed set of global root names. Today the set holds `config`, `upgrade`, `serve` and `auth` (`docs/cli/other.md`, section "Closed root names and option scope"; `TOP_LEVEL_NAMES` in `src/apps/cli/completeness.test.ts`). The constant `CommandName` of `src/apps/cli/constants.ts` gets `Run: "run"`, because `createProgram` asserts one root command per name (`src/apps/cli/index.ts`).
 - `kanthord run` with no operand prints the group help and exits `0`, as each group does (`docs/cli/other.md`, section "Help semantics"). `kanthord run --help` lists `agent`.
-- The name `run worker` is reserved for [L5](L5-worker-cli.md). Until LB builds it, the group `run` holds only `agent`.
+- The name `run worker` is reserved for L5. Until LB builds it, the group `run` holds only `agent`.
 - The component root `agent` (`kanthord agent get`, `src/apps/cli/agent.ts`) stays. It reads the server part of the Agent component. `run agent` is the agent CLI. The two names do not overlap, because `agent` is a root and `agent` under `run` is a leaf.
 - The new page `docs/cli/run.md` owns `run agent`, with the heading "Command inventory". `docs/cli/other.md` lists `run` among the global root names and links the page.
 - The page `docs/cli/run.md` states these facts for the developer, as [L1](L1-model.md#handoffs-to-later-layers) hands them:
@@ -625,7 +625,7 @@ Constraints:
 
 ## Handoffs to later layers
 
-- [L5](L5-worker-cli.md): `run worker` under the root `run`. Its codes take the form `cli.run.worker.<reason>`, to match `run agent`. `kanthord run --help` then lists `agent` and `worker`.
+- L5: `run worker` under the root `run`. Its codes take the form `cli.run.worker.<reason>`, to match `run agent`. `kanthord run --help` then lists `agent` and `worker`.
 - [LA](LA-agent-build.md): add `CommandName.Run` and the group `run` to `createProgram`. Add `run` to `TOP_LEVEL_NAMES`, the page `run` to `PAGE_INVENTORIES` and `PAGE_COUNTS`, and update `DOCUMENTED_COUNT` and `IMPLEMENTED_COUNT` (`src/apps/cli/completeness.test.ts`). Write `docs/cli/run.md`. Update the root names and the root help list of `docs/cli/other.md`, and the link list of `docs/cli/README.md`.
 - [LA](LA-agent-build.md): move the checks that L1 lists before the deletion of `tasks run`, with the changes of this page. The entry reader uses `readStoredCredential`. `routingMetadataOf` uses the mapping and no seed comparison. `withoutAmbientCredentials` uses R in place of the output folder and also removes the proxy names. The child `TMPDIR` is `R/tmp`. The check of `auth.json` runs before the pi tool install.
 - [LA](LA-agent-build.md): in `docs/cli/other.md`, section "Output and exit behavior", add the exits `2`, `4`, `5` and `75` of `run agent`, the stderr warning line and the stderr notice line. With `run`, the global root names are five. Fix the text that names three: `docs/cli/other.md:1155`, `docs/cli/README.md:71` and `docs/cli/project.md:36`.

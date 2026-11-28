@@ -19,7 +19,7 @@ LA4 starts after [LA1](LA1-run-skeleton.md), [LA2](LA2-credential-boundary.md), 
 ## Exit state
 
 - The Project Service opens each `env@1` session through `openAgent`. Each text that it gives out passes the exit redaction ([L1 AC20](L1-model.md#checks)).
-- `openSession` has one caller, the Workbench Service, until the rebase of `feature/workbench-v2` ([L3-D41](L3-agent.md#decisions)). `openSessionRuntime` has one caller, `agentPort`, until [L6](L6-worker.md).
+- `openSession` has one caller, the Workbench Service, until the rebase of `feature/workbench-v2` ([L3-D41](L3-agent.md#decisions)). `openSessionRuntime` has one caller, `agentPort`, until L6.
 - `kanthord worker tasks run`, `tasks seed` and `tasks compare` exit `1` with `error: unknown command 'tasks'`. `GET /api/worker/execution/:execution_id/seed` answers `404`.
 - The worker writes no seed capture. `KANTHORD_CAPTURE_TASKS` has no reader.
 - `kanthord run agent` is the only local agent run.
@@ -166,7 +166,7 @@ Each rule below stays at its strength or becomes stricter.
 ## Handoffs
 
 - **To LA5.** None. The runner of L4 calls only `kanthord run agent`.
-- **To LB.** The worker still opens with `openSessionRuntime` through `agentPort` ([L3 Open paths](L3-agent.md#open-paths-until-l6-and-the-workbench-change)). The Worker V2 evaluation set has no runner after PR 2; [L7](L7-worker-evaluation.md) owns its successor.
+- **To LB.** The worker still opens with `openSessionRuntime` through `agentPort` ([L3 Open paths](L3-agent.md#open-paths-until-l6-and-the-workbench-change)). The Worker V2 evaluation set has no runner after PR 2; L7 owns its successor.
 - **To the Workbench rebase.** `openSession`, `assistantRedaction` and `SessionRedactionInput` keep one reader, the Workbench Service ([L3-D41](L3-agent.md#decisions)).
 - **To the root pages.** These pages name the removed commands or the capture: `docs/explanation/architecture.html`, `docs/brainstorm/architecture.impl.md`, `docs/brainstorm/custody.impl.md`, `docs/brainstorm/worker-service.vocabulary.md`, `docs/brainstorm/worker-service.impl.md`, `docs/brainstorm/worker-execution-refactor/design.md` and `docs/brainstorm/HANDOFF.md`. The root branch `feature/agent-v2` changes them with PR 2.
 

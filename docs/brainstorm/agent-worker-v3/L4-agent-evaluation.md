@@ -53,7 +53,7 @@ Each run of `swe@1` has one result for each goal aspect.
 
 - L4 is a caller of the agent CLI. It is no CLI layer and no core layer. Its design comes after L3 and before LA (Ulrich, 2026-11-22).
 - The evaluation runs at step 4.3 of the [agent gate](index.md#round-order), against the agent that LA builds.
-- [L7](L7-worker-evaluation.md), the worker evaluation, owns the worker-level checks, the review cases and the successor of `~/kanthord-evalset/worker-v2/`.
+- L7, the worker evaluation, owns the worker-level checks, the review cases and the successor of `~/kanthord-evalset/worker-v2/`.
 
 ## Stages
 
@@ -209,7 +209,7 @@ Ulrich ruled on 2026-11-25: Git ignores `shared/*/node_modules/`, and the commit
 - **No shared task.** A held-out case shares no plan file of Worker V2 and no task with a dev case. Reason: the Worker V2 seeds hold 6 plan files, and a rework seed repeats the task of its plan file. A shared task lets a prompt change fit a held-out case.
 - The `frontend` fixture reproduces the dogfood finding of [L1 E1](L1-model.md#e1-project-context-through-the-binding-prompt-fits-with-a-fit-rule): a session that does not follow the existing interface fails A4.
 - **Blind held-out set.** Nobody reads a held-out session file, a held-out check output or a held-out case text to change a prompt. The held-out report shows no line for one case.
-- The evaluation set holds no review case. [L7](L7-worker-evaluation.md) owns the review cases.
+- The evaluation set holds no review case. L7 owns the review cases.
 
 ### Content rules
 
@@ -848,7 +848,7 @@ These rules hold with no process and no LLM stub, so their tests are unit tests 
 - [LA](LA-agent-build.md): give the L4 test file a timeout above 60 seconds. Reason: variant 1 of L4-AC6 waits for three attempts with three pi retries each, about 42 seconds.
 - [LA](LA-agent-build.md): build the evaluation set under `<data>/evaluation/agent/`: 10 dev cases, 20 held-out cases, `binding/backend.md`, `binding/frontend.md`, a `.gitignore` that names `config.json`, and `config.json`, with the content rules and the pre-commit hook that runs `node evaluation.mjs scan`. Run `node evaluation.mjs validate` for each case. The set is no part of the engine repository.
 - [LA](LA-agent-build.md): write `judge.md` with the question of each goal aspect of [Goal aspects](#goal-aspects) and the output form of [Diagnosis](#diagnosis), rule 5. `judge.md` governs items 1 to 3 of `## Judgement` of the `re@1` prompt for the diagnosis. It names missing process evidence as an A5 finding. It states that a quote of the transcript is allowed and holds no secret, because the runner counts the credential values before the copy.
-- [L7](L7-worker-evaluation.md): the worker-level checks against a local KanthorD server, the review cases of `reviewer@1` and `re@1`, and the successor of `~/kanthord-evalset/worker-v2/`.
+- L7: the worker-level checks against a local KanthorD server, the review cases of `reviewer@1` and `re@1`, and the successor of `~/kanthord-evalset/worker-v2/`.
 - [HANDOFF.md](../HANDOFF.md#agent-component), Agent component: another run model, when Ulrich asks for it.
 
 ## Changes in upper layers
