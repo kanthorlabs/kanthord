@@ -239,39 +239,39 @@ Build details of the checks:
 
 The owning module of each rule is `scripts/evaluation/agent/evaluation.mjs`, with its tests in `scripts/evaluation/agent/evaluation.test.mjs` ([L4-D15](L4-agent-evaluation.md#decisions), [LA5-D2](#decisions)). The tests run in `pnpm run verify` on macOS and on Linux.
 
-| L4 unit-level rule                        | PR          |
-| ----------------------------------------- | ----------- |
-| 1. The case schema                        | 1           |
-| 2. The configuration                      | 1           |
-| 3. The pass rule and the grading steps    | 1           |
-| 4. The scope rules and the frontend rules | 1           |
-| 5. The breach rules                       | 1 and 3     |
-| 6. The diagnosis parse                    | 2           |
-| 7. The noise rule and the A/A line        | 5           |
-| 8. The stage gate                         | 1           |
-| 9. The cap                                | 1 and 2     |
-| 10. The price ratio                       | 1           |
-| 11. The report keys                       | 1, 2 and 5  |
-| 12. The run action                        | 1, 2 and 4  |
-| 13. The start checks                      | 1 and 5     |
-| 14. The credential state                  | 1           |
-| 15. The refresh                           | 1           |
-| 16. The price read                        | 1           |
-| 17. The secret scan                       | 5           |
-| 18. The case validation                   | 5           |
-| 19. The transcript                        | 2           |
-| 20. The diff steps                        | 1           |
-| 21. The manifest                          | 6           |
-| 22. The script time limit                 | 7           |
-| 23. The pool concurrency                  | 10b         |
-| 24. The auth-gate-then-refresh            | 10b         |
-| 25. The start gate with in-flight reserves| 10b         |
-| 26. The kill handle                       | 10b         |
-| 27. The stop at a breach                  | 10b         |
-| 28. The `jobs` checks                     | 10b         |
-| 29. The auth gate guards the refresh      | 10b fix     |
-| 30. A task throw rejects `runPlan`        | 10b fix     |
-| 31. The process group ends at abort       | 10b fix     |
+| L4 unit-level rule                         | PR         |
+| ------------------------------------------ | ---------- |
+| 1. The case schema                         | 1          |
+| 2. The configuration                       | 1          |
+| 3. The pass rule and the grading steps     | 1          |
+| 4. The scope rules and the frontend rules  | 1          |
+| 5. The breach rules                        | 1 and 3    |
+| 6. The diagnosis parse                     | 2          |
+| 7. The noise rule and the A/A line         | 5          |
+| 8. The stage gate                          | 1          |
+| 9. The cap                                 | 1 and 2    |
+| 10. The price ratio                        | 1          |
+| 11. The report keys                        | 1, 2 and 5 |
+| 12. The run action                         | 1, 2 and 4 |
+| 13. The start checks                       | 1 and 5    |
+| 14. The credential state                   | 1          |
+| 15. The refresh                            | 1          |
+| 16. The price read                         | 1          |
+| 17. The secret scan                        | 5          |
+| 18. The case validation                    | 5          |
+| 19. The transcript                         | 2          |
+| 20. The diff steps                         | 1          |
+| 21. The manifest                           | 6          |
+| 22. The script time limit                  | 7          |
+| 23. The pool concurrency                   | 10b        |
+| 24. The auth-gate-then-refresh             | 10b        |
+| 25. The start gate with in-flight reserves | 10b        |
+| 26. The kill handle                        | 10b        |
+| 27. The stop at a breach                   | 10b        |
+| 28. The `jobs` checks                      | 10b        |
+| 29. The auth gate guards the refresh       | 10b fix    |
+| 30. A task throw rejects `runPlan`         | 10b fix    |
+| 31. The process group ends at abort        | 10b fix    |
 
 - `evaluation.mjs` imports the engine modules from the build: `findPatternText` from `dist/agent/sensitive-text.js`, `isolatedGitEnvironment` from `dist/kernel/git-environment.js` and `directories` from `dist/kernel/xdg.js` ([L4 Runner](L4-agent-evaluation.md#runner)). `pnpm run verify` runs `build` before `test`, so the unit tests read the same build. `evaluation.test.mjs` fails at once when `dist/` is absent.
 - Unit-level rule 15 uses an `oauth` entry that expires far in the future, so `getAuth` sends no request.
