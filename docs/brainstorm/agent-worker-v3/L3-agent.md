@@ -1141,6 +1141,10 @@ No change is open. L3-D28 to L3-D36 and L3-D42 to L3-D45 record the changes that
 43. **L3-D43. Applied to L1.** L1 gives the three texts of the contract output to L3 and each event to L6. The agent CLI composes the system prompt with the composition function of the agent runtime.
 44. **L3-D44. Applied to L2.** `run agent` composes the system prompt with `profilePrompt` and `composeSystemPrompt` of the agent runtime before the open.
 45. **L3-D45. Applied to L1.** `prompt-render.ts` stays in the server part, and its `finalPrompt` calls the composition function of the agent runtime.
+46. **L3-D46. Applied to PR 718, B1.** `cleanupCtx` in `agent-contract.ts` uses the `background` context as parent so that `close()` waits for `abort()` to settle before `dispose()`. Constraint: a cleanup context whose parent is the input context is aborted at once when the input context is already cancelled, which prevents `dispose` from waiting and can cause a deadlock.
+47. **L3-D47. Applied to PR 718, S3.** `recordOutputFinding` scans `message[ERROR_MESSAGE_KEY]` in addition to `message[CONTENT_KEY]`. Constraint: a known secret in `errorMessage` increments `output_found` and pushes a warning, the same as a secret in `content`.
+48. **L3-D48. Applied to PR 718, S6.** `internalEnd` carries the `budgetReached` closure variable and calls `buildTurnEnd` to decide the `TurnEnd` kind. Constraint: a budget end that reaches the catch block gives `BudgetEnd`; a stop gives `Stopped`; `Completed` is the default only when neither holds.
+49. **L3-D49. Applied to PR 718, S7.** `UsdTracker.check` compares list price to the limit in micro-dollars to avoid float precision errors. Constraint: `Math.round(x * MICRO_USD)` for both values; `0.70 + 0.10` now reaches a limit of `0.80` exactly.
 
 ## Open questions for Ulrich
 
